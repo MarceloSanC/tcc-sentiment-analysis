@@ -1,2 +1,3 @@
-.venv/
-nlpvenv
+.venv_nlp/
+
+data/**
