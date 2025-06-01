@@ -17,10 +17,17 @@ SET-Desenvolver estrutura de webscraping para sites de notícias
 
 ## A fazer
 SET-Desenvolver estrutura de pré-processamento de dados
+
 OUT-Definir seções e tópicos do texto do TCC
+
 OUT-Desenvolver o modelo ou fazer o ajuste fino de modelos pré-treinados para classificação do sentimento
+
 OUT-Pesquisar sobre métricas de performance de modelos NLP para análise de sentimento em texto
+
 NOV-Testar e comparar outros modelos de NLP
+
 NOV-Desenvolvimento da estrutura de pós-processamento de dados para alimentar o sistema principal
+
 NOV-Ajustes finais no texto do TCC
+
 NOV-Montar a aprensetação de slides
