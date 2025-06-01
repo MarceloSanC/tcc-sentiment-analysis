@@ -1,6 +1,7 @@
 # tcc-sentiment-analysis
 
 trello : https://trello.com/b/QmlZKX3G/tcc-analise-de-sentimento-do-mercado
+miro : https://miro.com/app/board/uXjVI0WVT3w=/
 
 ## Em Andamento
 
