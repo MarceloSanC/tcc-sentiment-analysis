@@ -1,7 +1,10 @@
 import os
-import requests
-import pandas as pd
+
 from datetime import datetime, timedelta
+
+import pandas as pd
+import requests
+
 
 class NewsSearch:
     """
@@ -11,38 +14,35 @@ class NewsSearch:
     def __init__(self):
         # 🔐 Chave da API da Finnhub (substitua pela sua se necessário)
         self.API_KEY = "d0ls2p9r01qpni3125ngd0ls2p9r01qpni3125o0"
-        
+
         # 📆 Número de dias passados a considerar na busca de notícias
-        self.DIAS = 7
+        self.DAYS = 60
 
         # 📊 Lista de tickers de interesse
-        self.TICKERS = [
-            "AAPL",        # Apple
-            "MSFT",        # Microsoft
-            "TSLA",        # Tesla
-            "GOOGL",       # Google
-            "NVDA",        # Nvidia
-        ]
+        self.TICKERS = tickers
 
-    def buscar_noticias(self, ticker, data_inicio, data_fim):
+        # Caminho para diretorio de notícias extraídas
+        self.raw_path = raw_path
+
+    def fetch_news(self, ticker, start_date, end_date):
         """
         Realiza a chamada à API da Finnhub e retorna as notícias para o ticker especificado.
         """
         if ticker.startswith("BINANCE:") or ticker.startswith("COINBASE:"):
             url = "https://finnhub.io/api/v1/crypto-news"
-            params = { "token": self.API_KEY }
+            params = {"token": self.API_KEY}
 
         elif ticker == "SP500":
             url = "https://finnhub.io/api/v1/news"
-            params = { "category": "general", "token": self.API_KEY }
+            params = {"category": "general", "token": self.API_KEY}
 
         else:
             url = "https://finnhub.io/api/v1/company-news"
             params = {
                 "symbol": ticker,
-                "from": data_inicio,
-                "to": data_fim,
-                "token": self.API_KEY
+                "from": start_date,
+                "to": end_date,
+                "token": self.API_KEY,
             }
 
         response = requests.get(url, params=params)
@@ -62,78 +62,87 @@ class NewsSearch:
             print(f"Erro ao buscar {ticker}: {response.status_code}")
             return []
 
-    def carregar_csv_existente(self, caminho_arquivo):
+    def load_existing_csv(self, file_path):
         """
         Carrega um CSV existente com notícias, se disponível.
         """
-        if os.path.exists(caminho_arquivo):
+        if os.path.exists(file_path):
             try:
-                return pd.read_csv(caminho_arquivo, parse_dates=["Data"])
+                return pd.read_csv(file_path, parse_dates=["Date"])
             except Exception as e:
                 print(f"Erro ao carregar o arquivo existente: {e}")
                 return pd.DataFrame()
         else:
             return pd.DataFrame()
 
-    def filtrar_novas_noticias(self, novas_noticias, df_existente):
+    def filter_new_news(self, new_news, df_existing_news):
         """
         Filtra notícias que já existem no CSV anterior.
         """
-        if df_existente.empty:
-            return novas_noticias
+        if df_existing_news.empty:
+            return new_news
 
-        ultima_data = df_existente["Data"].max()
-        noticias_filtradas = []
+        last_date = df_existing_news["Data"].max()
+        filtered_news = []
 
-        for noticia in novas_noticias:
-            data_noticia = datetime.fromtimestamp(noticia["datetime"])
-            if data_noticia > ultima_data:
-                noticias_filtradas.append(noticia)
+        for news in new_news:
+            news_date = datetime.fromtimestamp(news["datetime"])
+            if news_date > last_date:
+                filtered_news.append(news)
 
-        return noticias_filtradas
+        return filtered_news
 
-    def salvar_noticias_csv(self, noticias, ticker):
+    def save_news_to_csv(self, filtered_news, ticker):
         """
-        Salva novas notícias no CSV, adicionando ao final ou criando o arquivo se necessário.
+        Salva novas notícias no CSV correspondente ao ticker.
+        Cria o arquivo se ele não existir, senão adiciona ao final.
         """
-        if not noticias:
+        if not filtered_news:
             print(f"Nenhuma nova notícia para {ticker}.")
             return
 
-        caminho_arquivo = f"C://Users//Marcelo//Documents//Code//tcc-sentiment-analysis//data//raw//noticias_{ticker}.csv"
-        df_existente = self.carregar_csv_existente(caminho_arquivo)
-        noticias_filtradas = self.filtrar_novas_noticias(noticias, df_existente)
+        file_path = os.path.join(self.raw_path, f"news_{ticker}.csv")
 
-        if not noticias_filtradas:
-            print(f"Nenhuma nova notícia para {ticker}.")
-            return
+        # Prepara dados para DataFrame
+        data = [
+            [
+                ticker,
+                datetime.fromtimestamp(n["datetime"]).strftime("%Y-%m-%d %H:%M"),
+                n["headline"],
+                n["source"],
+                n["url"],
+            ]
+            for n in filtered_news
+        ]
 
-        dados = []
-        for noticia in noticias_filtradas:
-            data = datetime.fromtimestamp(noticia["datetime"]).strftime("%Y-%m-%d %H:%M")
-            dados.append([ticker, data, noticia["headline"], noticia["source"], noticia["url"]])
+        df_new = pd.DataFrame(
+            data, columns=["Ticker", "Date", "Title", "Source", "URL"]
+        )
 
-        df_novo = pd.DataFrame(dados, columns=["Ticker", "Data", "Título", "Fonte", "URL"])
+        # Salva, adicionando ou criando o arquivo
+        mode = "a" if os.path.exists(file_path) else "w"
+        headline = not os.path.exists(file_path)
 
-        if os.path.exists(caminho_arquivo):
-            df_novo.to_csv(caminho_arquivo, mode="a", header=False, index=False, encoding="utf-8-sig")
-        else:
-            df_novo.to_csv(caminho_arquivo, index=False, encoding="utf-8-sig")
+        df_new.to_csv(
+            file_path, mode=mode, header=headline, index=False, encoding="utf-8-sig"
+        )
+        print(f"✅ Arquivo atualizado: {file_path}")
 
-        print(f"Arquivo atualizado: {caminho_arquivo}")
-
-    def carregar_dados(self):
+    def fetch_and_save_news(self):
         """
         Executa a coleta, filtragem e salvamento de notícias para todos os tickers definidos.
         """
-        hoje = datetime.today()
-        inicio = (hoje - timedelta(days=self.DIAS)).strftime("%Y-%m-%d")
-        fim = hoje.strftime("%Y-%m-%d")
+        today = datetime.today()
+        start_date = (today - timedelta(days=self.DAYS)).strftime("%Y-%m-%d")
+        end_date = today.strftime("%Y-%m-%d")
 
         for ticker in self.TICKERS:
-            print(f"\nBuscando notícias de {ticker}...")
-            noticias = self.buscar_noticias(ticker, inicio, fim)
-            caminho_arquivo = f"C://Users//Marcelo//Documents//Code//tcc-sentiment-analysis//data//raw//noticias_{ticker}.csv"
-            df_existente = self.carregar_csv_existente(caminho_arquivo)
-            noticias_filtradas = self.filtrar_novas_noticias(noticias, df_existente)
-            self.salvar_noticias_csv(noticias_filtradas, ticker)
+            print(f"\n🔍 Buscando notícias de {ticker}, de {start_date} a {end_date}")
+            noticias = self.fetch_news(ticker, start_date, end_date)
+
+            file_path = os.path.join(self.raw_path, f"noticias_{ticker}.csv")
+            df_existente = self.load_existing_csv(file_path)
+            filtered_news = self.filter_new_news(noticias, df_existente)
+
+            # Agora só passa as filtradas, o método de salvar lida com ausência
+            self.save_news_to_csv(filtered_news, ticker)
