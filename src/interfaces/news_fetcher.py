@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
 
-from src.entities.news import RawNews
+from src.entities.news import News
 
 
 class NewsFetcher(ABC):
@@ -14,6 +14,6 @@ class NewsFetcher(ABC):
     @abstractmethod
     def fetch_news(
         self, ticker: str, start_date: datetime, end_date: datetime
-    ) -> list[RawNews]:
+    ) -> list[News]:
         """Busca notícias da fonte externa (ex: Finnhub)."""
         pass
