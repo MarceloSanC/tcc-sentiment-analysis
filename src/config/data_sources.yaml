@@ -1,0 +1,22 @@
+# config/data_sources.yaml
+assets:
+  - symbol: "PETR4.SA"
+    name: "Petrobras PN"
+    start_date: "2022-01-01"
+    end_date: "2024-12-31"
+  - symbol: "VALE3.SA"
+    name: "Vale ON"
+    start_date: "2022-01-01"
+    end_date: "2024-12-31"
+
+data_sources:
+  candles:
+    provider: "yfinance"
+    interval: "1d"
+    output_dir: "data/raw"
+  
+  # Opcional: sentiment
+  sentiment:
+    enabled: true
+    provider: "finnhub"
+    aggregation: "daily"
