@@ -23,7 +23,7 @@ lint:
 	ruff check --diff  # mostra o que seria corrigido
 
 format:
-	black src/ tests/
+	black --config pyproject.toml src/ tests/
 	ruff check --fix src/ tests/
 
 type-check:
