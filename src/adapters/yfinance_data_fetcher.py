@@ -1,11 +1,13 @@
 # src/adapters/yfinance_data_fetcher.py
-import yfinance as yf
-import pandas as pd
-from datetime import datetime
-from typing import List
 import time
+
+from datetime import datetime
+
+import yfinance as yf
+
 from src.entities.candle import Candle
 from src.interfaces.data_fetcher import DataFetcher
+
 
 class YFinanceDataFetcher(DataFetcher):
     def __init__(self, max_retries: int = 3, retry_delay: float = 1.0):
@@ -14,7 +16,7 @@ class YFinanceDataFetcher(DataFetcher):
 
     def fetch_candles(
         self, symbol: str, start: datetime, end: datetime
-    ) -> List[Candle]:
+    ) -> list[Candle]:
         for attempt in range(self.max_retries + 1):
             try:
                 # YFinance espera strings no formato YYYY-MM-DD
@@ -24,11 +26,11 @@ class YFinanceDataFetcher(DataFetcher):
                     end=end.strftime("%Y-%m-%d"),
                     interval="1d",
                     progress=False,
-                    timeout=10
+                    timeout=10,
                 )
                 if df.empty:
                     raise ValueError(f"No data returned for {symbol}")
-                
+
                 # Validar schema mínimo
                 required_cols = {"Open", "High", "Low", "Close", "Volume"}
                 if not required_cols.issubset(df.columns):
@@ -44,13 +46,15 @@ class YFinanceDataFetcher(DataFetcher):
                         high=float(row["High"]),
                         low=float(row["Low"]),
                         close=float(row["Close"]),
-                        volume=int(row["Volume"])
+                        volume=int(row["Volume"]),
                     )
                     candles.append(candle)
                 return candles
 
             except Exception as e:
                 if attempt < self.max_retries:
-                    time.sleep(self.retry_delay * (2 ** attempt))  # backoff exponencial
+                    time.sleep(self.retry_delay * (2**attempt))  # backoff exponencial
                     continue
-                raise RuntimeError(f"Failed to fetch {symbol} after {self.max_retries} retries: {e}") from e
+                raise RuntimeError(
+                    f"Failed to fetch {symbol} after {self.max_retries} retries: {e}"
+                ) from e
