@@ -1,5 +1,50 @@
+# Ambientes virtuais
+.venv/
 .venv_nlp/
+env/
+ENV/
 
-data/**
+# Arquivos compilados e caches
 __pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+.ipynb_checkpoints/
+
+# Build e metadados
 *.egg-info/
+dist/
+build/
+*.egg
+
+# Dados gerados (não devem estar no histórico)
+data/
+dataset/raw/
+dataset/interim/
+dataset/external/
+
+# Notebooks (salvos automaticamente pelo VS Code/Jupyter)
+*.ipynb
+!.gitkeep  # (se quiser manter pastas vazias com .gitkeep)
+
+# Logs e saídas de execução
+*.log
+*.out
+output/
+results/
+
+# Dados sensíveis e configuração local
+.env
+.env.local
+config/local.yaml
+
+# IDEs e editores
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Sistema
+.DS_Store
+Thumbs.db
