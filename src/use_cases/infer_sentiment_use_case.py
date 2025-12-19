@@ -1,4 +1,3 @@
-
 from src.entities.news import News
 from src.interfaces.news_repository import NewsRepository
 from src.interfaces.sentiment_model import SentimentModel
