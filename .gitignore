@@ -48,3 +48,8 @@ config/local.yaml
 # Sistema
 .DS_Store
 Thumbs.db
+
+# Coverage / Test artifacts
+.coverage
+.coverage.*
+htmlcov/
