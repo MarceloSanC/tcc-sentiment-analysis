@@ -1,11 +1,11 @@
 # config/data_sources.yaml
 assets:
-  - symbol: "PETR4.SA"
-    name: "Petrobras PN"
+  - symbol: "AAPL"
+    name: "Apple Inc"
     start_date: "2022-01-01"
     end_date: "2024-12-31"
-  - symbol: "VALE3.SA"
-    name: "Vale ON"
+  - symbol: "MSFT"
+    name: "Microsoft"
     start_date: "2022-01-01"
     end_date: "2024-12-31"
 
@@ -14,8 +14,7 @@ data_sources:
     provider: "yfinance"
     interval: "1d"
     output_dir: "data/raw"
-  
-  # Opcional: sentiment
+
   sentiment:
     enabled: true
     provider: "finnhub"
