@@ -1,5 +1,6 @@
 # src/main_candles.py
 import argparse
+import logging
 
 from datetime import datetime
 from pathlib import Path
@@ -10,6 +11,9 @@ from src.adapters.parquet_data_repository import ParquetDataRepository
 from src.adapters.yfinance_data_fetcher import YFinanceDataFetcher
 from src.use_cases.fetch_candles_use_case import FetchCandlesUseCase
 
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def load_config():
     config_path = Path(__file__).parent.parent / "config" / "data_sources.yaml"
@@ -41,7 +45,8 @@ def main():
     # Executar
     start = datetime.fromisoformat(asset_config["start_date"])
     end = datetime.fromisoformat(asset_config["end_date"])
-    use_case.execute(args.asset, start, end)
+    count = use_case.execute(args.asset, start, end)
+    logger.info("Pipeline finalizado", extra={"symbol": args.asset, "candles": count})
 
 
 if __name__ == "__main__":
