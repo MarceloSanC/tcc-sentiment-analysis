@@ -10,8 +10,7 @@ class FetchCandlesUseCase:
         self.data_fetcher = data_fetcher
         self.data_repository = data_repository
 
-    def execute(self, symbol: str, start: datetime, end: datetime) -> None:
-        print(f"📥 Buscando candles de {symbol} ({start.date()} → {end.date()})...")
+    def execute(self, symbol: str, start: datetime, end: datetime) -> int:
         candles = self.data_fetcher.fetch_candles(symbol, start, end)
-        print(f"✅ {len(candles)} candles coletados")
         self.data_repository.save_candles(symbol, candles)
+        return len(candles)
