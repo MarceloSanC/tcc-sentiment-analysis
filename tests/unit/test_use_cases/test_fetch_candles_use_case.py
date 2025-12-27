@@ -26,10 +26,10 @@ def test_fetch_candles_saves_data():
     use_case = FetchCandlesUseCase(mock_fetcher, mock_repo)
 
     # Act
-    use_case.execute("PETR4.SA", datetime(2022, 1, 1), datetime(2022, 1, 5))
+    count = use_case.execute("AAPL", datetime(2022, 1, 1), datetime(2022, 1, 5))
 
     # Assert
     mock_fetcher.fetch_candles.assert_called_once_with(
-        "PETR4.SA", datetime(2022, 1, 1), datetime(2022, 1, 5)
+        "AAPL", datetime(2022, 1, 1), datetime(2022, 1, 5)
     )
-    mock_repo.save_candles.assert_called_once_with("PETR4.SA", candles)
+    mock_repo.save_candles.assert_called_once_with("AAPL", candles)
