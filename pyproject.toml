@@ -16,6 +16,8 @@ dependencies = [
     "pandas",
     "tqdm",
     "pytorch-forecasting",
+    "pyarrow",
+    "pandas-ta==0.4.71b0",
 ]
 
 [project.optional-dependencies]
