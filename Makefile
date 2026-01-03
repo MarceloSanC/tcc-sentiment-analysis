@@ -6,7 +6,9 @@ check-python-version:
 help:
 	@echo "Comandos disponíveis:"
 	@echo "  install     - Instala dependências (dev)"
-	@echo "  test        - Roda testes com cobertura"
+	@echo "  test               - Testes (sem integração externa)"
+	@echo "  test-integration   - Testes com APIs externas"
+	@echo "  test-all           - Todos os testes"
 	@echo "  lint        - Verifica estilo e imports"
 	@echo "  format      - Formata código com black + ruff"
 	@echo "  type-check  - Verifica anotações de tipo"
@@ -16,6 +18,15 @@ install:
 	pip install -e ".[dev]"
 
 test:
+	python -m pytest tests/ \
+		-m "not integration" \
+		--cov=src \
+		--cov-report=term-missing
+
+test-integration:
+	python -m pytest tests/ -m integration
+
+test-all:
 	python -m pytest tests/ --cov=src --cov-report=term-missing
 
 lint:
