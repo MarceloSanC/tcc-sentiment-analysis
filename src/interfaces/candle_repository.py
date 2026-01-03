@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from src.entities.candle import Candle
 
 
-class DataRepository(ABC):
+class CandleRepository(ABC):
     @abstractmethod
     def save_candles(self, symbol: str, candles: list[Candle]) -> None:
         pass

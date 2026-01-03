@@ -3,7 +3,7 @@ from typing import Iterable
 
 from src.entities.candle import Candle
 from src.entities.feature_set import FeatureSet
-from interfaces.candle_repository import DataRepository
+from interfaces.candle_repository import CandleRepository
 from src.interfaces.feature_calculator import FeatureCalculator
 # TODO: criar FeatureSetRepository para persistência desacoplada
 
@@ -11,7 +11,7 @@ from src.interfaces.feature_calculator import FeatureCalculator
 class FeatureEngineeringUseCase:
     def __init__(
         self,
-        candle_repository: DataRepository,
+        candle_repository: CandleRepository,
         feature_calculator: FeatureCalculator,
         # TODO: injetar FeatureSetRepository
     ):

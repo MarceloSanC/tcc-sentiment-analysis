@@ -4,10 +4,10 @@ from pathlib import Path
 import pandas as pd
 
 from src.entities.candle import Candle
-from src.interfaces.data_repository import DataRepository
+from interfaces.candle_repository import CandleRepository
 
 
-class ParquetDataRepository(DataRepository):
+class ParquetCandleRepository(CandleRepository):
     def __init__(self, output_dir: str = "data/raw"):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)

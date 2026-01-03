@@ -2,11 +2,11 @@
 from datetime import datetime
 
 from src.interfaces.data_fetcher import DataFetcher
-from src.interfaces.data_repository import DataRepository
+from interfaces.candle_repository import CandleRepository
 
 
 class FetchCandlesUseCase:
-    def __init__(self, data_fetcher: DataFetcher, data_repository: DataRepository):
+    def __init__(self, data_fetcher: DataFetcher, data_repository: CandleRepository):
         self.data_fetcher = data_fetcher
         self.data_repository = data_repository
 

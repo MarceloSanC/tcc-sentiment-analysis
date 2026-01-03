@@ -7,7 +7,7 @@ from pathlib import Path
 
 import yaml
 
-from src.adapters.parquet_data_repository import ParquetDataRepository
+from src.adapters.parquet_data_repository import ParquetCandleRepository
 from src.adapters.yfinance_data_fetcher import YFinanceDataFetcher
 from src.use_cases.fetch_candles_use_case import FetchCandlesUseCase
 
@@ -37,7 +37,7 @@ def main():
 
     # Setup
     fetcher = YFinanceDataFetcher()
-    repo = ParquetDataRepository(
+    repo = ParquetCandleRepository(
         output_dir=config["data_sources"]["candles"]["output_dir"]
     )
     use_case = FetchCandlesUseCase(fetcher, repo)
