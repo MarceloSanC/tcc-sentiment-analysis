@@ -13,7 +13,7 @@ class FeatureSet:
 
     asset_id: str
     timestamp: datetime
-    values: Mapping[str, float]
+    features: Mapping[str, float]
 
     def __post_init__(self):
         # TODO(validation): validar tipos e valores finitos
