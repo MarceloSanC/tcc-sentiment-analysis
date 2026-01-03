@@ -8,6 +8,23 @@ from interfaces.candle_repository import CandleRepository
 
 
 class ParquetCandleRepository(CandleRepository):
+    """
+    NOTE:
+    This repository currently OVERWRITES existing candle files.
+
+    - No incremental append
+    - No deduplication by timestamp
+    - Full dataset is persisted on each execution
+
+    This behavior is intentional for early-stage development and
+    deterministic pipelines.
+
+    TODO(data-pipeline):
+    - Support incremental candle updates
+    - Deduplicate by timestamp (keep last)
+    - Optionally expose persistence mode (overwrite | append | upsert)
+    """
+    
     def __init__(self, output_dir: str = "data/raw"):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -30,7 +47,6 @@ class ParquetCandleRepository(CandleRepository):
                     "low": c.low,
                     "close": c.close,
                     "volume": c.volume,
-                    "sentiment_score": c.sentiment_score,
                 }
                 for c in candles
             ]
@@ -44,7 +60,6 @@ class ParquetCandleRepository(CandleRepository):
                 "low": "float32",
                 "close": "float32",
                 "volume": "int64",
-                "sentiment_score": "float32",
             }
         )
 

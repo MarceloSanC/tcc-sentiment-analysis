@@ -5,7 +5,7 @@ from datetime import datetime
 from src.entities.candle import Candle
 
 
-class DataFetcher(ABC):
+class CandleFetcher(ABC):
     @abstractmethod
     def fetch_candles(
         self, symbol: str, start: datetime, end: datetime

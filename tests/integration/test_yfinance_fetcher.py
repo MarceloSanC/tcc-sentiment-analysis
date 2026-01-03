@@ -3,7 +3,7 @@ from datetime import datetime
 
 import pytest
 
-from src.adapters.yfinance_data_fetcher import YFinanceDataFetcher
+from adapters.yfinance_candle_fetcher import YFinanceDataFetcher
 
 
 @pytest.mark.integration

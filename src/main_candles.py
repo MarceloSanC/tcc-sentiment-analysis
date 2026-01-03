@@ -7,8 +7,8 @@ from pathlib import Path
 
 import yaml
 
-from src.adapters.parquet_data_repository import ParquetCandleRepository
-from src.adapters.yfinance_data_fetcher import YFinanceDataFetcher
+from src.adapters.parquet_candle_repository import ParquetCandleRepository
+from src.adapters.yfinance_candle_fetcher import YFinanceCandleFetcher
 from src.use_cases.fetch_candles_use_case import FetchCandlesUseCase
 
 
@@ -23,7 +23,7 @@ def load_config():
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--asset", required=True, help="Ex: PETR4.SA")
+    parser.add_argument("--asset", required=True, help="Ex: AAPL")
     args = parser.parse_args()
 
     config = load_config()
@@ -36,7 +36,7 @@ def main():
         )
 
     # Setup
-    fetcher = YFinanceDataFetcher()
+    fetcher = YFinanceCandleFetcher()
     repo = ParquetCandleRepository(
         output_dir=config["data_sources"]["candles"]["output_dir"]
     )

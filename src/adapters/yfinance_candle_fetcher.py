@@ -6,12 +6,12 @@ from datetime import datetime
 import yfinance as yf
 
 from src.entities.candle import Candle
-from src.interfaces.data_fetcher import DataFetcher
+from src.interfaces.candle_fetcher import CandleFetcher
 
 
 logger = logging.getLogger(__name__) 
 
-class YFinanceDataFetcher(DataFetcher):
+class YFinanceCandleFetcher(CandleFetcher):
     def __init__(self, max_retries: int = 3, retry_delay: float = 1.0):
         self.max_retries = max_retries
         self.retry_delay = retry_delay

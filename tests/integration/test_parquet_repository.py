@@ -2,7 +2,7 @@
 from datetime import datetime
 from pathlib import Path
 
-from src.adapters.parquet_data_repository import ParquetDataRepository
+from adapters.parquet_candle_repository import ParquetDataRepository
 from src.entities.candle import Candle
 
 
