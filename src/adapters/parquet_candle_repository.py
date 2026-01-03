@@ -4,11 +4,12 @@ from pathlib import Path
 import pandas as pd
 
 from src.entities.candle import Candle
-from interfaces.candle_repository import CandleRepository
+from src.interfaces.candle_repository import CandleRepository
 
 
 class ParquetCandleRepository(CandleRepository):
     """
+    Repository adapter for Candle persistence using Parquet files.
     NOTE:
     This repository currently OVERWRITES existing candle files.
 
@@ -28,6 +29,35 @@ class ParquetCandleRepository(CandleRepository):
     def __init__(self, output_dir: str = "data/raw"):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
+
+    def load_candles(self, symbol: str) -> list[Candle]:
+        clean_symbol = symbol.split(".")[0].upper()
+        filepath = self.output_dir / f"candles_{clean_symbol}_1d.parquet"
+
+        if not filepath.exists():
+            raise FileNotFoundError(f"No candle file found for {symbol}")
+
+        df = pd.read_parquet(filepath)
+
+        # Garantia explícita de ordenação temporal
+        df = df.sort_values("timestamp").reset_index(drop=True)
+
+        candles: list[Candle] = []
+        for _, row in df.iterrows():
+            candles.append(
+                Candle(
+                    timestamp=row["timestamp"].to_pydatetime()
+                    if hasattr(row["timestamp"], "to_pydatetime")
+                    else row["timestamp"],
+                    open=float(row["open"]),
+                    high=float(row["high"]),
+                    low=float(row["low"]),
+                    close=float(row["close"]),
+                    volume=int(row["volume"]),
+                )
+            )
+
+        return candles
 
     def save_candles(self, symbol: str, candles: list[Candle]) -> None:
         if not candles:
