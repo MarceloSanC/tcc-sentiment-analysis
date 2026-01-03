@@ -1,46 +1,50 @@
 # src/use_cases/feature_engineering_use_case.py
-from pathlib import Path
-import pandas as pd
+from typing import Iterable
 
-from src.adapters.technical_indicator_calculator import (
-    TechnicalIndicatorCalculator,
-)
+from src.entities.candle import Candle
 from src.entities.feature_set import FeatureSet
+from interfaces.candle_repository import DataRepository
+from src.interfaces.feature_calculator import FeatureCalculator
+# TODO: criar FeatureSetRepository para persistência desacoplada
 
 
 class FeatureEngineeringUseCase:
     def __init__(
         self,
-        input_dir: str = "data/raw",
-        output_dir: str = "data/processed",
+        candle_repository: DataRepository,
+        feature_calculator: FeatureCalculator,
+        # TODO: injetar FeatureSetRepository
     ):
-        self.input_dir = Path(input_dir)
-        self.output_dir = Path(output_dir)
-        self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.candle_repository = candle_repository
+        self.feature_calculator = feature_calculator
 
-        self.indicator_calculator = TechnicalIndicatorCalculator()
+    def execute(self, asset_id: str) -> list[FeatureSet]:
+        """
+        Orquestra o pipeline de feature engineering:
+        - carrega candles
+        - calcula features
+        - retorna FeatureSets (persistência é responsabilidade externa)
+        """
 
-    def execute(self, symbol: str) -> FeatureSet:
-        clean_symbol = symbol.split(".")[0].upper()
-        input_path = self.input_dir / f"candles_{clean_symbol}_1d.parquet"
+        # 1. Load candles (domínio)
+        candles: list[Candle] = self.candle_repository.load_candles(asset_id)
 
-        if not input_path.exists():
-            raise FileNotFoundError(f"Arquivo não encontrado: {input_path}")
+        if not candles:
+            raise ValueError(f"Nenhum candle encontrado para {asset_id}")
 
-        # 1. Load
-        df = pd.read_parquet(input_path)
+        # 2. Garantia temporal explícita
+        candles = sorted(candles, key=lambda c: c.timestamp)
 
-        # 2. Sort + basic checks
-        df = df.sort_values("timestamp").reset_index(drop=True)
+        # TODO: validar timestamp monotônico
 
-        # 3. Indicators
-        df_features = self.indicator_calculator.calculate(df)
+        # 3. Feature engineering
+        feature_sets = self.feature_calculator.calculate(
+            asset_id=asset_id,
+            candles=candles,
+        )
 
-        # 4. Drop NaNs iniciais (indicadores)
-        df_features = df_features.dropna().reset_index(drop=True)
+        # TODO: aplicar normalização (pipeline explícito)
+        # TODO: validar schema das features
+        # TODO: persistir FeatureSets via FeatureSetRepository
 
-        # 5. Persist
-        output_path = self.output_dir / f"features_{clean_symbol}.parquet"
-        df_features.to_parquet(output_path, index=False)
-
-        return FeatureSet(df=df_features)
+        return feature_sets
