@@ -7,6 +7,7 @@ from src.entities.feature_set import FeatureSet
 from src.use_cases.feature_engineering_use_case import FeatureEngineeringUseCase
 from src.interfaces.candle_repository import CandleRepository
 from src.interfaces.feature_calculator import FeatureCalculator
+from src.interfaces.feature_set_repository import FeatureSetRepository
 
 
 # ---------- Fakes (test doubles) ----------
@@ -37,6 +38,17 @@ class DummyFeatureCalculator(FeatureCalculator):
             for c in candles
         ]
 
+class InMemoryFeatureSetRepository(FeatureSetRepository):
+    def __init__(self):
+        self._storage: dict[str, list[FeatureSet]] = {}
+
+    def save(self, asset_id: str, features: list[FeatureSet]) -> None:
+        # overwrite deliberado (pipeline idempotente)
+        self._storage[asset_id] = list(features)
+
+    def load(self, asset_id: str) -> list[FeatureSet]:
+        return list(self._storage.get(asset_id, []))
+
 # ---------- Test ----------
 
 def test_feature_engineering_pipeline_runs():
@@ -60,9 +72,12 @@ def test_feature_engineering_pipeline_runs():
 
     feature_calculator = DummyFeatureCalculator()
 
+    feature_repository = InMemoryFeatureSetRepository()
+
     use_case = FeatureEngineeringUseCase(
         candle_repository=candle_repo,
         feature_calculator=feature_calculator,
+        feature_repository=feature_repository,
     )
 
     feature_sets = use_case.execute(asset_id)
@@ -72,3 +87,8 @@ def test_feature_engineering_pipeline_runs():
     assert all(isinstance(fs, FeatureSet) for fs in feature_sets)
     assert feature_sets[0].asset_id == asset_id
     assert feature_sets[0].features["close"] == candles[0].close
+
+    persisted = feature_repository.load(asset_id)
+
+    assert len(persisted) == 5
+    assert persisted[0].features["close"] == candles[0].close
