@@ -1,10 +1,14 @@
+# ======================================================
 # Ambientes virtuais
+# ======================================================
 .venv/
 .venv_nlp/
 env/
 ENV/
 
-# Arquivos compilados e caches
+# ======================================================
+# Python caches / compilados
+# ======================================================
 __pycache__/
 *.pyc
 *.pyo
@@ -12,44 +16,72 @@ __pycache__/
 .Python
 .ipynb_checkpoints/
 
-# Build e metadados
-*.egg-info/
-dist/
+# ======================================================
+# Build / packaging
+# ======================================================
 build/
+dist/
 *.egg
+*.egg-info/
 
-# Dados gerados (não devem estar no histórico)
-data/
-dataset/raw/
-dataset/interim/
-dataset/external/
+# ======================================================
+# ===================== DADOS ==========================
+# ======================================================
+# Todos os dados são gerados ou dependem de fontes externas
+# NÃO devem ser versionados
 
-# Notebooks (salvos automaticamente pelo VS Code/Jupyter)
-*.ipynb
-!.gitkeep  # (se quiser manter pastas vazias com .gitkeep)
+data/**
 
-# Logs e saídas de execução
-*.log
-*.out
+# Exceção opcional: manter estrutura vazia
+!data/**/.gitkeep
+
+# ======================================================
+# Notebooks (exploratórios / não determinísticos)
+# ======================================================
+notebooks/**
+
+# Se quiser versionar notebooks finais, remova a linha acima
+# ou use exceções explícitas:
+# !notebooks/final/**
+
+# ======================================================
+# Outputs / relatórios gerados
+# ======================================================
 output/
 results/
+reports/**
 
-# Dados sensíveis e configuração local
+# ======================================================
+# Logs
+# ======================================================
+*.log
+*.out
+
+# ======================================================
+# Configurações locais / segredos
+# ======================================================
 .env
-.env.local
+.env.*
 config/local.yaml
 
-# IDEs e editores
+# ======================================================
+# IDEs / Editores
+# ======================================================
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# Sistema
+# ======================================================
+# Sistema operacional
+# ======================================================
 .DS_Store
 Thumbs.db
 
-# Coverage / Test artifacts
+# ======================================================
+# Coverage / testes
+# ======================================================
 .coverage
 .coverage.*
 htmlcov/
+pytest_cache/
