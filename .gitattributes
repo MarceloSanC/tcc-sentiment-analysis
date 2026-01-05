@@ -1,0 +1,9 @@
+# Normalize line endings for all text files
+* text=auto eol=lf
+
+# Explicit rules
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.py   text eol=lf
+*.sh   text eol=lf
+Makefile text eol=lf
