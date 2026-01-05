@@ -6,6 +6,10 @@ from src.entities.candle import Candle
 from src.entities.feature_set import FeatureSet
 from src.interfaces.feature_calculator import FeatureCalculator
 
+from src.infrastructure.schemas.technical_indicators_schema import (
+    TECHNICAL_INDICATORS,
+)
+
 
 class TechnicalIndicatorCalculator(FeatureCalculator):
     def calculate(
@@ -52,6 +56,12 @@ class TechnicalIndicatorCalculator(FeatureCalculator):
         # TODO(nans): definir política explícita de NaNs (drop, fill, flag)
         df = df.dropna()
 
+        missing = TECHNICAL_INDICATORS - set(df.columns)
+        if missing:
+            raise RuntimeError(
+                f"Missing technical indicators: {missing}"
+            )
+
         # 3. Converter para entidades FeatureSet
         features = []
         for _, row in df.iterrows():
@@ -60,16 +70,8 @@ class TechnicalIndicatorCalculator(FeatureCalculator):
                     asset_id=asset_id,
                     timestamp=row["timestamp"],
                     features={
-                        "rsi_14": row["rsi_14"],
-                        "macd": row["macd"],
-                        "macd_signal": row["macd_signal"],
-                        "ema_10": row["ema_10"],
-                        "ema_50": row["ema_50"],
-                        "ema_100": row["ema_100"],
-                        "ema_200": row["ema_200"],
-                        "volatility_20d": row["volatility_20d"],
-                        "candle_range": row["candle_range"],
-                        "candle_body": row["candle_body"],
+                        name: row[name]
+                        for name in TECHNICAL_INDICATORS
                     },
                 )
             )
