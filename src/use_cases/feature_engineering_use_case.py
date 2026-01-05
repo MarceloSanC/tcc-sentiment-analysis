@@ -5,7 +5,8 @@ from src.entities.candle import Candle
 from src.entities.feature_set import FeatureSet
 from interfaces.candle_repository import CandleRepository
 from src.interfaces.feature_calculator import FeatureCalculator
-# TODO: criar FeatureSetRepository para persistência desacoplada
+from src.interfaces.feature_set_repository import FeatureSetRepository
+from src.interfaces.feature_normalizer import FeatureNormalizer
 
 
 class FeatureEngineeringUseCase:
@@ -13,10 +14,13 @@ class FeatureEngineeringUseCase:
         self,
         candle_repository: CandleRepository,
         feature_calculator: FeatureCalculator,
-        # TODO: injetar FeatureSetRepository
+        feature_repository: FeatureSetRepository,
+        feature_normalizer: FeatureNormalizer | None = None,
     ):
         self.candle_repository = candle_repository
         self.feature_calculator = feature_calculator
+        self.feature_repository = feature_repository
+        self.feature_normalizer = feature_normalizer
 
     def execute(self, asset_id: str) -> list[FeatureSet]:
         """
@@ -26,25 +30,34 @@ class FeatureEngineeringUseCase:
         - retorna FeatureSets (persistência é responsabilidade externa)
         """
 
-        # 1. Load candles (domínio)
+        # Load candles (domínio)
         candles: list[Candle] = self.candle_repository.load_candles(asset_id)
 
         if not candles:
             raise ValueError(f"Nenhum candle encontrado para {asset_id}")
 
-        # 2. Garantia temporal explícita
+        # Garantia temporal explícita
         candles = sorted(candles, key=lambda c: c.timestamp)
 
         # TODO: validar timestamp monotônico
 
-        # 3. Feature engineering
+        # Feature engineering
         feature_sets = self.feature_calculator.calculate(
             asset_id=asset_id,
             candles=candles,
         )
 
-        # TODO: aplicar normalização (pipeline explícito)
+        if not feature_sets:
+            raise ValueError("Feature calculator retornou vazio")
+
+        # Normalização
+        if self.feature_normalizer:
+            self.feature_normalizer.fit(feature_sets)
+            feature_sets = self.feature_normalizer.transform(feature_sets)
+
+        # Persistência
+        self.feature_repository.save(asset_id, feature_sets)
+
         # TODO: validar schema das features
-        # TODO: persistir FeatureSets via FeatureSetRepository
 
         return feature_sets
