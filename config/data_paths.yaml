@@ -1,0 +1,11 @@
+# config/data_paths.yaml
+data:
+  raw:
+    candles: data/raw/market/candles
+
+  processed:
+    features: data/processed/features
+    dataset_tft: data/processed/dataset_tft
+
+  models:
+    tft: data/models
