@@ -16,4 +16,4 @@ class FeatureCalculator(ABC):
         """
         Calcula features a partir de candles e retorna entidades FeatureSet.
         """
-        pass
+        ...
