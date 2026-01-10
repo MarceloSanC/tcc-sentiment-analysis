@@ -37,6 +37,17 @@ Não use TODO para:
 # TODO (TFT): ...
 ```
 
+### Exemplos válidos:
+```
+# TODO(data-pipeline):
+# Suportar persistência incremental de candles
+# (append ou upsert por timestamp)
+
+# TODO(architecture):
+# Expor política explícita de persistência:
+# overwrite | append | upsert
+```
+
 ## Checklist melhorias técnicas
 
 ### Arquitetura & Clean Architecture
