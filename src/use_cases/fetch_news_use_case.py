@@ -11,9 +11,9 @@ class FetchNewsUseCase:
         news_repository: NewsRepository,
         days_back: int = 60,
     ):
-        self.news_fetcher = news_fetcher
-        self.news_repository = news_repository
-        self.days_back = days_back
+        self.news_fetcher: NewsFetcher = news_fetcher
+        self.news_repository: NewsRepository = news_repository
+        self.days_back: int = days_back
 
     def execute(self, tickers: list[str]) -> None:
         end_date = datetime.now()
@@ -29,7 +29,7 @@ class FetchNewsUseCase:
             effective_start = max(start_date, last_saved) if last_saved else start_date
 
             # Busca somente o necessário
-            news_list = self.news_fetcher.fetch_news(ticker, effective_start, end_date)
+            news_list = self.news_fetcher.fetch_company_news(ticker, effective_start, end_date)
 
             if news_list:
                 self.news_repository.save_news_batch(news_list)
