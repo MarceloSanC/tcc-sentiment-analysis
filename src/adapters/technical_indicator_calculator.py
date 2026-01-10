@@ -12,14 +12,19 @@ from src.infrastructure.schemas.technical_indicators_schema import (
 
 
 class TechnicalIndicatorCalculator(FeatureCalculator):
+    """
+    Adapter responsável por calcular indicadores técnicos
+    a partir de candles OHLCV.
+
+    Utiliza bibliotecas externas (pandas, pandas-ta),
+    portanto pertence à camada de adapters.
+    """
+
     def calculate(
         self,
         asset_id: str,
         candles: list[Candle],
     ) -> list[FeatureSet]:
-        
-        # TODO(clean-arch): extrair conversão Candle -> DataFrame para adapter utilitário
-        # TODO(test): validar se candles estão ordenados temporalmente
 
         # 1. Converter para DataFrame (infra detail)
         df = pd.DataFrame(
@@ -36,9 +41,6 @@ class TechnicalIndicatorCalculator(FeatureCalculator):
             ]
         ).sort_values("timestamp")
 
-        # TODO(feature-eng): tornar indicadores configuráveis via parâmetros
-        # TODO(leakage): validar janelas de cálculo vs horizonte do target
-
         # 2. Indicadores técnicos
         df["rsi_14"] = ta.rsi(df["close"], length=14)
 
@@ -53,7 +55,6 @@ class TechnicalIndicatorCalculator(FeatureCalculator):
         df["candle_range"] = df["high"] - df["low"]
         df["candle_body"] = (df["close"] - df["open"]).abs()
 
-        # TODO(nans): definir política explícita de NaNs (drop, fill, flag)
         df = df.dropna()
 
         missing = TECHNICAL_INDICATORS - set(df.columns)
@@ -77,3 +78,36 @@ class TechnicalIndicatorCalculator(FeatureCalculator):
             )
 
         return features
+
+
+# =========================
+# TODOs — melhorias futuras
+# =========================
+
+# TODO(architecture):
+# Extrair conversão Candle -> DataFrame
+# para um utilitário compartilhado de adapters
+
+# TODO(stat-validation):
+# Validar ordenação temporal explícita dos candles
+# antes do cálculo de indicadores
+
+# TODO(feature-engineering):
+# Tornar lista de indicadores configurável
+# via parâmetros ou arquivo de configuração
+
+# TODO(normalization & leakage):
+# Validar janelas de cálculo dos indicadores
+# versus horizonte do target para evitar leakage
+
+# TODO(feature-engineering):
+# Separar indicadores por categoria:
+# trend, momentum, volatility, volume
+
+# TODO(data-quality):
+# Definir política explícita para NaNs:
+# drop | fill | flag_missing
+
+# TODO(performance):
+# Avaliar vetorização adicional
+# ou uso de numba para indicadores customizados
