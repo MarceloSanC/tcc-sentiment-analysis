@@ -8,14 +8,14 @@ from src.entities.news import News
 class NewsRepository(ABC):
     @abstractmethod
     def get_latest_news_date(self, ticker: str) -> datetime | None:
-        pass
+        ...
 
     @abstractmethod
     def get_unprocessed_news(self, ticker: str) -> list[News]:
         """Retorna notícias com sentiment == None."""
-        pass
+        ...
 
     @abstractmethod
     def save_news_batch(self, news_list: list[News]) -> None:
         """Salva ou atualiza notícias (incluindo preenchimento de sentiment/confidence)."""
-        pass
+        ...
