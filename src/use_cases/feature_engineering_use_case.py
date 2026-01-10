@@ -61,3 +61,20 @@ class FeatureEngineeringUseCase:
         # TODO: validar schema das features
 
         return feature_sets
+
+
+# =========================
+# TODOs — melhorias futuras
+# =========================
+
+# TODO (Validation):
+# Validar monotonicidade estrita dos timestamps
+# (sem duplicatas ou retrocessos temporais).
+
+# TODO (Leakage):
+# Ajustar normalizador apenas em janelas de treino
+# e reutilizar parâmetros em validação/inferência
+
+# TODO (Schema):
+# Validar schema final das features antes da persistência
+# para garantir consistência entre execuções e modelos.
