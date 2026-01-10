@@ -1,4 +1,4 @@
-# src/interfaces/data_fetcher.py
+# src/interfaces/candle_fetcher.py
 from abc import ABC, abstractmethod
 from datetime import datetime
 
@@ -10,4 +10,4 @@ class CandleFetcher(ABC):
     def fetch_candles(
         self, symbol: str, start: datetime, end: datetime
     ) -> list[Candle]:
-        pass
+        ...
