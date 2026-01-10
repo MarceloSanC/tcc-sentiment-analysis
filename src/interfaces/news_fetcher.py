@@ -13,8 +13,8 @@ class NewsFetcher(ABC):
     """
 
     @abstractmethod
-    def fetch_news(
+    def fetch_company_news(
         self, ticker: str, start_date: datetime, end_date: datetime
     ) -> list[News]:
         """Busca notícias da fonte externa (ex: Finnhub)."""
-        pass
+        ...
