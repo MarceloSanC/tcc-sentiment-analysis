@@ -67,3 +67,29 @@ class SklearnFeatureNormalizer(FeatureNormalizer):
             )
 
         return normalized
+
+
+
+# =========================
+# TODOs — melhorias futuras
+# =========================
+
+# TODO (Leakage):
+# Persistir scalers por asset_id e por janela temporal
+# para evitar data leakage entre treino, validação e inferência.
+
+# TODO (Reproducibility):
+# Implementar load/save dos scalers (ex: via joblib)
+# para garantir reprodutibilidade entre execuções.
+
+# TODO (Validation):
+# Validar número mínimo de amostras por feature
+# antes de permitir o ajuste do scaler.
+
+# TODO (NaNs):
+# Definir política explícita para valores None / NaN:
+# drop | fill (mean/median) | flag binária.
+
+# TODO (Safety):
+# Garantir explicitamente que fit() foi chamado
+# antes de permitir transform().
