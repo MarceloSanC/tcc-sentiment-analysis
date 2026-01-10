@@ -12,8 +12,8 @@ class FeatureSetRepository(ABC):
 
     @abstractmethod
     def save(self, asset_id: str, features: list[FeatureSet]) -> None:
-        pass
+        ...
 
     @abstractmethod
     def load(self, asset_id: str) -> list[FeatureSet]:
-        pass
+        ...
