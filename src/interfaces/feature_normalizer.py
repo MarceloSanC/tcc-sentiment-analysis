@@ -9,9 +9,9 @@ class FeatureNormalizer(ABC):
     @abstractmethod
     def fit(self, features: Iterable[FeatureSet]) -> None:
         """Ajusta estatísticas de normalização usando dados de treino."""
-        pass
+        ...
 
     @abstractmethod
     def transform(self, features: Iterable[FeatureSet]) -> list[FeatureSet]:
         """Aplica normalização usando estatísticas já ajustadas."""
-        pass
+        ...
