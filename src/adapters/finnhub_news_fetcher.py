@@ -1,62 +1,106 @@
-from datetime import datetime
+# src/adapters/finnhub_news_fetcher.py
 
+from datetime import datetime, timezone
+from typing import List, Optional
 import requests
 
-from src.entities.news import News
-from src.interfaces.news_fetcher import NewsFetcher
+from src.entities.news_article import NewsArticle
 
 
-class FinnhubNewsFetcher(NewsFetcher):
-    def __init__(self, api_key: str):
+class FinnhubNewsFetcher:
+    """
+    Adapter responsável por buscar notícias financeiras da API Finnhub
+    e convertê-las para entidades de domínio (NewsArticle).
+    """
+
+    BASE_URL = "https://finnhub.io/api/v1/company-news"
+
+    def __init__(
+        self,
+        api_key: str,
+        timeout_seconds: int = 10,
+    ) -> None:
         self.api_key = api_key
+        self.timeout_seconds = timeout_seconds
 
-    def fetch_news(
-        self, ticker: str, start_date: datetime, end_date: datetime
-    ) -> list[News]:
-        if ticker.startswith(("BINANCE:", "COINBASE:")):
-            url = "https://finnhub.io/api/v1/crypto-news"
-            params = {"token": self.api_key}
-        elif ticker == "SP500":
-            url = "https://finnhub.io/api/v1/news"
-            params = {"category": "general", "token": self.api_key}
-        else:
-            url = "https://finnhub.io/api/v1/company-news"
-            params = {
-                "symbol": ticker,
-                "from": start_date.strftime("%Y-%m-%d"),
-                "to": end_date.strftime("%Y-%m-%d"),
-                "token": self.api_key,
-            }
+    def fetch_company_news(
+        self,
+        asset_id: str,
+        start_date: datetime,
+        end_date: datetime,
+        limit: Optional[int] = None,
+    ) -> List[NewsArticle]:
+        """
+        Busca notícias relacionadas a um ativo em um intervalo de datas.
 
-        response = requests.get(url, params=params)
-        if response.status_code != 200:
-            print(f"Erro ao buscar {ticker}: {response.status_code}")
-            return (
-                []
-            )  # Em produção, poderia lançar uma exceção customizada (ex: NewsFetchError)
+        Args:
+            asset_id: ticker do ativo (ex: PETR4.SA)
+            start_date: data inicial (timezone-aware)
+            end_date: data final (timezone-aware)
+            limit: número máximo de notícias (opcional)
 
-        try:
-            data = response.json()
-        except ValueError:
-            print(f"Erro ao decodificar JSON para {ticker}.")
-            return []
+        Returns:
+            Lista de NewsArticle (domínio)
+        """
 
-        if not isinstance(data, list):
-            return []
+        params = {
+            "symbol": asset_id,
+            "from": start_date.date().isoformat(),
+            "to": end_date.date().isoformat(),
+            "token": self.api_key,
+        }
 
-        news_list = []
-        for item in data:
-            try:
-                published_at = datetime.fromtimestamp(item["datetime"])
-                news = News(
-                    ticker=ticker,
+        response = requests.get(
+            self.BASE_URL,
+            params=params,
+            timeout=self.timeout_seconds,
+        )
+        response.raise_for_status()
+
+        raw_articles = response.json()
+
+        articles: List[NewsArticle] = []
+
+        for raw in raw_articles[:limit]:
+            published_at = datetime.fromtimestamp(
+                raw["datetime"],
+                tz=timezone.utc,
+            )
+
+            articles.append(
+                NewsArticle(
+                    article_id=str(raw.get("id", raw["datetime"])),
+                    asset_id=asset_id,
                     published_at=published_at,
-                    title=item["headline"],
-                    source=item["source"],
-                    url=item["url"],
+                    title=raw.get("headline", ""),
+                    content=raw.get("summary", ""),
+                    source=raw.get("source"),
+                    url=raw.get("url"),
                 )
-                news_list.append(news)
-            except (KeyError, ValueError):
-                continue  # ignora itens malformados
+            )
 
-        return news_list
+        return articles
+
+# =========================
+# TODOs — melhorias futuras
+# =========================
+
+# TODO(data-pipeline):
+# Suportar persistência incremental de candles
+# (append ou upsert por timestamp)
+
+# TODO(data-pipeline):
+# Implementar deduplicação temporal
+# (manter último candle por timestamp)
+
+# TODO(architecture):
+# Expor política explícita de persistência:
+# overwrite | append | upsert
+
+# TODO(stat-validation):
+# Validar gaps temporais excessivos
+# (ex: dias úteis faltantes)
+
+# TODO(reproducibility):
+# Versionar datasets de candles persistidos
+# (ex: hash do arquivo + metadata JSON)
