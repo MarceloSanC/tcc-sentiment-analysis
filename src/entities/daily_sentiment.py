@@ -1,7 +1,7 @@
 # src/entities/daily_sentiment.py
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 
 
@@ -26,6 +26,15 @@ class DailySentiment:
     sentiment_std: Optional[float] = None
 
     def __post_init__(self) -> None:
+        if isinstance(self.day, datetime):
+            raise TypeError(
+                "day must be a date without time (datetime is not allowed)"
+            )
+
+        if not isinstance(self.day, date):
+            raise TypeError(
+                "day must be a datetime.date instance"
+            )
         if not -1.0 <= self.sentiment_score <= 1.0:
             raise ValueError(
                 "sentiment_score must be in the range [-1.0, +1.0]"
