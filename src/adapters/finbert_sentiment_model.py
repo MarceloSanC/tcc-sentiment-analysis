@@ -63,7 +63,12 @@ class FinBERTSentimentModel(SentimentModel):
         if not articles:
             return []
 
-        texts = [a.content or a.title for a in articles]
+        texts = [
+            " ".join(
+                part for part in [a.headline, a.summary] if part and part.strip()
+            )
+            for a in articles
+        ]
 
         scores = self._score_texts(texts)
 
@@ -81,6 +86,7 @@ class FinBERTSentimentModel(SentimentModel):
                     asset_id=article.asset_id,
                     published_at=article.published_at,
                     sentiment_score=float(score),
+                    confidence=abs(float(score)),
                     model_name=self.model_name,
                 )
             )
@@ -131,6 +137,10 @@ class FinBERTSentimentModel(SentimentModel):
 # Retornar distribuição completa (neg / neu / pos)
 # e permitir múltiplas estratégias de agregação
 # (ex: weighted_pos, entropy, polarity_strength)
+
+# TODO(feature-engineering):
+# Permitir que modelos retornem confidence explícita
+# independente do sentiment_score (ex: entropy-based confidence)
 
 # TODO(normalization & leakage):
 # Calibrar scores por ativo usando z-score rolling
