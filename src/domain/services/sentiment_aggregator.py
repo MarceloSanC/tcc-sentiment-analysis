@@ -7,6 +7,7 @@ from datetime import date
 from statistics import mean, pstdev
 from typing import Iterable, List
 
+from src.domain.time.trading_calendar import normalize_to_trading_day
 from src.entities.scored_news_article import ScoredNewsArticle
 from src.entities.daily_sentiment import DailySentiment
 
@@ -50,14 +51,12 @@ class SentimentAggregator:
                     "All articles must belong to the same asset_id"
                 )
 
-            day = article.published_at.date()
+            day = normalize_to_trading_day(article.published_at)
             grouped_scores[day].append(article.sentiment_score)
 
         daily_sentiments: list[DailySentiment] = []
 
         for day, scores in grouped_scores.items():
-            if not scores:
-                continue
 
             daily_sentiments.append(
                 DailySentiment(
