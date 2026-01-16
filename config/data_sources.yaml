@@ -2,13 +2,13 @@
 assets:
   - symbol: "AAPL"
     name: "Apple Inc"
-    start_date: "2022-01-01"
-    end_date: "2024-12-31"
+    start_date: "2025-06-01"
+    end_date: "2025-12-31"
 
   - symbol: "MSFT"
     name: "Microsoft"
-    start_date: "2022-01-01"
-    end_date: "2024-12-31"
+    start_date: "2025-01-01"
+    end_date: "2025-12-31"
 
 data_sources:
   candles:
