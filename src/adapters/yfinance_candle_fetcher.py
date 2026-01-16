@@ -1,101 +1,132 @@
-# src/adapters/yfinance_data_fetcher.py
-import time
+# src/adapters/yfinance_candle_fetcher.py
+
+from __future__ import annotations
+
 import logging
-from datetime import datetime
+import time
+from datetime import datetime, timezone, time
 
 import yfinance as yf
 
 from src.entities.candle import Candle
 from src.interfaces.candle_fetcher import CandleFetcher
 
+logger = logging.getLogger(__name__)
 
-logger = logging.getLogger(__name__) 
 
 class YFinanceCandleFetcher(CandleFetcher):
-    def __init__(self, max_retries: int = 3, retry_delay: float = 1.0):
+    """
+    Adapter responsável por buscar candles via yfinance.
+
+    Contrato temporal:
+    - start/end devem ser timezone-aware
+    - Candle.timestamp retornado sempre timezone-aware em UTC
+    """
+
+    def __init__(self, max_retries: int = 3, retry_delay: float = 1.0) -> None:
         self.max_retries = max_retries
         self.retry_delay = retry_delay
 
-    def fetch_candles(
-        self, symbol: str, start: datetime, end: datetime
-    ) -> list[Candle]:
-        
+    @staticmethod
+    def _require_tz_aware(dt: datetime, name: str) -> None:
+        if dt.tzinfo is None:
+            raise ValueError(f"{name} must be timezone-aware")
+
+    @staticmethod
+    def _to_utc(dt: datetime) -> datetime:
+        return dt.astimezone(timezone.utc)
+
+    def fetch_candles(self, symbol: str, start: datetime, end: datetime) -> list[Candle]:
+        self._require_tz_aware(start, "start")
+        self._require_tz_aware(end, "end")
+
+        start_utc = self._to_utc(start)
+        end_utc = self._to_utc(end)
+
+        if start_utc > end_utc:
+            raise ValueError("start must be <= end")
+
         logger.info(
             "Fetching candles",
             extra={
                 "symbol": symbol,
-                "start": start.isoformat(),
-                "end": end.isoformat(),
+                "start": start_utc.date().isoformat(),
+                "end": end_utc.date().isoformat(),
             },
         )
 
+        last_error: Exception | None = None
+
         for attempt in range(self.max_retries + 1):
             try:
-                # YFinance espera strings no formato YYYY-MM-DD
                 df = yf.download(
                     symbol,
-                    start=start.strftime("%Y-%m-%d"),
-                    end=end.strftime("%Y-%m-%d"),
+                    start=start_utc.strftime("%Y-%m-%d"),
+                    end=end_utc.strftime("%Y-%m-%d"),
                     interval="1d",
                     progress=False,
                     timeout=10,
                 )
-                if df.empty:
+
+                if df is None or df.empty:
                     raise ValueError(f"No data returned for {symbol}")
 
-                # Normalizar MultiIndex
-                if isinstance(df.columns, type(df.columns)) and df.columns.nlevels > 1:
+                # Normalizar MultiIndex (quando yfinance retorna colunas com níveis)
+                if getattr(df.columns, "nlevels", 1) > 1:
                     df.columns = df.columns.get_level_values(0)
 
-                # Validar schema mínimo
                 required_cols = {"Open", "High", "Low", "Close", "Volume"}
-                if not required_cols.issubset(df.columns):
-                    raise ValueError(f"Missing columns in response: {df.columns}")
+                missing = required_cols - set(df.columns)
+                if missing:
+                    raise ValueError(f"Missing columns in response: {sorted(missing)}")
 
-                candles = []
+                candles: list[Candle] = []
+
                 for idx, row in df.iterrows():
-                    # idx é Timestamp → converter para datetime
                     ts = idx.to_pydatetime()
-                    candle = Candle(
-                        timestamp=ts,
-                        open=float(row["Open"]),
-                        high=float(row["High"]),
-                        low=float(row["Low"]),
-                        close=float(row["Close"]),
-                        volume=int(row["Volume"]),
+
+                    # idx pode vir naive dependendo do ambiente; padroniza para UTC
+                    if ts.tzinfo is None:
+                        ts = datetime.combine(ts.date(), time(0, 0), tzinfo=timezone.utc)
+                    else:
+                        # Converte pra UTC e normaliza para 00:00 UTC do dia (opcional, mas consistente p/ joins)
+                        ts_utc = ts.astimezone(timezone.utc)
+                        ts = datetime.combine(ts_utc.date(), time(0, 0), tzinfo=timezone.utc)
+
+                    candles.append(
+                        Candle(
+                            timestamp=ts,
+                            open=float(row["Open"]),
+                            high=float(row["High"]),
+                            low=float(row["Low"]),
+                            close=float(row["Close"]),
+                            volume=int(row["Volume"]),
+                        )
                     )
-                    candles.append(candle)
 
                 logger.info(
                     "Candles fetched successfully",
-                    extra={
-                        "symbol": symbol,
-                        "count": len(candles),
-                    },
+                    extra={"symbol": symbol, "count": len(candles)},
                 )
 
                 return candles
 
             except Exception as e:
+                last_error = e
                 logger.warning(
                     "Fetch attempt failed",
-                    extra={
-                        "symbol": symbol,
-                        "attempt": attempt + 1,
-                        "error": str(e),
-                    },
+                    extra={"symbol": symbol, "attempt": attempt + 1, "error": str(e)},
                 )
 
                 if attempt < self.max_retries:
                     time.sleep(self.retry_delay * (2**attempt))
                     continue
 
-                logger.error(
-                    "Fetch failed after retries",
-                    extra={"symbol": symbol},
-                    exc_info=True,
-                )
-
-                raise RuntimeError(
-                    f"Failed to fetch {symbol} after {self.max_retries} retries: {e}"
-                ) from e
+        logger.error(
+            "Fetch failed after retries",
+            extra={"symbol": symbol},
+            exc_info=True,
+        )
+        raise RuntimeError(
+            f"Failed to fetch {symbol} after {self.max_retries} retries: {last_error}"
+        ) from last_error
