@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Iterable
 
 from src.entities.news_article import NewsArticle
 from src.entities.scored_news_article import ScoredNewsArticle
