@@ -1,6 +1,6 @@
 # tests/unit/use_cases/test_infer_sentiment_use_case.py
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
 
 import pytest
@@ -17,8 +17,8 @@ from src.interfaces.candle_repository import CandleRepository
 
 @pytest.fixture
 def base_dates():
-    start = datetime(2024, 1, 1)
-    end = datetime(2024, 1, 3)
+    start = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    end = datetime(2024, 1, 3, tzinfo=timezone.utc)
     return start, end
 
 
