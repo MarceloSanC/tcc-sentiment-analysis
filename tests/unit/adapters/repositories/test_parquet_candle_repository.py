@@ -45,7 +45,7 @@ def test_repository_raises_if_directory_does_not_exist(tmp_path: Path):
 
 
 def test_repository_raises_if_path_is_not_directory(tmp_path: Path):
-    file_path = tmp_path / "file.txt"
+    file_path = tmp_path / "not_a_dir.txt"
     file_path.write_text("not a dir")
 
     with pytest.raises(NotADirectoryError):
@@ -57,7 +57,7 @@ def test_repository_raises_if_path_is_not_directory(tmp_path: Path):
 def test_save_candles_persists_parquet_file(repo, candles_sample, tmp_path):
     repo.save_candles("AAPL", candles_sample)
 
-    files = list(tmp_path.glob("*.parquet"))
+    files = list(tmp_path.rglob("*.parquet"))
     assert len(files) == 1
     assert "AAPL" in files[0].name
 
@@ -65,7 +65,7 @@ def test_save_candles_persists_parquet_file(repo, candles_sample, tmp_path):
 def test_save_candles_normalizes_symbol(repo, candles_sample, tmp_path):
     repo.save_candles("PETR4.SA", candles_sample)
 
-    files = list(tmp_path.glob("*.parquet"))
+    files = list(tmp_path.rglob("*.parquet"))
     assert len(files) == 1
     assert files[0].name == "candles_PETR4_1d.parquet"
 
@@ -117,7 +117,8 @@ def test_load_raises_if_schema_is_invalid(repo, tmp_path, candles_sample):
         ]
     )
 
-    filepath = tmp_path / "candles_AAPL_1d.parquet"
+    filepath = tmp_path / "AAPL" / "candles_AAPL_1d.parquet"
+    filepath.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(filepath, index=False)
 
     with pytest.raises(ValueError):
@@ -127,7 +128,7 @@ def test_load_raises_if_schema_is_invalid(repo, tmp_path, candles_sample):
 def test_saved_parquet_has_expected_columns(repo, candles_sample, tmp_path):
     repo.save_candles("AAPL", candles_sample)
 
-    filepath = tmp_path / "candles_AAPL_1d.parquet"
+    filepath = tmp_path / "AAPL" / "candles_AAPL_1d.parquet"
     df = pd.read_parquet(filepath)
 
     assert set(df.columns) == CANDLE_PARQUET_COLUMNS
