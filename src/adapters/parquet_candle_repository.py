@@ -1,5 +1,7 @@
 # src/adapters/parquet_candle_repository.py
+
 from pathlib import Path
+import logging
 
 import pandas as pd
 
@@ -11,6 +13,9 @@ from src.infrastructure.schemas.candle_parquet_schema import (
     CANDLE_PARQUET_COLUMNS,
     CANDLE_PARQUET_DTYPES,
 )
+
+logger = logging.getLogger(__name__)
+
 
 class ParquetCandleRepository(CandleRepository):
     """
@@ -24,7 +29,7 @@ class ParquetCandleRepository(CandleRepository):
     This is intentional for early-stage development
     and deterministic pipelines.
     """
-    
+
     def __init__(self, output_dir: str):
         self.output_dir = Path(output_dir)
 
@@ -38,12 +43,18 @@ class ParquetCandleRepository(CandleRepository):
             raise NotADirectoryError(
                 f"Candle path is not a directory: {self.output_dir.resolve()}"
             )
+
+        logger.info(
+            "ParquetCandleRepository initialized",
+            extra={"output_dir": str(self.output_dir.resolve())},
+        )
+
     def _normalize_symbol(self, asset_id: str) -> str:
         return asset_id.split(".")[0].upper()
-    
+
     def _filepath(self, asset_id: str) -> Path:
         clean_symbol = self._normalize_symbol(asset_id)
-        return self.output_dir / f"candles_{clean_symbol}_1d.parquet"
+        return self.output_dir / clean_symbol / f"candles_{clean_symbol}_1d.parquet"
 
     def load_candles(self, asset_id: str) -> list[Candle]:
         filepath = self._filepath(asset_id)
@@ -54,6 +65,11 @@ class ParquetCandleRepository(CandleRepository):
                 f"Expected path: {filepath.resolve()}"
             )
 
+        logger.info(
+            "Loading candles from parquet",
+            extra={"asset_id": asset_id, "path": str(filepath)},
+        )
+
         df = pd.read_parquet(filepath)
 
         missing = CANDLE_PARQUET_COLUMNS - set(df.columns)
@@ -63,10 +79,9 @@ class ParquetCandleRepository(CandleRepository):
                 f"Missing columns: {missing}. "
                 f"File: {filepath.resolve()}"
             )
-        
+
         df = df.astype(CANDLE_PARQUET_DTYPES, errors="ignore")
 
-        # Garantia explícita de ordenação temporal
         df = df.sort_values("timestamp").reset_index(drop=True)
 
         if not df["timestamp"].is_monotonic_increasing:
@@ -89,16 +104,20 @@ class ParquetCandleRepository(CandleRepository):
                 )
             )
 
+        logger.info(
+            "Candles loaded successfully",
+            extra={"asset_id": asset_id, "count": len(candles)},
+        )
+
         return candles
 
     def save_candles(self, asset_id: str, candles: list[Candle]) -> None:
         if not candles:
             raise ValueError("No candles to save")
 
-        # Normalizar símbolo para nome de arquivo (ex: PETR4.SA → PETR4)
         filepath = self._filepath(asset_id)
+        filepath.parent.mkdir(parents=True, exist_ok=True)
 
-        # Converter para DataFrame com schema explícito
         df = pd.DataFrame(
             [
                 {
@@ -113,18 +132,20 @@ class ParquetCandleRepository(CandleRepository):
             ]
         )
 
-        # Garantir contrato de colunas
         df = df[list(CANDLE_PARQUET_COLUMNS)]
-
-        # Forçar dtypes para eficiência e reprodutibilidade
         df = df.astype(CANDLE_PARQUET_DTYPES)
-
-        # Ordenar por timestamp (garantir série temporal)
         df = df.sort_values("timestamp").reset_index(drop=True)
 
-        # Salvar
         df.to_parquet(filepath, index=False)
-        print(f"✅ Salvo {len(candles)} candles em {filepath}")
+
+        logger.info(
+            "Candles saved successfully",
+            extra={
+                "asset_id": asset_id,
+                "count": len(candles),
+                "path": str(filepath),
+            },
+        )
 
     def update_sentiment(
         self,
@@ -134,59 +155,118 @@ class ParquetCandleRepository(CandleRepository):
         """
         Atualiza candles existentes com sentimento diário agregado.
 
-        Este método preserva a série temporal de candles e realiza
-        um enriquecimento por junção temporal (date-based join),
-        evitando recriação completa do dataset.
+        Cenário A (incremental):
+        - Atualiza apenas as datas presentes em daily_sentiments
+        - Preserva valores já persistidos fora desse range
+        - Evita colunas *_x / *_y no parquet final
         """
 
         if not daily_sentiments:
+            logger.info(
+                "No daily sentiments to persist",
+                extra={"asset_id": asset_id},
+            )
             return
 
-        clean_symbol = self._normalize_symbol(asset_id)
-        filepath = self.output_dir / f"candles_{clean_symbol}_1d.parquet"
+        filepath = self._filepath(asset_id)
+
+        logger.info("Updating sentiment (read)", extra={"path": str(filepath.resolve())})
 
         if not filepath.exists():
             raise FileNotFoundError(
-                f"Cannot update sentiment: candle file not found for {asset_id}"
+                f"Cannot update sentiment: candle file not found for "
+                f"{asset_id} ({filepath.resolve()})"
             )
+
+        logger.info(
+            "Updating candle sentiment (incremental)",
+            extra={
+                "asset_id": asset_id,
+                "days": len(daily_sentiments),
+                "path": str(filepath),
+            },
+        )
 
         # Load existing candles
         df_candles = pd.read_parquet(filepath)
 
-        # Prepare sentiment DataFrame (domain → infra)
+        # Ensure timestamp is UTC-aware datetime
+        # - if parquet stores epoch ms (int), unit="ms" is correct
+        # - if parquet stores datetime already, pd.to_datetime will keep it
+        ts = pd.to_datetime(df_candles["timestamp"], utc=True, errors="coerce")
+        if ts.isna().any():
+            raise ValueError(
+                f"Invalid timestamp values found in parquet for {asset_id}: {filepath}"
+            )
+
+        # Canonical join key: date (UTC trading day)
+        df_candles["date"] = ts.dt.date
+
+        # Prepare sentiment df (domain -> infra)
         df_sentiment = pd.DataFrame(
             [
                 {
-                    "date": ds.day,
-                    "sentiment_score": ds.sentiment_score,
-                    "sentiment_std": ds.sentiment_std,
-                    "n_articles": ds.n_articles,
+                    "date": ds.day,  # ds.day is a date
+                    "sentiment_score": float(ds.sentiment_score),
+                    "sentiment_std": float(ds.sentiment_std),
+                    "n_articles": int(ds.n_articles),
                 }
                 for ds in daily_sentiments
             ]
         )
 
-        # Normalize candle date
-        df_candles["date"] = pd.to_datetime(
-            df_candles["timestamp"]
-        ).dt.date
+        # Optional: drop duplicate days (keep last) to avoid merge explosion
+        df_sentiment = df_sentiment.drop_duplicates(subset=["date"], keep="last")
 
-        # Left join: candles × sentiment
-        df_updated = df_candles.merge(
+        # Merge with suffixes to preserve existing values
+        df_merged = df_candles.merge(
             df_sentiment,
             on="date",
             how="left",
+            suffixes=("_old", ""),
         )
 
+        # Coalesce: prefer new values when available, otherwise keep old ones
+        for col in ["sentiment_score", "sentiment_std", "n_articles"]:
+            old_col = f"{col}_old"
+            if old_col in df_merged.columns:
+                df_merged[col] = df_merged[col].combine_first(df_merged[old_col])
+                df_merged = df_merged.drop(columns=[old_col])
+
         # Cleanup helper column
-        df_updated = df_updated.drop(columns=["date"])
+        df_merged = df_merged.drop(columns=["date"])
+
+        # Basic validation: did we actually write anything new?
+        # (counts rows where new sentiment exists for the provided days)
+        matched_days = set(df_sentiment["date"].tolist())
+        df_check = pd.to_datetime(df_merged["timestamp"], utc=True).dt.date
+        mask_days = df_check.isin(matched_days)
+
+        updated_non_null = 0
+        if mask_days.any():
+            updated_non_null = int(df_merged.loc[mask_days, "sentiment_score"].notna().sum())
+
+        logger.info(
+            "Sentiment merge completed",
+            extra={
+                "asset_id": asset_id,
+                "days_input": len(df_sentiment),
+                "rows_in_window": int(mask_days.sum()),
+                "rows_with_sentiment_after": updated_non_null,
+            },
+        )
 
         # Persist updated candles
-        df_updated.to_parquet(filepath, index=False)
+        df_merged.to_parquet(filepath, index=False)
 
-        print(
-            f"✅ Updated sentiment for {len(daily_sentiments)} days "
-            f"in {filepath.name}"
+        logger.info("Updating sentiment (write)", extra={"path": str(filepath.resolve()), "rows": len(df_merged), "cols": list(df_merged.columns)})
+
+        logger.info(
+            "Sentiment successfully persisted into candles",
+            extra={
+                "asset_id": asset_id,
+                "path": str(filepath),
+            },
         )
 
 
