@@ -1,6 +1,7 @@
 # tests/unit/domain/services/test_sentiment_aggregator.py
 
-from datetime import datetime, date
+from datetime import datetime, date, timezone
+from statistics import pstdev
 
 import pytest
 
@@ -37,8 +38,8 @@ def test_aggregate_daily_single_article_per_day():
     aggregator = SentimentAggregator()
 
     articles = [
-        _article(published_at=datetime(2024, 1, 1, 10), score=0.5),
-        _article(published_at=datetime(2024, 1, 2, 9), score=-0.2),
+        _article(published_at=datetime(2024, 1, 1, 10, tzinfo=timezone.utc), score=0.5),
+        _article(published_at=datetime(2024, 1, 2, 9, tzinfo=timezone.utc), score=-0.2),
     ]
 
     result = aggregator.aggregate_daily("AAPL", articles)
@@ -65,9 +66,9 @@ def test_aggregate_daily_multiple_articles_same_day():
     aggregator = SentimentAggregator()
 
     articles = [
-        _article(published_at=datetime(2024, 1, 1, 8), score=0.2),
-        _article(published_at=datetime(2024, 1, 1, 12), score=0.6),
-        _article(published_at=datetime(2024, 1, 1, 18), score=0.4),
+        _article(published_at=datetime(2024, 1, 1, 8, tzinfo=timezone.utc), score=0.2),
+        _article(published_at=datetime(2024, 1, 1, 12, tzinfo=timezone.utc), score=0.6),
+        _article(published_at=datetime(2024, 1, 1, 18, tzinfo=timezone.utc), score=0.4),
     ]
 
     result = aggregator.aggregate_daily("AAPL", articles)
@@ -79,7 +80,7 @@ def test_aggregate_daily_multiple_articles_same_day():
     assert daily.day == date(2024, 1, 1)
     assert daily.n_articles == 3
     assert daily.sentiment_score == pytest.approx((0.2 + 0.6 + 0.4) / 3)
-    assert daily.sentiment_std > 0.0
+    assert daily.sentiment_std == pytest.approx(pstdev([0.2, 0.6, 0.4]))
 
 
 def test_aggregate_daily_temporal_ordering_is_enforced():
@@ -90,9 +91,9 @@ def test_aggregate_daily_temporal_ordering_is_enforced():
     aggregator = SentimentAggregator()
 
     articles = [
-        _article(published_at=datetime(2024, 1, 3, 10), score=0.1),
-        _article(published_at=datetime(2024, 1, 1, 10), score=0.3),
-        _article(published_at=datetime(2024, 1, 2, 10), score=-0.1),
+        _article(published_at=datetime(2024, 1, 3, 10, tzinfo=timezone.utc), score=0.1),
+        _article(published_at=datetime(2024, 1, 1, 10, tzinfo=timezone.utc), score=0.3),
+        _article(published_at=datetime(2024, 1, 2, 10, tzinfo=timezone.utc), score=-0.1),
     ]
 
     result = aggregator.aggregate_daily("AAPL", articles)
@@ -125,8 +126,8 @@ def test_aggregate_daily_rejects_mixed_asset_ids():
     aggregator = SentimentAggregator()
 
     articles = [
-        _article(asset_id="AAPL", published_at=datetime(2024, 1, 1), score=0.2),
-        _article(asset_id="MSFT", published_at=datetime(2024, 1, 1), score=0.4),
+        _article(asset_id="AAPL", published_at=datetime(2024, 1, 1, tzinfo=timezone.utc), score=0.2),
+        _article(asset_id="MSFT", published_at=datetime(2024, 1, 1, tzinfo=timezone.utc), score=0.4),
     ]
 
     with pytest.raises(ValueError):
@@ -144,12 +145,12 @@ def test_aggregate_daily_ignores_confidence_for_now():
 
     articles = [
         _article(
-            published_at=datetime(2024, 1, 1, 9),
+            published_at=datetime(2024, 1, 1, 9, tzinfo=timezone.utc),
             score=1.0,
             confidence=0.1,
         ),
         _article(
-            published_at=datetime(2024, 1, 1, 18),
+            published_at=datetime(2024, 1, 1, 18, tzinfo=timezone.utc),
             score=-1.0,
             confidence=0.9,
         ),
@@ -158,6 +159,7 @@ def test_aggregate_daily_ignores_confidence_for_now():
     result = aggregator.aggregate_daily("AAPL", articles)
 
     assert len(result) == 1
+    assert result[0].n_articles == 2
     assert result[0].sentiment_score == pytest.approx(0.0)
 
 # TODO(feature-engineering):
