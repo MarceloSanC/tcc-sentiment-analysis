@@ -1,5 +1,5 @@
-# src/main_features.py
 import argparse
+import logging
 from pathlib import Path
 
 from src.utils.path_resolver import load_data_paths
@@ -11,6 +11,9 @@ from src.adapters.sklearn_feature_normalizer import SklearnFeatureNormalizer
 from src.use_cases.feature_engineering_use_case import FeatureEngineeringUseCase
 
 
+logger = logging.getLogger(__name__)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Generate technical features for a financial asset"
@@ -20,7 +23,7 @@ def parse_args() -> argparse.Namespace:
         "--asset",
         type=str,
         required=True,
-        help="Asset identifier (e.g. PETR4.SA, AAPL)",
+        help="Asset identifier (e.g. AAPL)",
     )
 
     parser.add_argument(
@@ -38,9 +41,14 @@ def main() -> None:
     asset_id = args.asset
     overwrite = args.overwrite
 
+    logger.info(
+        "Starting feature engineering pipeline",
+        extra={"asset": asset_id, "overwrite": overwrite},
+    )
+
     # ---------- Paths ----------
     paths = load_data_paths()
-    
+
     # Candles: data/raw/market/candles/{ASSET}
     raw_candles_base_dir = paths["raw_candles"]
     raw_candles_asset_dir = raw_candles_base_dir / asset_id
@@ -57,9 +65,17 @@ def main() -> None:
     processed_features_asset_dir = processed_features_base_dir / asset_id
     processed_features_asset_dir.mkdir(parents=True, exist_ok=True)
 
+    logger.info(
+        "Resolved data paths",
+        extra={
+            "candles_dir": str(raw_candles_asset_dir.resolve()),
+            "features_dir": str(processed_features_asset_dir.resolve()),
+        },
+    )
+
     # ---------- Adapters ----------
     candle_repository = ParquetCandleRepository(
-        output_dir=raw_candles_asset_dir
+        output_dir=raw_candles_base_dir
     )
 
     feature_repository = ParquetFeatureSetRepository(
@@ -81,9 +97,13 @@ def main() -> None:
     # ---------- Execute ----------
     feature_sets = use_case.execute(asset_id)
 
-    print(
-        f"[OK] Generated {len(feature_sets)} feature rows "
-        f"for asset {asset_id}"
+    logger.info(
+        "Feature engineering completed successfully",
+        extra={
+            "asset": asset_id,
+            "rows": len(feature_sets),
+            "output_dir": str(processed_features_asset_dir.resolve()),
+        },
     )
 
 
