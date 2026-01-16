@@ -2,7 +2,9 @@
 import os
 from pathlib import Path
 import yaml
+import logging
 
+logger = logging.getLogger(__name__)
 
 def load_data_paths() -> dict:
     with open("config/data_paths.yaml") as f:
@@ -10,6 +12,8 @@ def load_data_paths() -> dict:
 
     root_env = os.getenv("DATA_ROOT")
     root = Path(root_env) if root_env else None
+
+    logger.info("Resolved data paths | root=%s", root)
 
     def resolve(p: str) -> Path:
         return root / Path(p) if root else Path(p)
