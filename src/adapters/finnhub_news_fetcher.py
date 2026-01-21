@@ -8,6 +8,7 @@ from typing import List, Optional
 
 import requests
 
+from domain.time.utc import require_tz_aware
 from src.entities.news_article import NewsArticle
 from src.interfaces.news_fetcher import NewsFetcher
 
@@ -36,11 +37,6 @@ class FinnhubNewsFetcher(NewsFetcher):
         self.timeout_seconds = timeout_seconds
         self._session = session or requests.Session()
 
-    @staticmethod
-    def _require_tz_aware(dt: datetime, name: str) -> None:
-        if dt.tzinfo is None:
-            raise ValueError(f"{name} must be timezone-aware")
-
     def fetch_company_news(
         self,
         asset_id: str,
@@ -60,8 +56,8 @@ class FinnhubNewsFetcher(NewsFetcher):
         Returns:
             Lista de NewsArticle (domínio)
         """
-        self._require_tz_aware(start_date, "start_date")
-        self._require_tz_aware(end_date, "end_date")
+        require_tz_aware(start_date, "start_date")
+        require_tz_aware(end_date, "end_date")
 
         start_utc = start_date.astimezone(timezone.utc)
         end_utc = end_date.astimezone(timezone.utc)
