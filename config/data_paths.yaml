@@ -2,9 +2,11 @@
 data:
   raw:
     candles: data/raw/market/candles
+    news: data/raw/news
 
   processed:
     features: data/processed/features
+    news: data/processed/news
     dataset_tft: data/processed/dataset_tft
 
   models:
