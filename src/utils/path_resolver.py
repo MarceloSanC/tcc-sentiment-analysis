@@ -21,6 +21,8 @@ def load_data_paths() -> dict:
     return {
         "raw_candles": resolve(paths["data"]["raw"]["candles"]),
         "processed_features": resolve(paths["data"]["processed"]["features"]),
+        "processed_news": resolve(paths["data"]["processed"]["news"]),
         "dataset_tft": resolve(paths["data"]["processed"]["dataset_tft"]),
         "models": resolve(paths["data"]["models"]["tft"]),
+        "news_dataset": resolve(paths["data"]["raw"]["news"]),
     }
