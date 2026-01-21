@@ -1,10 +1,11 @@
 # Executando o Pipeline
 
-Este projeto é dividido em **3 pipelines principais**, executados nesta ordem:
+Este projeto é dividido em **4 pipelines principais**, executados nesta ordem:
 
 1) **Candles (OHLCV)** → baixa e persiste preços históricos  
-2) **Sentimento** → coleta notícias e enriquece candles com sentimento diário  
-3) **Features** → calcula indicadores técnicos e gera features normalizadas
+2) **Sentimento (raw news)** → coleta notícias brutas e salva em parquet raw  
+3) **Scoring de notícias** → infere sentimento por notícia e salva em parquet processed  
+4) **Features** → calcula indicadores técnicos e gera features normalizadas
 
 > **Regra importante (consistência temporal):** o projeto padroniza timestamps em **UTC** para evitar ambiguidade e *lookahead bias*.
 
@@ -63,22 +64,37 @@ python -m src.main_candles --asset AAPL
 - Este pipeline deve rodar **antes** do sentimento (porque o sentimento enriquece candles já existentes).
 
 
-## 2) Rodar Pipeline de Sentimento (enriquecimento dos candles)
+## 2) Rodar Pipeline de Sentimento (raw news)
 
-Coleta notícias via **Finnhub**, infere sentimento com **FinBERT**, agrega por dia (UTC) e persiste no mesmo parquet de candles.
+Coleta notícias via **Alpha Vantage** e persiste o dataset raw em parquet.
 
 Executar:
 
 ```bash
-python -m src.main_sentiment --asset AAPL
+python -m src.main_news_dataset --asset AAPL
 ```
 
 **Observações**
 - O período (start/end) também é lido de `config/data_sources.yaml`.
-- Se `data_sources.sentiment.enabled: false`, o pipeline encerra sem executar.
+- A execução é incremental e deduplica por URL/article_id.
 
 
-## 3) Gerar Features Técnicas
+## 3) Rodar Scoring de Notícias (FinBERT → parquet processed)
+
+Lê `data/raw/news/...` e gera `data/processed/news/...` com sentimento por notícia.
+
+Executar:
+
+```bash
+python -m src.main_score_news --asset AAPL
+```
+
+**Observações**
+- O período (start/end) é lido de `config/data_sources.yaml`.
+- O pipeline ignora notícias já pontuadas (skip por article_id).
+
+
+## 4) Gerar Features Técnicas
 
 Lê candles já enriquecidos e gera features em:
 
