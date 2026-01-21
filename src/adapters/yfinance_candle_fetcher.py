@@ -8,6 +8,7 @@ from datetime import datetime, timezone, time
 
 import yfinance as yf
 
+from domain.time.utc import require_tz_aware, to_utc
 from src.entities.candle import Candle
 from src.interfaces.candle_fetcher import CandleFetcher
 
@@ -27,21 +28,12 @@ class YFinanceCandleFetcher(CandleFetcher):
         self.max_retries = max_retries
         self.retry_delay = retry_delay
 
-    @staticmethod
-    def _require_tz_aware(dt: datetime, name: str) -> None:
-        if dt.tzinfo is None:
-            raise ValueError(f"{name} must be timezone-aware")
-
-    @staticmethod
-    def _to_utc(dt: datetime) -> datetime:
-        return dt.astimezone(timezone.utc)
-
     def fetch_candles(self, symbol: str, start: datetime, end: datetime) -> list[Candle]:
-        self._require_tz_aware(start, "start")
-        self._require_tz_aware(end, "end")
+        require_tz_aware(start, "start")
+        require_tz_aware(end, "end")
 
-        start_utc = self._to_utc(start)
-        end_utc = self._to_utc(end)
+        start_utc = to_utc(start)
+        end_utc = to_utc(end)
 
         if start_utc > end_utc:
             raise ValueError("start must be <= end")
