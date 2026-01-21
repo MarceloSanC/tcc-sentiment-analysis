@@ -15,7 +15,16 @@ data_sources:
     provider: "yfinance"
     interval: "1d"
 
+  news_dataset:
+    build_enabled: true
+    provider: "alpha_vantage"
+    dataset_start: "2010-01-01T00:00:00Z"
+    dataset_end: "2025-12-31T23:59:00Z"
+    sort: "EARLIEST"
+    limit: 1000
+    safety_margin: 950
+
   sentiment:
     enabled: true
-    provider: "finnhub"
+    provider: "alpha_vantage"   # ou "local_dataset" depois
     aggregation: "daily"
