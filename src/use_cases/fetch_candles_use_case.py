@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, time, timezone
 
+from domain.time.utc import require_tz_aware, to_utc
 from src.interfaces.candle_fetcher import CandleFetcher
 from src.interfaces.candle_repository import CandleRepository
 
@@ -17,15 +18,6 @@ class FetchCandlesUseCase:
         self.candle_repository = candle_repository
 
     @staticmethod
-    def _require_tz_aware(dt: datetime, name: str) -> None:
-        if dt.tzinfo is None:
-            raise ValueError(f"{name} must be timezone-aware")
-
-    @staticmethod
-    def _to_utc(dt: datetime) -> datetime:
-        return dt.astimezone(timezone.utc)
-
-    @staticmethod
     def _inclusive_end_for_daily(end_utc: datetime) -> datetime:
         """
         yfinance 'end' tende a ser exclusive. Para candles 1d,
@@ -38,11 +30,11 @@ class FetchCandlesUseCase:
         return datetime.combine(end_utc.date() + timedelta(days=1), time(0, 0), tzinfo=timezone.utc)
 
     def execute(self, symbol: str, start: datetime, end: datetime) -> int:
-        self._require_tz_aware(start, "start")
-        self._require_tz_aware(end, "end")
+        require_tz_aware(start, "start")
+        require_tz_aware(end, "end")
 
-        start_utc = self._to_utc(start)
-        end_utc = self._to_utc(end)
+        start_utc = to_utc(start)
+        end_utc = to_utc(end)
 
         if start_utc > end_utc:
             raise ValueError("start must be <= end")
