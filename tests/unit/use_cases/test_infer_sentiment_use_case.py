@@ -1,205 +1,188 @@
-# tests/unit/use_cases/test_infer_sentiment_use_case.py
+from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock
+from datetime import datetime, timezone
 
 import pytest
 
-from src.use_cases.infer_sentiment_use_case import InferSentimentUseCase
 from src.entities.news_article import NewsArticle
 from src.entities.scored_news_article import ScoredNewsArticle
-from src.entities.daily_sentiment import DailySentiment
-from src.domain.services.sentiment_aggregator import SentimentAggregator
-from src.interfaces.news_fetcher import NewsFetcher
+from src.interfaces.news_repository import NewsRepository
+from src.interfaces.scored_news_repository import ScoredNewsRepository
 from src.interfaces.sentiment_model import SentimentModel
-from src.interfaces.candle_repository import CandleRepository
+from src.use_cases.infer_sentiment_use_case import InferSentimentUseCase
 
 
-@pytest.fixture
-def base_dates():
-    start = datetime(2024, 1, 1, tzinfo=timezone.utc)
-    end = datetime(2024, 1, 3, tzinfo=timezone.utc)
-    return start, end
+def _dt_utc(
+    y: int, m: int, d: int, hh: int = 0, mm: int = 0, ss: int = 0
+) -> datetime:
+    return datetime(y, m, d, hh, mm, ss, tzinfo=timezone.utc)
 
 
-@pytest.fixture
-def sample_articles(base_dates):
-    start, _ = base_dates
+class FakeNewsRepository(NewsRepository):
+    def __init__(self, articles: list[NewsArticle]) -> None:
+        self._articles = articles
 
-    return [
-        NewsArticle(
-            article_id="n2",
-            asset_id="AAPL",
-            headline="Late news",
-            summary="late",
-            published_at=start + timedelta(days=1),
-            source="test",
-        ),
-        NewsArticle(
-            article_id="n1",
-            asset_id="AAPL",
-            headline="Early news",
-            summary="early",
-            published_at=start,
-            source="test",
-        ),
+    def get_latest_published_at(self, asset_id: str):
+        raise NotImplementedError
+
+    def upsert_news_batch(self, articles: list[NewsArticle]) -> None:
+        raise NotImplementedError
+
+    def list_news(
+        self, asset_id: str, start_date: datetime, end_date: datetime
+    ) -> list[NewsArticle]:
+        return self._articles
+
+
+class FakeSentimentModel(SentimentModel):
+    def __init__(self) -> None:
+        self.seen_ids: list[str] = []
+        self.called = 0
+
+    def infer(self, articles: list[NewsArticle]) -> list[ScoredNewsArticle]:
+        self.called += 1
+        self.seen_ids = [str(a.article_id) for a in articles]
+        return [
+            ScoredNewsArticle(
+                asset_id=a.asset_id,
+                article_id=str(a.article_id),
+                published_at=a.published_at,
+                sentiment_score=0.5,
+                model_name="fake",
+            )
+            for a in articles
+        ]
+
+
+class FakeScoredNewsRepository(ScoredNewsRepository):
+    def __init__(self, existing_ids: set[str] | None = None) -> None:
+        self.existing_ids = existing_ids or set()
+        self.saved_batches: list[list[ScoredNewsArticle]] = []
+
+    def get_latest_published_at(self, asset_id: str):
+        return None
+
+    def upsert_scored_news_batch(self, articles: list[ScoredNewsArticle]) -> None:
+        self.saved_batches.append(articles)
+
+    def list_scored_news(
+        self, asset_id: str, start_date: datetime, end_date: datetime
+    ):
+        return []
+
+    def list_article_ids(self, asset_id: str) -> set[str]:
+        return set(self.existing_ids)
+
+
+def _article(
+    asset_id: str, article_id: str | None, published_at: datetime
+) -> NewsArticle:
+    return NewsArticle(
+        asset_id=asset_id,
+        article_id=article_id,
+        published_at=published_at,
+        headline="h",
+        summary="s",
+        source="src",
+        url=f"https://example.com/{article_id}" if article_id else None,
+    )
+
+
+def test_infer_orders_articles_before_scoring() -> None:
+    articles = [
+        _article("AAPL", "a2", _dt_utc(2024, 1, 2)),
+        _article("AAPL", "a1", _dt_utc(2024, 1, 1)),
     ]
 
-
-@pytest.fixture
-def scored_articles(sample_articles):
-    return [
-        ScoredNewsArticle(
-            article_id=a.article_id,
-            asset_id=a.asset_id,
-            published_at=a.published_at,
-            sentiment_score=0.5,
-            model_name="mock-model",
-        )
-        for a in sample_articles
-    ]
-
-
-def test_full_pipeline_happy_path(sample_articles, scored_articles, base_dates):
-    """
-    Deve executar o pipeline completo:
-    fetch → infer → aggregate → persist
-    respeitando ordenação temporal.
-    """
-    start, end = base_dates
-
-    news_fetcher = MagicMock(spec=NewsFetcher)
-    sentiment_model = MagicMock(spec=SentimentModel)
-    aggregator = SentimentAggregator()
-    candle_repo = MagicMock(spec=CandleRepository)
-
-    news_fetcher.fetch_company_news.return_value = sample_articles
-    sentiment_model.infer.return_value = scored_articles
+    news_repo = FakeNewsRepository(articles)
+    sentiment_model = FakeSentimentModel()
+    scored_repo = FakeScoredNewsRepository()
 
     use_case = InferSentimentUseCase(
-        news_fetcher=news_fetcher,
+        news_repository=news_repo,
         sentiment_model=sentiment_model,
-        sentiment_aggregator=aggregator,
-        candle_repository=candle_repo,
+        scored_news_repository=scored_repo,
     )
 
-    result = use_case.execute(
-        asset_id="AAPL",
-        start_date=start,
-        end_date=end,
-    )
+    use_case.execute("AAPL", _dt_utc(2024, 1, 1), _dt_utc(2024, 1, 3))
 
-    # fetch chamado corretamente
-    news_fetcher.fetch_company_news.assert_called_once()
-
-    # infer recebe artigos ordenados por data
-    infer_input = sentiment_model.infer.call_args[0][0]
-    assert infer_input[0].article_id == "n1"
-    assert infer_input[1].article_id == "n2"
-
-    # persistência ocorre
-    candle_repo.update_sentiment.assert_called_once()
-
-    # saída é ordenada temporalmente
-    assert result == sorted(result, key=lambda d: d.day)
+    assert sentiment_model.seen_ids == ["a1", "a2"]
 
 
-def test_short_circuit_when_no_articles(base_dates):
-    """
-    Sem notícias → não infere, não agrega, não persiste.
-    """
-    start, end = base_dates
-
-    news_fetcher = MagicMock(spec=NewsFetcher)
-    sentiment_model = MagicMock(spec=SentimentModel)
-    aggregator = MagicMock(spec=SentimentAggregator)
-    candle_repo = MagicMock(spec=CandleRepository)
-
-    news_fetcher.fetch_company_news.return_value = []
+def test_short_circuit_when_no_articles() -> None:
+    news_repo = FakeNewsRepository([])
+    sentiment_model = FakeSentimentModel()
+    scored_repo = FakeScoredNewsRepository()
 
     use_case = InferSentimentUseCase(
-        news_fetcher, sentiment_model, aggregator, candle_repo
+        news_repository=news_repo,
+        sentiment_model=sentiment_model,
+        scored_news_repository=scored_repo,
     )
 
-    result = use_case.execute("AAPL", start, end)
+    result = use_case.execute("AAPL", _dt_utc(2024, 1, 1), _dt_utc(2024, 1, 2))
 
-    assert result == []
-    sentiment_model.infer.assert_not_called()
-    aggregator.aggregate_daily.assert_not_called()
-    candle_repo.update_sentiment.assert_not_called()
+    assert result.read == 0
+    assert result.scored == 0
+    assert sentiment_model.called == 0
+    assert scored_repo.saved_batches == []
 
 
-def test_short_circuit_when_no_scored_articles(sample_articles, base_dates):
-    """
-    Sem scores → não agrega nem persiste.
-    """
-    start, end = base_dates
+def test_skip_already_scored_articles() -> None:
+    articles = [
+        _article("AAPL", "a1", _dt_utc(2024, 1, 1)),
+        _article("AAPL", "a2", _dt_utc(2024, 1, 2)),
+        _article("AAPL", "a3", _dt_utc(2024, 1, 3)),
+    ]
 
-    news_fetcher = MagicMock(spec=NewsFetcher)
-    sentiment_model = MagicMock(spec=SentimentModel)
-    aggregator = MagicMock(spec=SentimentAggregator)
-    candle_repo = MagicMock(spec=CandleRepository)
-
-    news_fetcher.fetch_company_news.return_value = sample_articles
-    sentiment_model.infer.return_value = []
+    news_repo = FakeNewsRepository(articles)
+    sentiment_model = FakeSentimentModel()
+    scored_repo = FakeScoredNewsRepository(existing_ids={"a1", "a3"})
 
     use_case = InferSentimentUseCase(
-        news_fetcher, sentiment_model, aggregator, candle_repo
+        news_repository=news_repo,
+        sentiment_model=sentiment_model,
+        scored_news_repository=scored_repo,
+        batch_size=10,
     )
 
-    result = use_case.execute("AAPL", start, end)
+    result = use_case.execute("AAPL", _dt_utc(2024, 1, 1), _dt_utc(2024, 1, 4))
 
-    assert result == []
-    aggregator.aggregate_daily.assert_not_called()
-    candle_repo.update_sentiment.assert_not_called()
+    assert sentiment_model.seen_ids == ["a2"]
+    assert result.read == 3
+    assert result.skipped == 2
+    assert result.scored == 1
+    assert result.saved == 1
+    assert len(scored_repo.saved_batches) == 1
 
 
-def test_no_persistence_when_aggregator_returns_empty(sample_articles, scored_articles, base_dates):
-    """
-    Agregador vazio → não persiste.
-    """
-    start, end = base_dates
+def test_requires_article_id() -> None:
+    articles = [
+        _article("AAPL", None, _dt_utc(2024, 1, 1)),
+    ]
 
-    news_fetcher = MagicMock(spec=NewsFetcher)
-    sentiment_model = MagicMock(spec=SentimentModel)
-    aggregator = MagicMock(spec=SentimentAggregator)
-    candle_repo = MagicMock(spec=CandleRepository)
-
-    news_fetcher.fetch_company_news.return_value = sample_articles
-    sentiment_model.infer.return_value = scored_articles
-    aggregator.aggregate_daily.return_value = []
+    news_repo = FakeNewsRepository(articles)
+    sentiment_model = FakeSentimentModel()
+    scored_repo = FakeScoredNewsRepository()
 
     use_case = InferSentimentUseCase(
-        news_fetcher, sentiment_model, aggregator, candle_repo
+        news_repository=news_repo,
+        sentiment_model=sentiment_model,
+        scored_news_repository=scored_repo,
     )
 
-    result = use_case.execute("AAPL", start, end)
-
-    assert result == []
-    candle_repo.update_sentiment.assert_not_called()
+    with pytest.raises(ValueError, match="article_id is required"):
+        use_case.execute("AAPL", _dt_utc(2024, 1, 1), _dt_utc(2024, 1, 2))
 
 
 # =========================
 # TODOs — melhorias futuras
 # =========================
 
-# TODO(test):
-# Validar explicitamente que aggregate_daily recebe
-# apenas artigos do mesmo asset_id
-
 # TODO(stat-validation):
-# Criar teste para detectar desalinhamento temporal:
-# published_at > candle_day (lookahead bias)
-
-# TODO(architecture):
-# Introduzir fake explícito (in-memory) para CandleRepository
-# em vez de mock, se a lógica de persistência crescer
-
-# TODO(test):
-# Adicionar teste de pipeline parcial (infer + aggregate)
-# para cenários de backfill
+# Validar desalinhamento temporal quando agregarmos
+# scored news em sentimento diário (lookahead bias).
 
 # TODO(CleanArch):
-# Centralizar política de seleção de texto
-# para inferência de sentimento em método da entidade
-# ou Value Object dedicado (ex: SentimentInputText)
+# Centralizar política de seleção de texto para inferência
+# em método da entidade ou Value Object dedicado.
