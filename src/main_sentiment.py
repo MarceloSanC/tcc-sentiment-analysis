@@ -1,23 +1,21 @@
-# src/main_sentiment.py
+from __future__ import annotations
+
 import argparse
 import logging
-import os
 from pathlib import Path
 
 import yaml
 from dotenv import load_dotenv
 
-from src.domain.time.utc import parse_iso_utc
-from src.adapters.finnhub_news_fetcher import FinnhubNewsFetcher
 from src.adapters.finbert_sentiment_model import FinBERTSentimentModel
-from src.adapters.parquet_candle_repository import ParquetCandleRepository
-from src.domain.services.sentiment_aggregator import SentimentAggregator
+from src.adapters.parquet_news_repository import ParquetNewsRepository
+from src.adapters.parquet_scored_news_repository import ParquetScoredNewsRepository
+from src.domain.time.utc import parse_iso_utc
 from src.use_cases.infer_sentiment_use_case import InferSentimentUseCase
 from src.utils.logging_config import setup_logging
 from src.utils.path_resolver import load_data_paths
 
 logger = logging.getLogger(__name__)
-
 load_dotenv()
 
 
@@ -27,75 +25,80 @@ def load_config() -> dict:
         return yaml.safe_load(f)
 
 
-def main() -> None:
-    setup_logging()
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Infer sentiment for raw news using FinBERT and persist to processed parquet"
+    )
+    parser.add_argument("--asset", required=True, help="Asset symbol (e.g. AAPL)")
+    return parser.parse_args()
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--asset", required=True, help="Ex: AAPL")
-    args = parser.parse_args()
-    asset_id = args.asset
+
+def main() -> None:
+    setup_logging(logging.INFO)
+
+    args = parse_args()
+    asset_id = args.asset.strip().upper()
 
     config = load_config()
+    asset_cfg = next(
+        (a for a in config.get("assets", []) if str(a.get("symbol", "")).upper() == asset_id),
+        None,
+    )
+    if not asset_cfg:
+        raise RuntimeError(f"Asset not found in config/data_sources.yaml: {asset_id}")
 
-    sentiment_cfg = (config.get("data_sources") or {}).get("sentiment") or {}
-    if not sentiment_cfg.get("enabled", False):
-        logger.info("Sentiment pipeline disabled in config", extra={"asset": asset_id})
-        return
-
-    provider = sentiment_cfg.get("provider")
-    if provider != "finnhub":
-        raise ValueError(f"Unsupported sentiment provider: {provider}")
-
-    asset_config = next((a for a in config.get("assets", []) if a["symbol"] == asset_id), None)
-    if not asset_config:
-        raise ValueError(f"Asset {asset_id} not found in config/data_sources.yaml")
-
-    api_key = os.getenv("FINNHUB_API_KEY")
-    if not api_key:
-        raise RuntimeError("FINNHUB_API_KEY environment variable is not set")
-
-    start_date = parse_iso_utc(asset_config["start_date"])
-    end_date = parse_iso_utc(asset_config["end_date"])
-
+    start_date = parse_iso_utc(asset_cfg["start_date"])
+    end_date = parse_iso_utc(asset_cfg["end_date"])
     if start_date > end_date:
         raise ValueError("start_date must be <= end_date")
 
+    paths = load_data_paths()
+    raw_news_dir = paths.get("news_dataset")
+    if raw_news_dir is None:
+        raw_news_dir = Path("data") / "raw" / "news"
+    raw_news_dir = Path(raw_news_dir)
+
+    processed_news_dir = paths.get("processed_news")
+    if processed_news_dir is None:
+        processed_news_dir = Path("data") / "processed" / "news"
+    processed_news_dir = Path(processed_news_dir)
+
     logger.info(
-        "Starting sentiment pipeline",
+        "Starting sentiment inference",
         extra={
             "asset": asset_id,
             "start": start_date.isoformat(),
             "end": end_date.isoformat(),
-            "provider": provider,
-            "aggregation": sentiment_cfg.get("aggregation"),
+            "raw_news_dir": str(raw_news_dir.resolve()),
+            "processed_news_dir": str(processed_news_dir.resolve()),
         },
     )
 
-    paths = load_data_paths()
-    candles_base_dir = paths["raw_candles"]
-    candles_base_dir.mkdir(parents=True, exist_ok=True)
-
-    news_fetcher = FinnhubNewsFetcher(api_key=api_key)
+    news_repository = ParquetNewsRepository(output_dir=raw_news_dir)
+    scored_repository = ParquetScoredNewsRepository(output_dir=processed_news_dir)
     sentiment_model = FinBERTSentimentModel()
-    sentiment_aggregator = SentimentAggregator()
-    candle_repository = ParquetCandleRepository(output_dir=candles_base_dir)
 
     use_case = InferSentimentUseCase(
-        news_fetcher=news_fetcher,
+        news_repository=news_repository,
         sentiment_model=sentiment_model,
-        sentiment_aggregator=sentiment_aggregator,
-        candle_repository=candle_repository,
+        scored_news_repository=scored_repository,
     )
 
-    daily_sentiments = use_case.execute(
+    result = use_case.execute(
         asset_id=asset_id,
         start_date=start_date,
         end_date=end_date,
     )
 
     logger.info(
-        "Sentiment enrichment completed",
-        extra={"asset": asset_id, "days": len(daily_sentiments)},
+        "Sentiment inference completed",
+        extra={
+            "asset": result.asset_id,
+            "read": result.read,
+            "skipped": result.skipped,
+            "scored": result.scored,
+            "saved": result.saved,
+        },
     )
 
 
