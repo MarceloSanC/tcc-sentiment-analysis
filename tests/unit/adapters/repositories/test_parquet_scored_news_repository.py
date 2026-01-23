@@ -57,7 +57,7 @@ def test_upsert_persists_parquet_with_schema_and_dtypes(
 
     repo.upsert_scored_news_batch(articles)
 
-    parquet_path = tmp_path / "asset=AAPL" / "scored_news_AAPL.parquet"
+    parquet_path = tmp_path / "AAPL" / "scored_news_AAPL.parquet"
     assert parquet_path.exists()
 
     df = pd.read_parquet(parquet_path)
@@ -97,7 +97,7 @@ def test_upsert_deduplicates_by_article_id_keep_last(
     repo.upsert_scored_news_batch([a1])
     repo.upsert_scored_news_batch([a1_updated])
 
-    parquet_path = tmp_path / "asset=AAPL" / "scored_news_AAPL.parquet"
+    parquet_path = tmp_path / "AAPL" / "scored_news_AAPL.parquet"
     df = pd.read_parquet(parquet_path)
 
     assert len(df) == 1
