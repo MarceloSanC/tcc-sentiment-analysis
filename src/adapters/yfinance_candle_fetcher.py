@@ -58,6 +58,7 @@ class YFinanceCandleFetcher(CandleFetcher):
                     interval="1d",
                     progress=False,
                     timeout=10,
+                    auto_adjust=False,
                 )
 
                 if df is None or df.empty:
