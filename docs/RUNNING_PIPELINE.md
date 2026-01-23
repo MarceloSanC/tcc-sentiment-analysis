@@ -81,12 +81,12 @@ python -m src.main_news_dataset --asset AAPL
 
 ## 3) Rodar Scoring de Notícias (FinBERT → parquet processed)
 
-Lê `data/raw/news/...` e gera `data/processed/news/...` com sentimento por notícia.
+Lê `data/raw/news/{ASSET}` e gera `data/processed/news/{ASSET}` com sentimento por notícia.
 
 Executar:
 
 ```bash
-python -m src.main_score_news --asset AAPL
+python -m src.main_sentiment --asset AAPL
 ```
 
 **Observações**
