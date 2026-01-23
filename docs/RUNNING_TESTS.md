@@ -23,7 +23,7 @@ TOTAL                                64      0   100%
 
 - Por arquivo:
 ```
-python -m pytest tests/unit/test_use_cases/test_fetch_news_use_case.py -v
+python -m pytest tests/unit/use_cases/test_fetch_news_use_case.py -v
 ```
 
 - Por marcação (ex: testes de integração):
