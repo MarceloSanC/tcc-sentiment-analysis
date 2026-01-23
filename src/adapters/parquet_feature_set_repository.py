@@ -14,7 +14,7 @@ from src.infrastructure.schemas.feature_set_parquet_schema import (
 
 class ParquetFeatureSetRepository(FeatureSetRepository):
     """
-    Adapter de persistência de FeatureSets em Parquet (long format).
+    Adapter de persistência de FeatureSets em Parquet (wide format).
     """
 
     def __init__(
@@ -41,15 +41,9 @@ class ParquetFeatureSetRepository(FeatureSetRepository):
         rows: list[dict] = []
 
         for fs in features:
-            for name, value in fs.features.items():
-                rows.append(
-                    {
-                        "asset_id": fs.asset_id,
-                        "timestamp": fs.timestamp,
-                        "feature_name": name,
-                        "feature_value": float(value) if value is not None else None,
-                    }
-                )
+            row = {"asset_id": fs.asset_id, "timestamp": fs.timestamp}
+            row.update(fs.features)
+            rows.append(row)
 
         df = pd.DataFrame(rows)
 
@@ -60,6 +54,10 @@ class ParquetFeatureSetRepository(FeatureSetRepository):
 
         # Dtypes
         df = df.astype(FEATURE_SET_DTYPES)
+        for col in df.columns:
+            if col in FEATURE_SET_BASE_COLUMNS:
+                continue
+            df[col] = pd.to_numeric(df[col], errors="coerce").astype("float32")
 
         # Temporal guarantee
         df = df.sort_values(FEATURE_SET_INDEX).reset_index(drop=True)
@@ -84,21 +82,22 @@ class ParquetFeatureSetRepository(FeatureSetRepository):
 
         df = df.sort_values(FEATURE_SET_INDEX)
 
-        grouped: dict[
-            tuple[str, pd.Timestamp], dict[str, float]
-        ] = {}
-
-        for _, row in df.iterrows():
-            key = (row["asset_id"], row["timestamp"])
-            grouped.setdefault(key, {})
-            grouped[key][row["feature_name"]] = row["feature_value"]
-
+        feature_cols = [c for c in df.columns if c not in FEATURE_SET_BASE_COLUMNS]
         result: list[FeatureSet] = []
 
-        for (asset_id, timestamp), features in grouped.items():
+        for _, row in df.iterrows():
+            features = {
+                name: float(row[name])
+                for name in feature_cols
+                if pd.notna(row[name])
+            }
+            if not features:
+                raise ValueError("FeatureSet cannot be empty")
+
+            timestamp = row["timestamp"]
             result.append(
                 FeatureSet(
-                    asset_id=asset_id,
+                    asset_id=row["asset_id"],
                     timestamp=(
                         timestamp.to_pydatetime()
                         if hasattr(timestamp, "to_pydatetime")
