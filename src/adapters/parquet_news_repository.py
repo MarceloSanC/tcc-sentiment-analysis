@@ -25,7 +25,7 @@ class ParquetNewsRepository(NewsRepository):
     Parquet-based repository for NewsArticle.
 
     Storage layout:
-      data/raw/news/asset=AAPL/news_AAPL.parquet
+      data/raw/news/AAPL/news_AAPL.parquet
 
     Temporal contract:
     - All datetimes in/out are timezone-aware UTC.
@@ -55,7 +55,7 @@ class ParquetNewsRepository(NewsRepository):
 
     def _asset_dir(self, asset_id: str) -> Path:
         symbol = self._normalize_symbol(asset_id)
-        return self.output_dir / f"asset={symbol}"
+        return self.output_dir / symbol
 
     def _filepath(self, asset_id: str) -> Path:
         symbol = self._normalize_symbol(asset_id)
