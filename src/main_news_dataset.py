@@ -13,7 +13,7 @@ import yaml
 from src.domain.time.utc import parse_iso_utc
 from src.adapters.alpha_vantage_news_fetcher import AlphaVantageNewsFetcher
 from src.adapters.parquet_news_repository import ParquetNewsRepository
-from src.use_cases.build_news_dataset_use_case import BuildNewsDatasetUseCase
+from src.use_cases.fetch_news_use_case import FetchNewsUseCase
 from src.utils.logging_config import setup_logging
 from src.utils.path_resolver import load_data_paths
 
@@ -102,7 +102,7 @@ def main() -> None:
     repository = ParquetNewsRepository(output_dir=raw_news_dir)
 
     # ---------- Use Case ----------
-    use_case = BuildNewsDatasetUseCase(
+    use_case = FetchNewsUseCase(
         news_fetcher=fetcher,
         news_repository=repository,
         safety_margin=safety_margin,
