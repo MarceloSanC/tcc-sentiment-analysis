@@ -3,6 +3,8 @@
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import pandas as pd
+
 from src.adapters.parquet_feature_set_repository import ParquetFeatureSetRepository
 from src.entities.feature_set import FeatureSet
 
@@ -38,3 +40,9 @@ def test_parquet_feature_set_repository_save_and_load(tmp_path: Path):
     # Conteúdo preservado
     assert loaded[0].features["rsi_14"] == 30.0
     assert loaded[2].features["ema_50"] == 102.0
+
+    # Parquet must be wide (one row per timestamp)
+    filepath = tmp_path / f"features_{asset_id}.parquet"
+    df = pd.read_parquet(filepath)
+    assert len(df) == 3
+    assert set(["asset_id", "timestamp", "rsi_14", "ema_50"]).issubset(df.columns)
