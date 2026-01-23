@@ -1,139 +1,141 @@
-# src/use_cases/infer_sentiment_use_case.py
-
 from __future__ import annotations
 
+import logging
+from dataclasses import dataclass
 from datetime import datetime
+from typing import Iterable
 
+from src.domain.time.utc import require_tz_aware, to_utc
 from src.entities.news_article import NewsArticle
 from src.entities.scored_news_article import ScoredNewsArticle
-from src.entities.daily_sentiment import DailySentiment
-
-from src.domain.services.sentiment_aggregator import SentimentAggregator
-
-from src.interfaces.news_fetcher import NewsFetcher
+from src.interfaces.news_repository import NewsRepository
+from src.interfaces.scored_news_repository import ScoredNewsRepository
 from src.interfaces.sentiment_model import SentimentModel
-from src.interfaces.candle_repository import CandleRepository
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class InferSentimentResult:
+    asset_id: str
+    read: int
+    skipped: int
+    scored: int
+    saved: int
+    start: datetime
+    end: datetime
 
 
 class InferSentimentUseCase:
     """
-    Use Case responsável por orquestrar o pipeline completo
-    de inferência de sentimento e integração com candles.
+    Infers sentiment for raw news articles and persists them into the processed dataset.
 
-    Fluxo:
-        NewsFetcher
-            → NewsArticle
-        SentimentModel
-            → ScoredNewsArticle
-        SentimentAggregator
-            → DailySentiment
-        CandleRepository.update_sentiment(...)
-            → candles_{ASSET}_1d.parquet
+    Flow:
+      NewsRepository -> NewsArticle
+      SentimentModel -> ScoredNewsArticle
+      ScoredNewsRepository -> Parquet
     """
 
     def __init__(
         self,
-        news_fetcher: NewsFetcher,
+        news_repository: NewsRepository,
         sentiment_model: SentimentModel,
-        sentiment_aggregator: SentimentAggregator,
-        candle_repository: CandleRepository,
+        scored_news_repository: ScoredNewsRepository,
+        batch_size: int = 32,
     ) -> None:
-        self.news_fetcher: NewsFetcher = news_fetcher
-        self.sentiment_model: SentimentModel = sentiment_model
-        self.sentiment_aggregator: SentimentAggregator = sentiment_aggregator
-        self.candle_repository: CandleRepository = candle_repository
+        self.news_repository = news_repository
+        self.sentiment_model = sentiment_model
+        self.scored_news_repository = scored_news_repository
+        self.batch_size = int(batch_size)
+
+    @staticmethod
+    def _chunk(items: list[NewsArticle], size: int) -> Iterable[list[NewsArticle]]:
+        for i in range(0, len(items), size):
+            yield items[i : i + size]
+
+    @staticmethod
+    def _require_article_ids(articles: Iterable[NewsArticle]) -> None:
+        for a in articles:
+            if a.article_id is None or not str(a.article_id).strip():
+                raise ValueError(
+                    "NewsArticle.article_id is required for scoring (stable id)."
+                )
 
     def execute(
         self,
         asset_id: str,
         start_date: datetime,
         end_date: datetime,
-    ) -> list[DailySentiment]:
-        """
-        Executa inferência e agregação de sentimento
-        e atualiza os candles persistidos.
+    ) -> InferSentimentResult:
+        require_tz_aware(start_date, "start_date")
+        require_tz_aware(end_date, "end_date")
 
-        Args:
-            asset_id: ativo financeiro (ex: AAPL, MSFT)
-            start_date: data inicial da coleta
-            end_date: data final da coleta
+        start_utc = to_utc(start_date)
+        end_utc = to_utc(end_date)
+        if start_utc > end_utc:
+            raise ValueError("start_date must be <= end_date")
 
-        Returns:
-            Lista de DailySentiment persistidos
-        """
-
-        # 1. Fetch de notícias
-        articles: list[NewsArticle] = self.news_fetcher.fetch_company_news(
-            asset_id=asset_id,
-            start_date=start_date,
-            end_date=end_date,
-        )
-
+        articles = self.news_repository.list_news(asset_id, start_utc, end_utc)
         if not articles:
-            return []
-
-        # Garantia temporal explícita
-        articles = sorted(articles, key=lambda a: a.published_at)
-
-        # 2. Inferência de sentimento
-        scored_articles: list[ScoredNewsArticle] = (
-            self.sentiment_model.infer(articles)
-        )
-
-        if not scored_articles:
-            return []
-
-        # 3. Agregação diária
-        daily_sentiments: list[DailySentiment] = (
-            self.sentiment_aggregator.aggregate_daily(
+            return InferSentimentResult(
                 asset_id=asset_id,
-                articles=scored_articles,
+                read=0,
+                skipped=0,
+                scored=0,
+                saved=0,
+                start=start_utc,
+                end=end_utc,
             )
+
+        articles = sorted(articles, key=lambda a: a.published_at)
+        self._require_article_ids(articles)
+
+        scored_ids = self.scored_news_repository.list_article_ids(asset_id)
+        candidates = [a for a in articles if str(a.article_id) not in scored_ids]
+
+        skipped = len(articles) - len(candidates)
+
+        if not candidates:
+            return InferSentimentResult(
+                asset_id=asset_id,
+                read=len(articles),
+                skipped=skipped,
+                scored=0,
+                saved=0,
+                start=start_utc,
+                end=end_utc,
+            )
+
+        scored_total = 0
+        saved_total = 0
+
+        for batch in self._chunk(candidates, self.batch_size):
+            scored_batch: list[ScoredNewsArticle] = self.sentiment_model.infer(batch)
+            scored_total += len(scored_batch)
+
+            if scored_batch:
+                self.scored_news_repository.upsert_scored_news_batch(scored_batch)
+                saved_total += len(scored_batch)
+
+        logger.info(
+            "Scored news dataset",
+            extra={
+                "asset_id": asset_id,
+                "read": len(articles),
+                "skipped": skipped,
+                "scored": scored_total,
+                "saved": saved_total,
+                "start": start_utc.isoformat(),
+                "end": end_utc.isoformat(),
+            },
         )
 
-        if not daily_sentiments:
-            return []
-
-        # 4. Persistência nos candles
-        self.candle_repository.update_sentiment(
+        return InferSentimentResult(
             asset_id=asset_id,
-            daily_sentiments=daily_sentiments,
+            read=len(articles),
+            skipped=skipped,
+            scored=scored_total,
+            saved=saved_total,
+            start=start_utc,
+            end=end_utc,
         )
-
-        return daily_sentiments
-
-# =========================
-# TODOs — melhorias futuras
-# =========================
-
-# TODO(architecture):
-# Tornar o pipeline configurável:
-# - fetch only
-# - infer only
-# - aggregate only
-# Útil para reprocessamentos e backfills
-
-# TODO(data-pipeline):
-# Suportar execução incremental
-# (processar apenas dias sem sentimento persistido)
-
-# TODO(stat-validation):
-# Validar alinhamento temporal:
-# sentiment_day <= candle_day
-# (garantia forte contra lookahead bias)
-
-# TODO(feature-engineering):
-# Permitir múltiplas janelas de sentimento:
-# - sentiment_lag_0d
-# - sentiment_lag_1d
-# - sentiment_lag_3d
-
-# TODO(test):
-# Criar teste de integração:
-# Finnhub → FinBERT → Aggregator → Parquet
-
-# TODO(reproducibility):
-# Persistir metadados do pipeline:
-# - modelo de sentimento
-# - idioma
-# - parâmetros de agregação
