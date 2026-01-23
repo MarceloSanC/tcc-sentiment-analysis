@@ -65,8 +65,8 @@ def test_upsert_persists_parquet_in_partitioned_layout(repo: ParquetNewsReposito
 
     repo.upsert_news_batch(articles)
 
-    # layout: data/raw/news/asset=AAPL/news_AAPL.parquet
-    parquet_path = tmp_path / "asset=AAPL" / "news_AAPL.parquet"
+    # layout: data/raw/news/AAPL/news_AAPL.parquet
+    parquet_path = tmp_path / "AAPL" / "news_AAPL.parquet"
     assert parquet_path.exists()
 
     df = pd.read_parquet(parquet_path)
@@ -117,7 +117,7 @@ def test_upsert_deduplicates_by_article_id_keep_last(repo: ParquetNewsRepository
     repo.upsert_news_batch([a1])
     repo.upsert_news_batch([a1_updated])
 
-    parquet_path = tmp_path / "asset=AAPL" / "news_AAPL.parquet"
+    parquet_path = tmp_path / "AAPL" / "news_AAPL.parquet"
     df = pd.read_parquet(parquet_path)
 
     # dedup por article_id -> 1 linha apenas
@@ -187,7 +187,7 @@ def test_upsert_fills_article_id_from_url_when_missing(repo: ParquetNewsReposito
 
     repo.upsert_news_batch([a])
 
-    parquet_path = tmp_path / "asset=AAPL" / "news_AAPL.parquet"
+    parquet_path = tmp_path / "AAPL" / "news_AAPL.parquet"
     df = pd.read_parquet(parquet_path)
 
     assert len(df) == 1
