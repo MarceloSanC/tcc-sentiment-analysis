@@ -28,7 +28,7 @@ def test_indicator_calculation_adds_expected_features():
 
     assert len(result) == len(candles) - 200 + 1
 
-    feature_keys = result[0].features.keys()
+    feature_keys = result[0].indicators.keys()
 
     assert "rsi_14" in feature_keys
     assert "macd" in feature_keys
