@@ -6,7 +6,9 @@ data:
 
   processed:
     features: data/processed/features
-    news: data/processed/news
+    technical_indicators: data/processed/technical_indicators
+    news_scored: data/processed/scored_news
+    sentiment_daily: data/processed/sentiment_daily
     dataset_tft: data/processed/dataset_tft
 
   models:
