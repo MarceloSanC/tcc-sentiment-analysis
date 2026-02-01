@@ -140,16 +140,27 @@ def main() -> None:
             end_date=dataset_end,
         )
 
-        logger.info(
-            "News dataset completed",
-            extra={
-                "asset": symbol,
-                "fetched": result.fetched,
-                "saved": result.saved,
-                "iterations": result.iterations,
-                "last_cursor": result.last_cursor.isoformat(),
-            },
-        )
+        if result.fetched == 0 and result.saved == 0:
+            logger.info(
+                "News dataset skipped (already up to date)",
+                extra={
+                    "asset": symbol,
+                    "start": result.start.isoformat(),
+                    "end": result.end.isoformat(),
+                    "last_cursor": result.last_cursor.isoformat(),
+                },
+            )
+        else:
+            logger.info(
+                "News dataset completed",
+                extra={
+                    "asset": symbol,
+                    "fetched": result.fetched,
+                    "saved": result.saved,
+                    "iterations": result.iterations,
+                    "last_cursor": result.last_cursor.isoformat(),
+                },
+            )
 
 
 if __name__ == "__main__":
