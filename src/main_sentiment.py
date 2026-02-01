@@ -58,9 +58,9 @@ def main() -> None:
         raw_news_dir = Path("data") / "raw" / "news"
     raw_news_dir = Path(raw_news_dir)
 
-    processed_news_dir = paths.get("processed_news")
+    processed_news_dir = paths.get("processed_news_scored")
     if processed_news_dir is None:
-        processed_news_dir = Path("data") / "processed" / "news"
+        processed_news_dir = Path("data") / "processed" / "scored_news"
     processed_news_dir = Path(processed_news_dir)
 
     logger.info(
@@ -78,28 +78,41 @@ def main() -> None:
     scored_repository = ParquetScoredNewsRepository(output_dir=processed_news_dir)
     sentiment_model = FinBERTSentimentModel()
 
-    use_case = InferSentimentUseCase(
+    infer_use_case = InferSentimentUseCase(
         news_repository=news_repository,
         sentiment_model=sentiment_model,
         scored_news_repository=scored_repository,
     )
 
-    result = use_case.execute(
+    infer_result = infer_use_case.execute(
         asset_id=asset_id,
         start_date=start_date,
         end_date=end_date,
     )
 
-    logger.info(
-        "Sentiment inference completed",
-        extra={
-            "asset": result.asset_id,
-            "read": result.read,
-            "skipped": result.skipped,
-            "scored": result.scored,
-            "saved": result.saved,
-        },
-    )
+
+    if infer_result.scored == 0 and infer_result.read > 0:
+        logger.info(
+            "Sentiment inference skipped (period already scored)",
+            extra={
+                "asset": infer_result.asset_id,
+                "read": infer_result.read,
+                "skipped": infer_result.skipped,
+                "start": infer_result.start.isoformat(),
+                "end": infer_result.end.isoformat(),
+            },
+        )
+    else:
+        logger.info(
+            "Sentiment inference completed",
+            extra={
+                "asset": infer_result.asset_id,
+                "read": infer_result.read,
+                "skipped": infer_result.skipped,
+                "scored": infer_result.scored,
+                "saved": infer_result.saved,
+            },
+        )
 
 
 if __name__ == "__main__":
