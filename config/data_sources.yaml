@@ -2,7 +2,7 @@
 assets:
   - symbol: "AAPL"
     name: "Apple Inc"
-    start_date: "2025-06-01"
+    start_date: "2010-01-01"
     end_date: "2025-12-31"
 
   - symbol: "MSFT"
