@@ -22,7 +22,7 @@ class ParquetScoredNewsRepository(ScoredNewsRepository):
     Parquet-based repository for ScoredNewsArticle.
 
     Storage layout:
-      data/processed/news/AAPL/scored_news_AAPL.parquet
+      data/processed/scored_news/AAPL/scored_news_AAPL.parquet
 
     Temporal contract:
     - All datetimes in/out are timezone-aware UTC.
@@ -134,7 +134,7 @@ class ParquetScoredNewsRepository(ScoredNewsRepository):
 
         df.to_parquet(filepath, index=False)
 
-        logger.info(
+        logger.debug(
             "Scored news upserted",
             extra={
                 "asset_id": self._normalize_symbol(asset),
