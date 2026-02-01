@@ -5,14 +5,20 @@ check-python-version:
 
 help:
 	@echo "Comandos disponíveis:"
-	@echo "  install     - Instala dependências (dev)"
+	@echo "  install     		- Instala dependências (dev)"
 	@echo "  test               - Testes (sem integração externa)"
 	@echo "  test-integration   - Testes com APIs externas"
 	@echo "  test-all           - Todos os testes"
-	@echo "  lint        - Verifica estilo e imports"
-	@echo "  format      - Formata código com black + ruff"
-	@echo "  type-check  - Verifica anotações de tipo"
-	@echo "  clean       - Remove arquivos temporários"
+	@echo "  lint        		- Verifica estilo e imports"
+	@echo "  format      		- Formata código com black + ruff"
+	@echo "  type-check  		- Verifica anotações de tipo"
+	@echo "  clean       		- Remove arquivos temporários"
+	@echo "  run-candles        - Executa main_candles (ex: make run-candles ASSET=AAPL)"
+	@echo "  run-news-raw       - Executa main_news_dataset (ex: make run-news-raw ASSET=AAPL)"
+	@echo "  run-sentiment      - Executa main_sentiment (ex: make run-sentiment ASSET=AAPL)"
+	@echo "  run-sentiment-feat - Executa main_sentiment_features (ex: make run-sentiment-feat ASSET=AAPL)"
+	@echo "  run-indicators     - Executa main_technical_indicators (ex: make run-indicators ASSET=AAPL)"
+	@echo "  run-all            - Executa todos os orquestradores (ex: make run-all ASSET=AAPL)"
 
 install:
 	pip install -e ".[dev]"
@@ -45,3 +51,26 @@ clean:
 	find . -type f -name "*.pyc" -delete 2>/dev/null || true
 	rm -f .coverage
 	rm -rf htmlcov/ 2>/dev/null || true
+.PHONY: run-candles run-news-raw run-sentiment run-sentiment-feat run-indicators run-all
+
+run-candles:
+	python -m src.main_candles --asset $(ASSET)
+
+run-news-raw:
+	python -m src.main_news_dataset --asset $(ASSET)
+
+run-sentiment:
+	python -m src.main_sentiment --asset $(ASSET)
+
+run-sentiment-feat:
+	python -m src.main_sentiment_features --asset $(ASSET)
+
+run-indicators:
+	python -m src.main_technical_indicators --asset $(ASSET)
+
+run-all:
+	$(MAKE) run-candles ASSET=$(ASSET)
+	$(MAKE) run-news-raw ASSET=$(ASSET)
+	$(MAKE) run-sentiment ASSET=$(ASSET)
+	$(MAKE) run-sentiment-feat ASSET=$(ASSET)
+	$(MAKE) run-indicators ASSET=$(ASSET)
