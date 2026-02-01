@@ -3,15 +3,15 @@ import pandas as pd
 import pandas_ta as ta
 
 from src.entities.candle import Candle
-from src.entities.feature_set import FeatureSet
-from src.interfaces.feature_calculator import FeatureCalculator
+from src.entities.technical_indicator_set import TechnicalIndicatorSet
+from src.interfaces.technical_indicator_calculator import TechnicalIndicatorCalculatorPort
 
 from src.infrastructure.schemas.technical_indicators_schema import (
     TECHNICAL_INDICATORS,
 )
 
 
-class TechnicalIndicatorCalculator(FeatureCalculator):
+class TechnicalIndicatorCalculator(TechnicalIndicatorCalculatorPort):
     """
     Adapter responsável por calcular indicadores técnicos
     a partir de candles OHLCV.
@@ -24,7 +24,7 @@ class TechnicalIndicatorCalculator(FeatureCalculator):
         self,
         asset_id: str,
         candles: list[Candle],
-    ) -> list[FeatureSet]:
+    ) -> list[TechnicalIndicatorSet]:
 
         # 1. Converter para DataFrame (infra detail)
         df = pd.DataFrame(
@@ -63,21 +63,21 @@ class TechnicalIndicatorCalculator(FeatureCalculator):
                 f"Missing technical indicators: {missing}"
             )
 
-        # 3. Converter para entidades FeatureSet
-        features = []
+        # 3. Converter para entidades TechnicalIndicatorSet
+        indicators = []
         for _, row in df.iterrows():
-            features.append(
-                FeatureSet(
+            indicators.append(
+                TechnicalIndicatorSet(
                     asset_id=asset_id,
                     timestamp=row["timestamp"],
-                    features={
+                    indicators={
                         name: row[name]
                         for name in TECHNICAL_INDICATORS
                     },
                 )
             )
 
-        return features
+        return indicators
 
 
 # =========================
