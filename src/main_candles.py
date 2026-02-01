@@ -92,10 +92,16 @@ def main():
 
     count = use_case.execute(asset_id, start, end)
 
-    logger.info(
-        "Pipeline de candles finalizado",
-        extra={"asset": asset_id, "candles": count},
-    )
+    if count == 0:
+        logger.info(
+            "Candles pipeline skipped (no new data)",
+            extra={"asset": asset_id, "start": start.isoformat(), "end": end.isoformat()},
+        )
+    else:
+        logger.info(
+            "Pipeline de candles finalizado",
+            extra={"asset": asset_id, "candles": count},
+        )
 
 
 if __name__ == "__main__":
