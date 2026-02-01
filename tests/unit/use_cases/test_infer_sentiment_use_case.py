@@ -175,6 +175,21 @@ def test_requires_article_id() -> None:
         use_case.execute("AAPL", _dt_utc(2024, 1, 1), _dt_utc(2024, 1, 2))
 
 
+def test_raises_on_invalid_date_range() -> None:
+    news_repo = FakeNewsRepository([])
+    sentiment_model = FakeSentimentModel()
+    scored_repo = FakeScoredNewsRepository()
+
+    use_case = InferSentimentUseCase(
+        news_repository=news_repo,
+        sentiment_model=sentiment_model,
+        scored_news_repository=scored_repo,
+    )
+
+    with pytest.raises(ValueError, match="start_date must be <= end_date"):
+        use_case.execute("AAPL", _dt_utc(2024, 1, 2), _dt_utc(2024, 1, 1))
+
+
 # =========================
 # TODOs — melhorias futuras
 # =========================
