@@ -96,6 +96,16 @@ class InferSentimentUseCase:
         skipped = len(articles) - len(candidates)
 
         if not candidates:
+            logger.info(
+                "Sentiment inference skipped (all articles already scored)",
+                extra={
+                    "asset_id": asset_id,
+                    "read": len(articles),
+                    "skipped": skipped,
+                    "start": start_utc.isoformat(),
+                    "end": end_utc.isoformat(),
+                },
+            )
             return InferSentimentResult(
                 asset_id=asset_id,
                 read=len(articles),
@@ -108,6 +118,7 @@ class InferSentimentUseCase:
 
         scored_total = 0
         saved_total = 0
+        total_candidates = len(candidates)
 
         for batch in self._chunk(candidates, self.batch_size):
             scored_batch: list[ScoredNewsArticle] = self.sentiment_model.infer(batch)
@@ -116,6 +127,15 @@ class InferSentimentUseCase:
             if scored_batch:
                 self.scored_news_repository.upsert_scored_news_batch(scored_batch)
                 saved_total += len(scored_batch)
+
+            logger.info(
+                f"Scored news progress {len(scored_batch)}/{total_candidates}",
+                extra={
+                    "asset_id": asset_id,
+                    "scored": scored_total,
+                    "total": total_candidates,
+                },
+            )
 
         logger.info(
             "Scored news dataset",
