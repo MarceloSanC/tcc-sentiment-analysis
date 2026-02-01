@@ -1,11 +1,12 @@
 # Executando o Pipeline
 
-Este projeto é dividido em **4 pipelines principais**, executados nesta ordem:
+Este projeto é dividido em **5 pipelines principais**, executados nesta ordem:
 
 1) **Candles (OHLCV)** → baixa e persiste preços históricos  
 2) **Sentimento (raw news)** → coleta notícias brutas e salva em parquet raw  
-3) **Scoring de notícias** → infere sentimento por notícia e salva em parquet processed  
-4) **Features** → calcula indicadores técnicos e gera features normalizadas
+3) **Scoring de notícias** → infere sentimento por notícia (parquet processed)  
+4) **Features de sentimento** → agrega sentimento diário a partir do scored news  
+5) **Indicadores técnicos** → calcula indicadores técnicos a partir dos candles
 
 > **Regra importante (consistência temporal):** o projeto padroniza timestamps em **UTC** para evitar ambiguidade e *lookahead bias*.
 
@@ -60,8 +61,9 @@ python -m src.main_candles --asset AAPL
 ```
 
 **Observações**
-- O período é lido de `config/data_sources.yaml`.
-- Este pipeline deve rodar **antes** do sentimento (porque o sentimento enriquece candles já existentes).
+
+O período é lido de `config/data_sources.yaml`.
+- Este pipeline deve rodar **antes** do sentimento.
 
 
 ## 2) Rodar Pipeline de Sentimento (raw news)
@@ -81,7 +83,9 @@ python -m src.main_news_dataset --asset AAPL
 
 ## 3) Rodar Scoring de Notícias (FinBERT → parquet processed)
 
-Lê `data/raw/news/{ASSET}` e gera `data/processed/news/{ASSET}` com sentimento por notícia.
+Lê data/raw/news/{ASSET} e gera:
+
+- `data/processed/scored_news/{ASSET}/scored_news_{ASSET}.parquet` (sentimento por notícia)
 
 Executar:
 
@@ -94,22 +98,39 @@ python -m src.main_sentiment --asset AAPL
 - O pipeline ignora notícias já pontuadas (skip por article_id).
 
 
-## 4) Gerar Features Técnicas
+## 4) Gerar Features de Sentimento (agregação diária)
 
-Lê candles já enriquecidos e gera features em:
+Lê `data/processed/scored_news/{ASSET}` e gera:
 
-- `data/processed/features/{ASSET}/features_{ASSET}.parquet`
+- `data/processed/sentiment_daily/{ASSET}/daily_sentiment_{ASSET}.parquet` (agregado diário)
 
 Executar:
 
 ```bash
-python -m src.main_features --asset AAPL
+python -m src.main_sentiment_features --asset AAPL
+```
+
+**Observações**
+- O período (start/end) é lido de `config/data_sources.yaml`.
+- Reprocessamento é idempotente por dia.
+
+
+## 5) Gerar Indicadores Técnicos
+
+Lê candles já enriquecidos e gera indicadores técnicos em:
+
+- `data/processed/technical_indicators/{ASSET}/technical_indicators_{ASSET}.parquet`
+
+Executar:
+
+```bash
+python -m src.main_technical_indicators --asset AAPL
 ```
 
 Para sobrescrever um arquivo existente:
 
 ```bash
-python -m src.main_features --asset AAPL --overwrite
+python -m src.main_technical_indicators --asset AAPL --overwrite
 ```
 
 
