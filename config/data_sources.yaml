@@ -28,3 +28,10 @@ data_sources:
     enabled: true
     provider: "alpha_vantage"   # ou "local_dataset" depois
     aggregation: "daily"
+
+  fundamentals:
+    enabled: true
+    provider: "alpha_vantage"
+    report_types:
+      - "annual"
+      - "quarterly"
