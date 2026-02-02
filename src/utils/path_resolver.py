@@ -28,6 +28,9 @@ def load_data_paths() -> dict:
             paths["data"]["processed"]["sentiment_daily"]
         ),
         "processed_news_scored": resolve(paths["data"]["processed"]["news_scored"]),
+        "processed_fundamentals": resolve(
+            paths["data"]["processed"]["fundamentals"]
+        ),
         "dataset_tft": resolve(paths["data"]["processed"]["dataset_tft"]),
         "models": resolve(paths["data"]["models"]["tft"]),
         "news_dataset": resolve(paths["data"]["raw"]["news"]),
