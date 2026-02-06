@@ -1,178 +1,167 @@
-# TCC: Análise de Sentimento em Notícias Financeiras para Previsão de Tendências de Mercado
+# TCC: Sentiment Analysis for Financial News and Market Features
 
-> **Aluno**: Marcelo Santos  
-> **Curso**: Engenharia Mecatrônica — UFSC  
-> **Orientador**: [Nome do orientador]  
-> **Ano**: 2025  
+> Student: Marcelo Santos  
+> Program: Engenharia Mecatronica - UFSC  
+> Advisor: [Nome do orientador]  
+> Year: 2025
 
-Este projeto implementa um sistema automatizado para:
-- Coletar notícias financeiras de ações (via API **Finnhub**),
-- Inferir sentimento (*positivo*, *neutro*, *negativo*) com **FinBERT**,
-- Calcular médias móveis de sentimento,
-- Analisar correlação entre sentimento e retorno de mercado.
+This project builds a data pipeline that collects market and news data, scores sentiment with FinBERT, aggregates daily sentiment, computes technical indicators, fetches fundamentals, and produces datasets for modeling (TFT-ready).
 
-O sistema segue os princípios da **Clean Architecture**, garantindo **desacoplamento**, **testabilidade** e **extensibilidade** — permitindo futuras expansões com análise técnica, modelos de ML, etc.
+The codebase follows Clean Architecture to keep fetchers, repositories, domain logic, and use cases decoupled and testable.
 
 ---
 
-## Estrutura do Projeto (Clean Architecture)
+## Current Stage (Feb 2026)
+The pipeline is operational end-to-end with structured outputs in `data/processed/`:
+- Raw market candles (parquet + report)
+- Raw news (parquet + report)
+- Scored news (FinBERT)
+- Daily sentiment aggregates
+- Technical indicators
+- Fundamentals (Alpha Vantage)
+- TFT dataset (feature set)
+
+Legacy experiments live under `data/legacy/` and are not part of the current pipeline.
+
+---
+
+## Project Structure (high level)
 ```
+config/
+  data_paths.yaml
+  data_sources.yaml
+data/
+  raw/                 # candles + raw news
+  processed/           # scored_news, sentiment_daily, indicators, fundamentals, tft dataset
+  reports/             # experiments (ablation, feature selection, stability)
+docs/                  # guides and checklists
+notebooks/             # research and experiments
 src/
-├── main.py
-├── adapters/
-│   ├── finbert_sentiment_model.py
-│   ├── finnhub_news_fetcher.py
-│   └── sqlite_news_repository.py
-├── entities/
-│   └── news.py
-├── interfaces/
-│   ├── news_fetcher.py
-│   ├── news_repository.py
-│   └── sentiment_model.py
-├── services/
-│   ├── finbert.py
-│   ├── market_data_fetcher.py
-│   ├── news_search.py
-│   ├── sentiment_aggregator.py
-│   └── sentiment_market_analyzer.py
-├── tcc_sentiment_analysis.egg-info/
-│   ├── PKG-INFO
-│   ├── SOURCES.txt
-│   ├── dependency_links.txt
-│   ├── requires.txt
-│   └── top_level.txt
-└── use_cases/
-    ├── fetch_news_use_case.py
-    └── infer_sentiment_use_case.py
+  adapters/            # fetchers, repositories, model adapters
+  domain/              # services and time utilities
+  entities/            # core entities
+  infrastructure/      # parquet schemas
+  interfaces/          # ports (interfaces)
+  use_cases/           # application logic
+  main_*.py            # orchestration entrypoints
+tests/                 # unit + integration tests
 ```
 
----
-
-## Requisitos
-
-- **Windows 10/11**
-- **Python 3.13+** ([download](https://python.org))
-- **Git** (opcional, para versionamento)
-
-> *Recomenda-se uso de ambiente virtual.*
+For the full structure see `docs/PROJECT_STRUCTURE.md`.
 
 ---
 
-## Configuração (Passo a Passo)
+## Requirements
+- Windows 10/11
+- Python 3.13+
+- Git (optional)
+- Make (via GnuWin32 or similar)
 
-### 1. Clone ou baixe o projeto
+---
 
+## Setup
 ```powershell
 git clone https://github.com/seu-usuario/tcc-sentiment-analysis.git
 cd tcc-sentiment-analysis
 ```
 
-### 2. Instale o make
-
+Install Make:
 ```
 winget install GnuWin32.Make
 ```
 
-### 3. Configure o ambiente
-
-Habilita execução de scripts (só uma vez no PC)
-```
-Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
-```
-
-Configura PATH, Python e ativa o venv (se existir)
-
-```
-.\setup.ps1
-```
-
-### 4. Crie e ative o ambiente virtual
-
+Create and activate a venv:
 ```
 python -m venv .venv
 .\setup.ps1
 ```
 
-### 5. Instale dependências
-
+Install dependencies:
 ```
 make install
 ```
-ou manualmente:
 
+---
+
+## Configuration
+Pipeline configuration is centralized in:
+- `config/data_sources.yaml` (API providers, symbols, time ranges)
+- `config/data_paths.yaml` (raw/processed output paths)
+
+Do not store API keys in this repository. Use environment variables or `.env`.
+
+---
+
+## How to Run
+Orchestrators live under `src/` and are exposed via Make targets.
+
+Run a single step:
 ```
-pip install -e ".[dev]"
+make run-candles ASSET=AAPL
+make run-news-raw ASSET=AAPL
+make run-sentiment ASSET=AAPL
+make run-sentiment-feat ASSET=AAPL
+make run-indicators ASSET=AAPL
 ```
 
-## Como Executar
-
-### Pipeline completo (notícias → sentimento → análise)
-
+Run the full pipeline (candles -> news -> sentiment -> daily sentiment -> indicators):
 ```
-python src/main.py
+make run-all ASSET=AAPL
 ```
 
-### Comandos úteis (make)
+Other entrypoints:
+```
+python -m src.main_fundamentals --asset AAPL
+python -m src.main_dataset_tft --asset AAPL
+```
 
-Roda testes + cobertura
+Logs are written to `logs/pipeline.log`.
+
+---
+
+## Outputs
+Example output paths (per asset):
+- `data/raw/market/candles/<ASSET>/`
+- `data/raw/news/<ASSET>/`
+- `data/processed/scored_news/<ASSET>/`
+- `data/processed/sentiment_daily/<ASSET>/`
+- `data/processed/technical_indicators/<ASSET>/`
+- `data/processed/fundamentals/<ASSET>/`
+- `data/processed/dataset_tft/<ASSET>/`
+
+Each step also writes a JSON report under a `reports/` subfolder.
+
+---
+
+## Tests
+Unit tests only (no external APIs):
 ```
 make test
 ```
-Formata código ( black + ruff )
+
+Integration tests (API calls):
 ```
-make format
-```
-Verifica estilo e imports
-```
-make lint
-```
-Valida anotações de tipo ( mypy )
-```
-make type-check
-```
-Limpa arquivos temporários
-```
-make clean
+make test-integration
 ```
 
-## Testes
-Testes unitários isolados (sem dependência de rede, banco ou modelo):
-```
-make test
-```
-Saída esperada:
-```
------------ coverage: platform win32, python 3.13.3 -----------
-Name                              Stmts   Miss  Cover
--------------------------------------------------------
-src/entities/news.py                 12      0   100%
-src/use_cases/fetch_news_use_case.py 28      0   100%
-src/use_cases/infer_sentiment_use_case.py 24  0   100%
--------------------------------------------------------
-TOTAL                                64      0   100%
-```
+---
 
-## Banco de Dados
+## Docs
+Recommended starting points:
+- `docs/GETTING_STARTED.md`
+- `docs/RUNNING_PIPELINE.md`
+- `docs/TROUBLESHOOTING.md`
 
- - SQLite: data/tcc_sentiment.db
- - Tabela única: news
-    - Campos: ticker, published_at, title, source, url, sentiment, confidence
-    - sentiment começa como NULL (notícia bruta) e é atualizado após inferência.
+---
 
-## Chave da API Finnhub
-A chave está em src/adapters/finnhub_news_fetcher.py:
-```
-self.api_key = "d0ls2p9r01qpni3125ngd0ls2p9r01qpni3125o0"
-```
-
-## Referências
+## References
 - Bollen, J., Mao, H., & Zeng, X. (2011). Twitter mood predicts the stock market.
 - Araci, D. (2019). FinBERT: Financial Sentiment Analysis with Pre-trained Language Models.
 - Martin, R. C. (2017). Clean Architecture.
 
-##  Contato
+---
 
-Marcelo Santos
-marcelo.santos.c@grad.ufsc.br
-
-Engenharia Mecatrônica — UFSC
+## Contact
+Marcelo Santos  
+marcelo.santos.c@grad.ufsc.br  
+Engenharia Mecatronica - UFSC
