@@ -2,7 +2,7 @@
 
 > Student: Marcelo Santos  
 > Program: Engenharia Mecatronica - UFSC  
-> Advisor: [Nome do orientador]  
+> Advisor: Dr. Pedro Paulo 
 > Year: 2025
 
 This project builds a data pipeline that collects market and news data, scores sentiment with FinBERT, aggregates daily sentiment, computes technical indicators, fetches fundamentals, and produces datasets for modeling (TFT-ready).
@@ -61,7 +61,7 @@ For the full structure see `docs/PROJECT_STRUCTURE.md`.
 
 ## Setup
 ```powershell
-git clone https://github.com/seu-usuario/tcc-sentiment-analysis.git
+git clone https://github.com/MarceloSanC/tcc-sentiment-analysis.git
 cd tcc-sentiment-analysis
 ```
 
