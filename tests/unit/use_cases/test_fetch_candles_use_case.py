@@ -23,6 +23,7 @@ def test_fetch_candles_saves_data():
         )
     ]
     mock_fetcher.fetch_candles.return_value = candles
+    mock_repo.load_candles.return_value = []  # existente vazio
 
     use_case = FetchCandlesUseCase(mock_fetcher, mock_repo)
 
@@ -30,7 +31,7 @@ def test_fetch_candles_saves_data():
     end = datetime(2022, 1, 5, tzinfo=timezone.utc)
 
     # Act
-    count = use_case.execute("AAPL", start, end)
+    fetched, existing = use_case.execute("AAPL", start, end)
 
     # Assert
     # contrato: end é normalizado para o próximo dia (boundary)
@@ -41,7 +42,8 @@ def test_fetch_candles_saves_data():
     )
 
     mock_repo.save_candles.assert_called_once_with("AAPL", candles)
-    assert count == len(candles)
+    assert fetched == len(candles)
+    assert existing == 0
 
 
 def test_fetch_candles_normalizes_end_datetime_to_next_day_boundary():
@@ -49,6 +51,7 @@ def test_fetch_candles_normalizes_end_datetime_to_next_day_boundary():
     mock_fetcher = Mock()
     mock_repo = Mock()
     mock_fetcher.fetch_candles.return_value = []  # evita len(Mock)
+    mock_repo.load_candles.return_value = []  # evita len(Mock)
 
     use_case = FetchCandlesUseCase(mock_fetcher, mock_repo)
 
