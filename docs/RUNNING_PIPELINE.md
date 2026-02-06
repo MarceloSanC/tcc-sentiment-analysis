@@ -1,12 +1,14 @@
 # Executando o Pipeline
 
-Este projeto é dividido em **5 pipelines principais**, executados nesta ordem:
+Este projeto é dividido em **7 pipelines principais**, executados nesta ordem:
 
 1) **Candles (OHLCV)** → baixa e persiste preços históricos  
 2) **Sentimento (raw news)** → coleta notícias brutas e salva em parquet raw  
 3) **Scoring de notícias** → infere sentimento por notícia (parquet processed)  
 4) **Features de sentimento** → agrega sentimento diário a partir do scored news  
 5) **Indicadores técnicos** → calcula indicadores técnicos a partir dos candles
+6) **Fundamentals** → coleta indicadores fundamentalistas por período
+7) **Dataset TFT** → consolida todos os dados em um dataset de treino
 
 > **Regra importante (consistência temporal):** o projeto padroniza timestamps em **UTC** para evitar ambiguidade e *lookahead bias*.
 
@@ -133,6 +135,37 @@ Para sobrescrever um arquivo existente:
 python -m src.main_technical_indicators --asset AAPL --overwrite
 ```
 
+
+## 6) Coletar Fundamentals
+
+Coleta indicadores fundamentalistas e persiste em:
+
+- `data/processed/fundamentals/{ASSET}/fundamentals_{ASSET}.parquet`
+
+Executar:
+
+```bash
+python -m src.main_fundamentals --asset AAPL
+```
+
+
+## 7) Montar Dataset de Treino TFT
+
+Consolida candles, indicadores técnicos, sentimento diário e fundamentals em um dataset único.
+
+Executar:
+
+```bash
+python -m src.main_dataset_tft --asset AAPL
+```
+
+## Executar Pipeline Completo
+
+Executa todos os orquestradores na ordem documentada:
+
+```bash
+python -m src.main_pipeline --asset AAPL
+```
 
 ## Rotinas de Qualidade
 
