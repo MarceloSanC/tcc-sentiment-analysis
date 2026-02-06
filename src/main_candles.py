@@ -7,9 +7,12 @@ from pathlib import Path
 import yaml
 
 from src.utils.path_resolver import load_data_paths
+from src.utils.logging_config import setup_logging
 from src.adapters.parquet_candle_repository import ParquetCandleRepository
 from src.adapters.yfinance_candle_fetcher import YFinanceCandleFetcher
 from src.use_cases.fetch_candles_use_case import FetchCandlesUseCase
+from src.domain.services.data_quality_reporter import DataQualityReporter
+from src.domain.services.data_quality_profiles import get_profile
 
 
 logger = logging.getLogger(__name__)
@@ -46,11 +49,13 @@ def _parse_iso_utc(value: str) -> datetime:
 
 
 def main():
+    setup_logging(logging.INFO)
     parser = argparse.ArgumentParser()
     parser.add_argument("--asset", required=True, help="Ex: AAPL")
     args = parser.parse_args()
 
     asset_id = args.asset
+    symbol = asset_id.split(".")[0].upper()
 
     config = load_config()
     asset_config = next(
@@ -90,9 +95,18 @@ def main():
         },
     )
 
-    count = use_case.execute(asset_id, start, end)
+    fetched, existing = use_case.execute(asset_id, start, end)
+    new_rows = max(fetched - existing, 0)
 
-    if count == 0:
+    # Data quality report (snapshot)
+    candles_path = candles_base_dir / symbol / f"candles_{symbol}_1d.parquet"
+    if candles_path.exists():
+        profile = get_profile("candles")
+        reports_dir = candles_path.parent / "reports"
+        if fetched > 0 or not DataQualityReporter.report_exists(reports_dir, profile.prefix):
+            DataQualityReporter.report_from_parquet(candles_path, **profile.to_kwargs())
+
+    if fetched == 0:
         logger.info(
             "Candles pipeline skipped (no new data)",
             extra={"asset": asset_id, "start": start.isoformat(), "end": end.isoformat()},
@@ -100,7 +114,12 @@ def main():
     else:
         logger.info(
             "Pipeline de candles finalizado",
-            extra={"asset": asset_id, "candles": count},
+            extra={
+                "asset": asset_id,
+                "fetched": fetched,
+                "existing_rows": existing,
+                "new_rows": new_rows,
+            },
         )
 
 
