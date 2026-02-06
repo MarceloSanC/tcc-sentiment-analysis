@@ -29,7 +29,7 @@ class FetchCandlesUseCase:
         # mesmo se vier com hora, incluir o dia do end
         return datetime.combine(end_utc.date() + timedelta(days=1), time(0, 0), tzinfo=timezone.utc)
 
-    def execute(self, symbol: str, start: datetime, end: datetime) -> int:
+    def execute(self, symbol: str, start: datetime, end: datetime) -> tuple[int, int]:
         require_tz_aware(start, "start")
         require_tz_aware(end, "end")
 
@@ -42,5 +42,12 @@ class FetchCandlesUseCase:
         end_inclusive = self._inclusive_end_for_daily(end_utc)
 
         candles = self.candle_fetcher.fetch_candles(symbol, start_utc, end_inclusive)
+
+        existing = 0
+        try:
+            existing = len(self.candle_repository.load_candles(symbol))
+        except FileNotFoundError:
+            existing = 0
+
         self.candle_repository.save_candles(symbol, candles)
-        return len(candles)
+        return len(candles), existing
