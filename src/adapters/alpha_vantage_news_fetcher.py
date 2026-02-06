@@ -183,7 +183,7 @@ class AlphaVantageNewsFetcher(NewsFetcher):
             )
 
         logger.info(
-            "Alpha Vantage fetched %d news for %s | period=%s → %s",
+            "Alpha Vantage fetched %d news for %s | period=%s -> %s",
             len(articles),
             ticker,
             time_from,
