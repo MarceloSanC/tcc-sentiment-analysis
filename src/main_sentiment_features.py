@@ -16,6 +16,8 @@ from src.domain.time.utc import parse_iso_utc
 from src.use_cases.sentiment_feature_engineering_use_case import (
     SentimentFeatureEngineeringUseCase,
 )
+from src.domain.services.data_quality_reporter import DataQualityReporter
+from src.domain.services.data_quality_profiles import get_profile
 from src.utils.logging_config import setup_logging
 from src.utils.path_resolver import load_data_paths
 
@@ -97,6 +99,14 @@ def main() -> None:
         start_date=start_date,
         end_date=end_date,
     )
+
+    daily_path = processed_sentiment_daily_dir / asset_id / f"daily_sentiment_{asset_id}.parquet"
+    if daily_path.exists():
+        profile = get_profile("sentiment_daily")
+        skipped = result.aggregated == 0 and result.read > 0
+        reports_dir = daily_path.parent / "reports"
+        if not skipped or not DataQualityReporter.report_exists(reports_dir, profile.prefix):
+            DataQualityReporter.report_from_parquet(daily_path, **profile.to_kwargs())
 
 
     if result.aggregated == 0 and result.read > 0:
