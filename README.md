@@ -159,11 +159,6 @@ TOTAL                                64      0   100%
     - Campos: ticker, published_at, title, source, url, sentiment, confidence
     - sentiment começa como NULL (notícia bruta) e é atualizado após inferência.
 
-## Chave da API Finnhub
-A chave está em src/adapters/finnhub_news_fetcher.py:
-```
-self.api_key = "d0ls2p9r01qpni3125ngd0ls2p9r01qpni3125o0"
-```
 
 ## Referências
 - Bollen, J., Mao, H., & Zeng, X. (2011). Twitter mood predicts the stock market.
