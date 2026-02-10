@@ -56,15 +56,9 @@ For the full structure see `docs/PROJECT_STRUCTURE.md`.
 - Python 3.13+
 - Git (optional)
 - Make (via GnuWin32 or similar)
-## Requirements
-- Windows 10/11
-- Python 3.13+
-- Git (optional)
-- Make (via GnuWin32 or similar)
 
 ---
 
-## Setup
 ## Setup
 ```powershell
 git clone https://github.com/MarceloSanC/tcc-sentiment-analysis.git
@@ -72,19 +66,16 @@ cd tcc-sentiment-analysis
 ```
 
 Install Make:
-Install Make:
 ```
 winget install GnuWin32.Make
 ```
 
-Create and activate a venv:
 Create and activate a venv:
 ```
 python -m venv .venv
 .\setup.ps1
 ```
 
-Install dependencies:
 Install dependencies:
 ```
 make install
@@ -104,9 +95,9 @@ Do not store API keys in this repository. Use environment variables or `.env`.
 ## How to Run
 Orchestrators live under `src/` and are exposed via Make targets.
 
-Run a single step:
+For the complete step-by-step instructions (including training), see `docs/RUNNING_PIPELINE.md`.
 
----
+Run a single step:
 
 ## Configuration
 Pipeline configuration is centralized in:
@@ -135,7 +126,6 @@ make run-news-raw ASSET=AAPL
 make run-sentiment ASSET=AAPL
 make run-sentiment-feat ASSET=AAPL
 make run-indicators ASSET=AAPL
-```
 
 Run the full pipeline (candles -> news -> sentiment -> daily sentiment -> indicators):
 ```
@@ -168,6 +158,7 @@ Each step also writes a JSON report under a `reports/` subfolder.
 
 ## Tests
 Unit tests only (no external APIs):
+```
 make run-all ASSET=AAPL
 ```
 
@@ -195,36 +186,6 @@ Each step also writes a JSON report under a `reports/` subfolder.
 
 ---
 
-## Tests
-Unit tests only (no external APIs):
-```
-make test
-```
-
-Integration tests (API calls):
-```
-make test-integration
-```
-
----
-
-## Docs
-Recommended starting points:
-- `docs/GETTING_STARTED.md`
-- `docs/RUNNING_PIPELINE.md`
-- `docs/TROUBLESHOOTING.md`
-
----
-
-## References
-
-Integration tests (API calls):
-```
-make test-integration
-```
-
----
-
 ## Docs
 Recommended starting points:
 - `docs/GETTING_STARTED.md`
@@ -238,7 +199,6 @@ Recommended starting points:
 - Araci, D. (2019). FinBERT: Financial Sentiment Analysis with Pre-trained Language Models.
 - Martin, R. C. (2017). Clean Architecture.
 
----
 ---
 
 ## Contact
