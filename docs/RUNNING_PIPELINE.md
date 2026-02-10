@@ -159,6 +159,28 @@ Executar:
 python -m src.main_dataset_tft --asset AAPL
 ```
 
+## 8) Treinar Modelo TFT
+
+Treina o modelo e salva artefatos em `data/models/tft/{ASSET}/{VERSION}/`.
+
+Executar:
+
+```bash
+python -m src.main_train_tft --asset AAPL
+```
+
+Com seleção de features:
+
+```bash
+python -m src.main_train_tft --asset AAPL --features close,volume,rsi_14,ema_50,sentiment_score,news_volume
+```
+
+Com ajuste de hiperparâmetros:
+
+```bash
+python -m src.main_train_tft --asset AAPL --max-epochs 30 --batch-size 128 --learning-rate 0.0005
+```
+
 ## Executar Pipeline Completo
 
 Executa todos os orquestradores na ordem documentada:
