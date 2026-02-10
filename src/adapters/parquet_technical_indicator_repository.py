@@ -32,12 +32,6 @@ class ParquetTechnicalIndicatorRepository(TechnicalIndicatorRepository):
 
         filepath = self.output_dir / f"technical_indicators_{asset_id}.parquet"
 
-        if filepath.exists() and not self.overwrite:
-            raise FileExistsError(
-                f"Feature file already exists: {filepath.resolve()}\n"
-                "Use --overwrite to replace it."
-            )
-
         rows: list[dict] = []
 
         for item in indicators:
@@ -61,6 +55,12 @@ class ParquetTechnicalIndicatorRepository(TechnicalIndicatorRepository):
 
         # Temporal guarantee
         df = df.sort_values(TECHNICAL_INDICATOR_INDEX).reset_index(drop=True)
+
+        if filepath.exists() and not self.overwrite:
+            df_old = pd.read_parquet(filepath)
+            df = pd.concat([df_old, df], ignore_index=True)
+            df = df.drop_duplicates(subset=TECHNICAL_INDICATOR_INDEX, keep="last")
+            df = df.sort_values(TECHNICAL_INDICATOR_INDEX).reset_index(drop=True)
 
         df.to_parquet(filepath, index=False)
 
