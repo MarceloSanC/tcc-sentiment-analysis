@@ -103,7 +103,7 @@ def main() -> None:
             if asset_cfg:
                 requested_start = pd.to_datetime(asset_cfg["start_date"], utc=True, errors="coerce")
                 requested_end = pd.to_datetime(asset_cfg["end_date"], utc=True, errors="coerce")
-                if requested_start <= existing_start and requested_end >= existing_end:
+                if existing_start <= requested_start and existing_end >= requested_end:
                     logger.info(
                         "Technical indicators skipped (period already covered). Use --overwrite to rebuild.",
                         extra={
