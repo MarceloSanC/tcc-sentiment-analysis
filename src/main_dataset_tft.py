@@ -38,6 +38,11 @@ def parse_args() -> argparse.Namespace:
         description="Build a daily TFT training dataset from processed pipelines"
     )
     parser.add_argument("--asset", required=True, help="Asset symbol (e.g. AAPL)")
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Overwrite existing TFT dataset if it exists",
+    )
     return parser.parse_args()
 
 
@@ -46,6 +51,7 @@ def main() -> None:
 
     args = parse_args()
     asset_id = args.asset.strip().upper()
+    overwrite = args.overwrite
 
     config = load_config()
     asset_cfg = next(
@@ -94,6 +100,7 @@ def main() -> None:
             "sentiment_daily_dir": str(processed_sentiment_daily_dir.resolve()),
             "fundamentals_dir": str(processed_fundamentals_dir.resolve()),
             "dataset_dir": str(dataset_tft_dir.resolve()),
+            "overwrite": overwrite,
         },
     )
 
@@ -109,6 +116,17 @@ def main() -> None:
     )
     tft_dataset_repository = ParquetTFTDatasetRepository(output_dir=dataset_tft_dir)
 
+    dataset_path = dataset_tft_dir / asset_id / f"dataset_tft_{asset_id}.parquet"
+    if dataset_path.exists() and not overwrite:
+        logger.info(
+            "TFT dataset skipped (already exists). Use --overwrite to rebuild.",
+            extra={"asset": asset_id, "path": str(dataset_path.resolve())},
+        )
+        profile = get_profile("dataset_tft")
+        if not DataQualityReporter.report_exists(dataset_path.parent / "reports", profile.prefix):
+            DataQualityReporter.report_from_parquet(dataset_path, **profile.to_kwargs())
+        return
+
     use_case = BuildTFTDatasetUseCase(
         candle_repository=candle_repository,
         indicator_repository=indicator_repository,
@@ -122,8 +140,6 @@ def main() -> None:
         start_date=start_date,
         end_date=end_date,
     )
-
-    dataset_path = dataset_tft_dir / asset_id / f"dataset_tft_{asset_id}.parquet"
     if dataset_path.exists():
         profile = get_profile("dataset_tft")
         DataQualityReporter.report_from_parquet(dataset_path, **profile.to_kwargs())
