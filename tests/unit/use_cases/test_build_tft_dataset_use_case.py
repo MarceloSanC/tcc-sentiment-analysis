@@ -169,6 +169,62 @@ def test_builds_dataset_and_writes_reports(tmp_path: Path) -> None:
     assert result.rows == 2  # last row dropped for target_return
 
 
+def test_news_volume_defaults_to_zero_when_missing(tmp_path: Path) -> None:
+    asset_id = "AAPL"
+    candles = [
+        Candle(timestamp=_dt_utc(2024, 1, 1), open=100, high=101, low=99, close=100, volume=10),
+        Candle(timestamp=_dt_utc(2024, 1, 2), open=100, high=102, low=99, close=101, volume=11),
+        Candle(timestamp=_dt_utc(2024, 1, 3), open=101, high=103, low=100, close=102, volume=12),
+        Candle(timestamp=_dt_utc(2024, 1, 4), open=102, high=104, low=101, close=103, volume=13),
+    ]
+    indicators = [
+        TechnicalIndicatorSet(
+            asset_id=asset_id,
+            timestamp=_dt_utc(2024, 1, 1),
+            indicators={"rsi_14": 30.0},
+        ),
+        TechnicalIndicatorSet(
+            asset_id=asset_id,
+            timestamp=_dt_utc(2024, 1, 2),
+            indicators={"rsi_14": 31.0},
+        ),
+        TechnicalIndicatorSet(
+            asset_id=asset_id,
+            timestamp=_dt_utc(2024, 1, 3),
+            indicators={"rsi_14": 32.0},
+        ),
+        TechnicalIndicatorSet(
+            asset_id=asset_id,
+            timestamp=_dt_utc(2024, 1, 4),
+            indicators={"rsi_14": 33.0},
+        ),
+    ]
+    sentiments = [
+        DailySentiment(
+            asset_id=asset_id,
+            day=date(2024, 1, 1),
+            sentiment_score=0.2,
+            n_articles=2,
+            sentiment_std=0.1,
+        ),
+    ]
+    repo = FakeTFTDatasetRepository(output_dir=tmp_path)
+    use_case = BuildTFTDatasetUseCase(
+        candle_repository=FakeCandleRepository(candles),
+        indicator_repository=FakeTechnicalIndicatorRepository(indicators),
+        daily_sentiment_repository=FakeDailySentimentRepository(sentiments),
+        fundamental_repository=FakeFundamentalRepository([]),
+        tft_dataset_repository=repo,
+    )
+
+    use_case.execute(asset_id, _dt_utc(2024, 1, 1), _dt_utc(2024, 1, 4))
+
+    assert repo.saved is not None
+    missing_day = _dt_utc(2024, 1, 2)
+    value = repo.saved.loc[repo.saved["timestamp"] == missing_day, "news_volume"].item()
+    assert value == 0
+
+
 def test_raises_on_invalid_date_range(tmp_path: Path) -> None:
     use_case = BuildTFTDatasetUseCase(
         candle_repository=FakeCandleRepository(_candles()),
