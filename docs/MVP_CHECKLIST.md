@@ -150,20 +150,20 @@
 
 ---
 
-- [ ] **Etapa 6: Indicadores Fundamentalistas**
+- [x] **Etapa 6: Indicadores Fundamentalistas**
 
 **Objetivo**: Coletar indicadores fundamentalistas para enriquecer o dataset do TFT.
 
-**Componentes** (planejados):
+**Componentes**:
 
-- [ ] Adapter de fundamentals (ex: Alpha Vantage, Finnhub ou outro provedor)
-- [ ] Repositório parquet dedicado (raw/processed)
-- [ ] Use case e orquestrador CLI
+- [x] Adapter de fundamentals (Alpha Vantage)
+- [x] Repositório parquet dedicado (processed)
+- [x] Use case e orquestrador CLI (`main_fundamentals`)
 
 **Critério de aceite**:
 
-- [ ] Dataset fundamentalista salvo com schema estável
-- [ ] Alinhamento temporal com candles e sentimento
+- [x] Dataset fundamentalista salvo com schema estável
+- [x] Alinhamento temporal com candles e sentimento
 
 **Justificativa (TCC)**:
 
@@ -171,22 +171,22 @@
 
 ---
 
-- [ ] **Etapa 7: Pré-processamento e Dataset TFT**
+- [x] **Etapa 7: Pré-processamento e Dataset TFT**
 
 **Objetivo**: Unificar candles, indicadores técnicos, sentimento agregado e fundamentals em um dataset de treino do TFT.
 
-**Componentes** (planejados):
+**Componentes**:
 
-- [ ] `FeatureAssembler` (join e alinhamento temporal)
-- [ ] Normalização/escala por janela temporal
-- [ ] Geração de alvo (`t+1` retorno) e lags
-- [ ] Persistência `data/processed/dataset_tft/{ASSET}/dataset_tft_{ASSET}.parquet`
+- [x] `BuildTFTDatasetUseCase` (join e alinhamento temporal)
+- [x] Normalização/escala por janela temporal
+- [x] Geração de alvo (`t+1` retorno) e lags
+- [x] Persistência `data/processed/dataset_tft/{ASSET}/dataset_tft_{ASSET}.parquet`
 
 **Critério de aceite**:
 
-- [ ] Dataset contém features sincronizadas e alvo
-- [ ] Sem leakage temporal
-- [ ] Schema consistente e validado
+- [x] Dataset contém features sincronizadas e alvo
+- [x] Sem leakage temporal
+- [x] Schema consistente e validado
 
 **Justificativa (TCC)**:
 
@@ -209,6 +209,9 @@
 - [ ] Treina modelo com alvo `retorno_t+1`
 - [ ] Salva checkpoint e artefatos (scalers, config)
 - [ ] Relatório de importância das features
+- [ ] Split temporal (train/val/test) sem leakage
+- [ ] Normalização ajustada no treino e aplicada no val/test
+- [ ] Validação explícita: sentiment diário só usa notícias do mesmo dia
 
 **Justificativa (TCC)**:
 
