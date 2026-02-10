@@ -70,7 +70,7 @@ class DataQualityReporter:
             report["zeros"] = (numeric == 0).sum().to_dict()
             report["rows_with_zeros"] = int((numeric == 0).any(axis=1).sum())
             numeric_values = numeric.apply(pd.to_numeric, errors="coerce")
-            invalid_inf = ~np.isfinite(numeric_values)
+            invalid_inf = np.isinf(numeric_values)
             report["invalid_numeric_inf"] = invalid_inf.sum().to_dict()
             stats = numeric.describe().T
             report["numeric_stats"] = stats.to_dict(orient="index")
