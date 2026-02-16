@@ -159,6 +159,7 @@ class BuildTFTDatasetUseCase:
             asset_id,
             start_utc,
             end_utc,
+            include_latest_before_start=True,
         )
         if not fundamentals:
             logger.warning(
