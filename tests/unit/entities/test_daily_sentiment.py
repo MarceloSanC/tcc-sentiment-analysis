@@ -81,10 +81,10 @@ def test_asset_id_is_required_and_cannot_be_empty():
         )
 
 
-@pytest.mark.parametrize("n_articles", [0, -1, -10])
-def test_n_articles_must_be_positive(n_articles):
+@pytest.mark.parametrize("n_articles", [-1, -10])
+def test_n_articles_cannot_be_negative(n_articles):
     """
-    n_articles deve ser inteiro positivo.
+    n_articles deve ser inteiro não-negativo.
     """
     with pytest.raises(ValueError):
         DailySentiment(
@@ -93,6 +93,17 @@ def test_n_articles_must_be_positive(n_articles):
             sentiment_score=0.1,
             n_articles=n_articles,
         )
+
+
+def test_n_articles_zero_is_allowed_for_no_news_day():
+    sentiment = DailySentiment(
+        asset_id="AAPL",
+        day=date(2024, 1, 1),
+        sentiment_score=0.0,
+        n_articles=0,
+        sentiment_std=0.0,
+    )
+    assert sentiment.n_articles == 0
 
 
 def test_sentiment_std_cannot_be_negative():
