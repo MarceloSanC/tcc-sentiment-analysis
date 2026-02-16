@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from src.domain.services.sentiment_aggregator import SentimentAggregator
+from src.domain.time.trading_calendar import normalize_to_trading_day
 from src.domain.time.utc import require_tz_aware, to_utc
+from src.entities.daily_sentiment import DailySentiment
+from src.entities.scored_news_article import ScoredNewsArticle
 from src.interfaces.daily_sentiment_repository import DailySentimentRepository
 from src.interfaces.scored_news_repository import ScoredNewsRepository
 
@@ -62,17 +65,19 @@ class SentimentFeatureEngineeringUseCase:
             end_date=end_utc,
         )
 
-        if not scored:
-            return SentimentFeatureEngineeringResult(
-                asset_id=asset_id,
-                read=0,
-                aggregated=0,
-                saved=0,
-                start=start_utc,
-                end=end_utc,
-            )
-
         daily = self.sentiment_aggregator.aggregate_daily(asset_id, scored)
+        daily = self._fill_missing_days_with_zero_news(
+            asset_id=asset_id,
+            daily=daily,
+            start_utc=start_utc,
+            end_utc=end_utc,
+        )
+        self._validate_daily_causality(
+            scored=scored,
+            daily=daily,
+            start_utc=start_utc,
+            end_utc=end_utc,
+        )
 
         if daily:
             self.daily_sentiment_repository.upsert_daily_sentiment_batch(daily)
@@ -97,3 +102,93 @@ class SentimentFeatureEngineeringUseCase:
             start=start_utc,
             end=end_utc,
         )
+
+    @staticmethod
+    def _validate_daily_causality(
+        *,
+        scored: list[ScoredNewsArticle],
+        daily: list[DailySentiment],
+        start_utc: datetime,
+        end_utc: datetime,
+    ) -> None:
+        """
+        Explicit causality guard:
+        - only scored news inside requested window can feed daily sentiment;
+        - each daily row must map to at least one source news day;
+        - n_articles in daily aggregate must match source count of that day.
+        """
+        start_day = start_utc.date()
+        end_day = end_utc.date()
+
+        day_counts: dict = {}
+        for article in scored:
+            article_day = normalize_to_trading_day(article.published_at)
+            if article_day < start_day or article_day > end_day:
+                raise ValueError(
+                    "Causality violation: scored news outside requested date window"
+                )
+            day_counts[article_day] = day_counts.get(article_day, 0) + 1
+
+        for item in daily:
+            if item.day < start_day or item.day > end_day:
+                raise ValueError(
+                    "Causality violation: daily sentiment day outside requested date window"
+                )
+
+            if item.day in day_counts:
+                if item.n_articles != day_counts[item.day]:
+                    raise ValueError(
+                        "Causality violation: n_articles does not match source news count"
+                    )
+                continue
+
+            if item.n_articles != 0:
+                raise ValueError(
+                    "Causality violation: synthetic day without source news must have n_articles=0"
+                )
+            if item.sentiment_score != 0.0:
+                raise ValueError(
+                    "Causality violation: synthetic day without source news must have sentiment_score=0.0"
+                )
+
+        daily_days = {item.day for item in daily}
+        missing_source_days = sorted(day for day in day_counts if day not in daily_days)
+        if missing_source_days:
+            raise ValueError(
+                "Causality violation: source news day missing from daily sentiment aggregate"
+            )
+
+    @staticmethod
+    def _fill_missing_days_with_zero_news(
+        *,
+        asset_id: str,
+        daily: list[DailySentiment],
+        start_utc: datetime,
+        end_utc: datetime,
+    ) -> list[DailySentiment]:
+        by_day = {item.day: item for item in daily}
+
+        all_days: list = []
+        current = start_utc.date()
+        end_day = end_utc.date()
+        while current <= end_day:
+            all_days.append(current)
+            current += timedelta(days=1)
+
+        filled: list[DailySentiment] = []
+        for day in all_days:
+            existing = by_day.get(day)
+            if existing is not None:
+                filled.append(existing)
+                continue
+
+            filled.append(
+                DailySentiment(
+                    asset_id=asset_id,
+                    day=day,
+                    sentiment_score=0.0,
+                    n_articles=0,
+                    sentiment_std=0.0,
+                )
+            )
+        return filled
