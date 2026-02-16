@@ -6,12 +6,22 @@ import logging
 
 import pandas as pd
 
-from src.infrastructure.schemas.tft_dataset_parquet_schema import DEFAULT_TFT_FEATURES
+from src.domain.services.feature_warmup_inspector import FeatureWarmupInspector
+from src.infrastructure.schemas.tft_dataset_parquet_schema import (
+    BASELINE_FEATURES,
+    DEFAULT_TFT_FEATURES,
+    FUNDAMENTAL_FEATURES,
+    SENTIMENT_FEATURES,
+    TECHNICAL_FEATURES,
+)
 from src.infrastructure.schemas.model_artifact_schema import TFT_SPLIT_DEFAULTS
+from src.infrastructure.schemas.model_artifact_schema import TFT_TRAINING_DEFAULTS
 
 from src.interfaces.tft_dataset_repository import TFTDatasetRepository
 from src.interfaces.model_trainer import ModelTrainer, TrainingResult
 from src.interfaces.model_repository import ModelRepository
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -50,11 +60,141 @@ class TrainTFTModelUseCase:
         return [c for c in available if c not in base_exclude]
 
     @staticmethod
+    def _resolve_features(
+        df: pd.DataFrame, features: list[str] | None
+    ) -> tuple[list[str], str]:
+        token_groups: dict[str, tuple[str, list[str]]] = {
+            "BASELINE_FEATURES": ("B", BASELINE_FEATURES),
+            "TECHNICAL_FEATURES": ("T", TECHNICAL_FEATURES),
+            "SENTIMENT_FEATURES": ("S", SENTIMENT_FEATURES),
+            "FUNDAMENTAL_FEATURES": ("F", FUNDAMENTAL_FEATURES),
+            "B": ("B", BASELINE_FEATURES),
+            "T": ("T", TECHNICAL_FEATURES),
+            "S": ("S", SENTIMENT_FEATURES),
+            "F": ("F", FUNDAMENTAL_FEATURES),
+        }
+        allowed_order = ["B", "T", "S", "F", "C"]
+
+        if features is None:
+            selected = TrainTFTModelUseCase._select_features(df, None)
+            letters: set[str] = set()
+            if any(c in selected for c in BASELINE_FEATURES):
+                letters.add("B")
+            if any(c in selected for c in TECHNICAL_FEATURES):
+                letters.add("T")
+            if any(c in selected for c in SENTIMENT_FEATURES):
+                letters.add("S")
+            if any(c in selected for c in FUNDAMENTAL_FEATURES):
+                letters.add("F")
+            suffix = "".join([l for l in allowed_order if l in letters]) or "C"
+            return selected, suffix
+
+        selected: list[str] = []
+        selected_set: set[str] = set()
+        letters: set[str] = set()
+        custom_requested = False
+        missing: list[str] = []
+
+        for raw_token in features:
+            token = raw_token.strip()
+            upper = token.upper()
+            if upper in token_groups:
+                letter, cols = token_groups[upper]
+                letters.add(letter)
+                for col in cols:
+                    if col in df.columns and col not in selected_set:
+                        selected.append(col)
+                        selected_set.add(col)
+                continue
+
+            custom_requested = True
+            col = token
+            if col not in df.columns:
+                lower_col = token.lower()
+                if lower_col in df.columns:
+                    col = lower_col
+                else:
+                    missing.append(token)
+                    continue
+            if col not in selected_set:
+                selected.append(col)
+                selected_set.add(col)
+
+        if missing:
+            raise ValueError(f"Requested features not found in dataset: {missing}")
+        if not selected:
+            raise ValueError("No valid features resolved from provided --features")
+
+        if custom_requested:
+            letters.add("C")
+        suffix = "".join([l for l in allowed_order if l in letters]) or "C"
+        return selected, suffix
+
+    @staticmethod
     def _parse_yyyymmdd(value: str) -> datetime:
         try:
             return datetime.strptime(value, "%Y%m%d").replace(tzinfo=timezone.utc)
         except ValueError as exc:
             raise ValueError(f"Invalid date format: {value}. Expected yyyymmdd.") from exc
+
+    @staticmethod
+    def _available(df: pd.DataFrame, columns: list[str]) -> list[str]:
+        return [c for c in columns if c in df.columns]
+
+    def _run_ablation(
+        self,
+        *,
+        df: pd.DataFrame,
+        train_df: pd.DataFrame,
+        val_df: pd.DataFrame,
+        test_df: pd.DataFrame,
+        known_real_cols: list[str],
+        split_cfg: dict,
+        training_config: dict,
+    ) -> list[dict[str, float | str]]:
+        baseline = self._available(df, BASELINE_FEATURES)
+        technical = self._available(df, TECHNICAL_FEATURES)
+        sentiment = self._available(df, SENTIMENT_FEATURES)
+        fundamentals = self._available(df, FUNDAMENTAL_FEATURES)
+        experiments = {
+            "baseline": baseline,
+            "baseline_plus_technical": baseline + technical,
+            "baseline_plus_sentiment": baseline + sentiment,
+            "baseline_plus_fundamentals": baseline + fundamentals,
+            "baseline_plus_technical_plus_sentiment_plus_fundamentals": baseline + technical + sentiment + fundamentals,
+        }
+
+        results: list[dict[str, float | str]] = []
+        for name, feat_cols in experiments.items():
+            feat_cols = list(dict.fromkeys(feat_cols))
+            if not feat_cols:
+                continue
+            cfg = dict(training_config)
+            cfg["split_config"] = split_cfg
+            run = self.model_trainer.train(
+                train_df,
+                val_df,
+                test_df,
+                feature_cols=feat_cols,
+                target_col="target_return",
+                time_idx_col="time_idx",
+                group_col="asset_id",
+                known_real_cols=known_real_cols,
+                config=cfg,
+            )
+            results.append(
+                {
+                    "experiment": name,
+                    "n_features": float(len(feat_cols)),
+                    "train_rmse": float(run.split_metrics.get("train", {}).get("rmse", float("nan"))),
+                    "val_rmse": float(run.split_metrics.get("val", {}).get("rmse", float("nan"))),
+                    "test_rmse": float(run.split_metrics.get("test", {}).get("rmse", float("nan"))),
+                    "train_mae": float(run.split_metrics.get("train", {}).get("mae", float("nan"))),
+                    "val_mae": float(run.split_metrics.get("val", {}).get("mae", float("nan"))),
+                    "test_mae": float(run.split_metrics.get("test", {}).get("mae", float("nan"))),
+                }
+            )
+        return results
 
     @staticmethod
     def _apply_time_split(
@@ -103,6 +243,7 @@ class TrainTFTModelUseCase:
         features: list[str] | None = None,
         training_config: dict | None = None,
         split_config: dict | None = None,
+        run_ablation: bool = False,
     ) -> TrainTFTModelResult:
         df = self.dataset_repository.load(asset_id)
         if df.empty:
@@ -111,13 +252,29 @@ class TrainTFTModelUseCase:
         if "time_idx" not in df.columns or "target_return" not in df.columns:
             raise ValueError("Dataset missing required columns for TFT training")
 
-        feature_cols = self._select_features(df, features)
+        feature_cols, feature_tag = self._resolve_features(df, features)
 
         known_real_cols = [c for c in ["time_idx", "day_of_week", "month"] if c in df.columns]
 
         split_cfg = dict(TFT_SPLIT_DEFAULTS)
         if split_config:
             split_cfg.update(split_config)
+        warmup_segments = FeatureWarmupInspector.detect_leading_null_warmups(
+            df,
+            feature_cols,
+            requested_start=split_cfg["train_start"],
+            requested_end=split_cfg["test_end"],
+        )
+        for segment in warmup_segments:
+            logger.warning(
+                "Warm-up null segment detected. Requested period %s to %s contains %d leading null values for feature '%s' from %s to %s.",
+                segment.requested_start,
+                segment.requested_end,
+                segment.num_null,
+                segment.feature_name,
+                segment.first_date_warmup,
+                segment.last_date_warmup_null,
+            )
         train_df, val_df, test_df = self._apply_time_split(
             df,
             train_start=split_cfg["train_start"],
@@ -128,25 +285,39 @@ class TrainTFTModelUseCase:
             test_end=split_cfg["test_end"],
         )
 
-        if train_df.empty or val_df.empty:
-            raise ValueError("Train/validation split resulted in empty dataset")
+        if train_df.empty or val_df.empty or test_df.empty:
+            raise ValueError("Train/validation/test split resulted in empty dataset")
 
-        training_cutoff = int(train_df["time_idx"].max())
-
-        effective_config = dict(training_config or {})
-        effective_config["training_cutoff_time_idx"] = training_cutoff
+        trainer_config = self._build_trainer_config(training_config)
+        metadata_config = dict(trainer_config)
+        metadata_config["split_config"] = split_cfg
+        metadata_config["feature_set_tag"] = feature_tag
+        metadata_config["feature_tokens"] = features or ["DEFAULT_TFT_FEATURES"]
 
         training_result: TrainingResult = self.model_trainer.train(
-            pd.concat([train_df, val_df], ignore_index=True),
+            train_df,
+            val_df,
+            test_df,
             feature_cols=feature_cols,
             target_col="target_return",
             time_idx_col="time_idx",
             group_col="asset_id",
             known_real_cols=known_real_cols,
-            config=effective_config,
+            config=trainer_config,
         )
+        ablation_results: list[dict[str, float | str]] = []
+        if run_ablation and features is None:
+            ablation_results = self._run_ablation(
+                df=df,
+                train_df=train_df,
+                val_df=val_df,
+                test_df=test_df,
+                known_real_cols=known_real_cols,
+                split_cfg=split_cfg,
+                training_config=trainer_config,
+            )
 
-        version = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        version = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S") + f"_{feature_tag}"
         training_window = {
             "start": df["timestamp"].min().isoformat(),
             "end": df["timestamp"].max().isoformat(),
@@ -158,9 +329,15 @@ class TrainTFTModelUseCase:
             training_result.model,
             metrics=training_result.metrics,
             history=training_result.history,
+            split_metrics=training_result.split_metrics,
             features_used=feature_cols,
             training_window=training_window,
-            config=effective_config,
+            split_window=split_cfg,
+            config=metadata_config,
+            feature_importance=training_result.feature_importance,
+            ablation_results=ablation_results,
+            checkpoint_path=training_result.checkpoint_path,
+            dataset_parameters=training_result.dataset_parameters,
         )
 
         return TrainTFTModelResult(
@@ -169,3 +346,7 @@ class TrainTFTModelUseCase:
             metrics=training_result.metrics,
             artifacts_dir=artifacts_dir,
         )
+    @staticmethod
+    def _build_trainer_config(training_config: dict | None) -> dict:
+        config = dict(training_config or {})
+        return {k: v for k, v in config.items() if k in TFT_TRAINING_DEFAULTS}
