@@ -40,9 +40,9 @@ class DailySentiment:
                 "sentiment_score must be in the range [-1.0, +1.0]"
             )
 
-        if self.n_articles <= 0:
+        if self.n_articles < 0:
             raise ValueError(
-                "n_articles must be a positive integer"
+                "n_articles must be a non-negative integer"
             )
 
         if self.sentiment_std is not None and self.sentiment_std < 0:
