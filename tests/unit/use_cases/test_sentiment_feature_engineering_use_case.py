@@ -103,9 +103,37 @@ def test_short_circuit_when_no_scored_news() -> None:
     result = use_case.execute("AAPL", _dt_utc(2024, 1, 1), _dt_utc(2024, 1, 2))
 
     assert result.read == 0
-    assert result.aggregated == 0
-    assert result.saved == 0
-    assert daily_repo.saved == []
+    assert result.aggregated == 2
+    assert result.saved == 2
+    assert len(daily_repo.saved) == 2
+    assert all(item.n_articles == 0 for item in daily_repo.saved)
+    assert all(item.sentiment_score == 0.0 for item in daily_repo.saved)
+
+
+def test_fills_missing_days_with_zero_news_volume() -> None:
+    scored = [
+        _scored("AAPL", "a1", _dt_utc(2024, 1, 1, 10), 0.2),
+        _scored("AAPL", "a2", _dt_utc(2024, 1, 3, 12), -0.4),
+    ]
+
+    scored_repo = FakeScoredNewsRepository(scored)
+    daily_repo = FakeDailySentimentRepository()
+    aggregator = SentimentAggregator()
+
+    use_case = SentimentFeatureEngineeringUseCase(
+        scored_news_repository=scored_repo,
+        sentiment_aggregator=aggregator,
+        daily_sentiment_repository=daily_repo,
+    )
+
+    result = use_case.execute("AAPL", _dt_utc(2024, 1, 1), _dt_utc(2024, 1, 3, 23, 59))
+
+    assert result.read == 2
+    assert result.aggregated == 3
+    assert result.saved == 3
+    by_day = {d.day.isoformat(): d for d in daily_repo.saved}
+    assert by_day["2024-01-02"].n_articles == 0
+    assert by_day["2024-01-02"].sentiment_score == 0.0
 
 
 def test_raises_on_invalid_date_range() -> None:
@@ -121,3 +149,23 @@ def test_raises_on_invalid_date_range() -> None:
 
     with pytest.raises(ValueError, match="start_date must be <= end_date"):
         use_case.execute("AAPL", _dt_utc(2024, 1, 2), _dt_utc(2024, 1, 1))
+
+
+def test_raises_on_future_news_outside_requested_window() -> None:
+    scored = [
+        _scored("AAPL", "a1", _dt_utc(2024, 1, 1, 10), 0.2),
+        _scored("AAPL", "a2", _dt_utc(2024, 1, 3, 9), 0.4),  # outside requested end
+    ]
+
+    scored_repo = FakeScoredNewsRepository(scored)
+    daily_repo = FakeDailySentimentRepository()
+    aggregator = SentimentAggregator()
+
+    use_case = SentimentFeatureEngineeringUseCase(
+        scored_news_repository=scored_repo,
+        sentiment_aggregator=aggregator,
+        daily_sentiment_repository=daily_repo,
+    )
+
+    with pytest.raises(ValueError, match="Causality violation"):
+        use_case.execute("AAPL", _dt_utc(2024, 1, 1), _dt_utc(2024, 1, 2, 23, 59))
