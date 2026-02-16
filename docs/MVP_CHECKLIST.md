@@ -143,6 +143,7 @@
 - [x] Agregação diária persiste `data/processed/sentiment_daily/{ASSET}/daily_sentiment_{ASSET}.parquet`
 - [x] Cada dia contém `sentiment_score` agregado e `news_volume`
 - [x] Agregação diária determinística (mesmo input → mesmo output)
+- [x] Validação explícita de causalidade: sentimento diário usa apenas notícias do próprio dia (sem notícia futura)
 
 **Justificativa (TCC)**:
 
@@ -187,6 +188,8 @@
 - [x] Dataset contém features sincronizadas e alvo
 - [x] Sem leakage temporal
 - [x] Schema consistente e validado
+- [ ] Política explícita de missing por feature (ex.: `news_volume=0`) 
+- [x] Validador de warmup para detectar e alertar `null` iniciais por feature no período de treino
 
 **Justificativa (TCC)**:
 
@@ -200,18 +203,22 @@
 
 **Componentes** (planejados):
 
-- [ ] Adapter de treino TFT (pytorch-forecasting)
-- [ ] Use case de treino e validação temporal
+- [x] Adapter de treino TFT (pytorch-forecasting)
+- [x] Use case de treino e validação temporal
 - [ ] Rotinas de explainability (ex: SHAP ou atenção do TFT)
+- [x] Estratégia de experimentos para relevância (ablação + permutation importance)
 
 **Critério de aceite**:
 
-- [ ] Treina modelo com alvo `retorno_t+1`
-- [ ] Salva checkpoint e artefatos (scalers, config)
-- [ ] Relatório de importância das features
-- [ ] Split temporal (train/val/test) sem leakage
+- [x] Treina modelo com alvo `retorno_t+1`
+- [x] Avalia em test e salva métricas separadas (`train`, `val`, `test`)
+- [ ] Salva checkpoint e artefatos (scalers, config, `metadata.json` com split efetivo)
+- [x] Relatório de importância das features
+- [x] Split temporal (train/val/test) sem leakage
 - [ ] Normalização ajustada no treino e aplicada no val/test
-- [ ] Validação explícita: sentiment diário só usa notícias do mesmo dia
+- [x] Early stopping + checkpoint do melhor `val_loss`
+- [x] Relevância em duas camadas: ablação controlada (baseline vs +sentimento vs +fundamentals) e permutation importance no conjunto de teste
+- [ ] Exporta artefatos de análise (`feature_importance.csv`, gráfico comparativo por experimento)
 
 **Justificativa (TCC)**:
 
@@ -236,3 +243,4 @@
 **Justificativa (TCC)**:
 
 > A inferência operacional valida o uso do modelo em ambiente próximo ao real e permite avaliação contínua de performance.
+
