@@ -19,28 +19,41 @@ TFT_DATASET_DTYPES: Dict[str, str] = {
     "target_return": "float64",
 }
 
-DEFAULT_TFT_FEATURES: List[str] = [
+BASELINE_FEATURES: List[str] = [
     "open",
     "high",
     "low",
     "close",
     "volume",
+]
+
+TECHNICAL_FEATURES: List[str] = [
     "volatility_20d",
-    # "rsi_14",
-    # "candle_body",
-    # "macd_signal",
-    # "ema_100",
-    # "macd",
-    # "ema_10",
-    # "ema_200",
-    # "ema_50",
-    # "candle_range",
-    # "sentiment_score",
-    # "news_volume",
-    # "sentiment_std",
-    # "revenue",
-    # "net_income",
-    # "operating_cash_flow",
-    # "total_shareholder_equity",
-    # "total_liabilities",
+    "rsi_14",
+    "candle_body",
+    "macd_signal",
+    "ema_100",
+    "macd",
+    "ema_10",
+    "ema_200",
+    "ema_50",
+    "candle_range",
+]
+
+SENTIMENT_FEATURES: List[str] = [
+    "sentiment_score",
+    "news_volume",
+    "sentiment_std",
+]
+
+FUNDAMENTAL_FEATURES: List[str] = [
+    "revenue",
+    "net_income",
+    "operating_cash_flow",
+    "total_shareholder_equity",
+    "total_liabilities",
+]
+
+DEFAULT_TFT_FEATURES: List[str] = [
+    *BASELINE_FEATURES
 ]
