@@ -26,6 +26,7 @@ class FundamentalRepository(ABC):
         start_date: datetime,
         end_date: datetime,
         report_type: str | None = None,
+        include_latest_before_start: bool = True,
     ) -> list[FundamentalReport]:
         """List fundamentals in the given interval."""
         ...
