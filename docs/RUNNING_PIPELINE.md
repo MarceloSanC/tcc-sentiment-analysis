@@ -162,6 +162,7 @@ python -m src.main_dataset_tft --asset AAPL
 ## 8) Treinar Modelo TFT
 
 Treina o modelo e salva artefatos em `data/models/tft/{ASSET}/{VERSION}/`.
+Referencia completa de parametros: `docs/TRAIN_TFT_PARAMS.md`.
 
 Executar:
 
@@ -169,24 +170,25 @@ Executar:
 python -m src.main_train_tft --asset AAPL
 ```
 
-Com seleção de features:
+Sem parâmetros adicionais, o treino usa:
+- `features`: conjunto padrão (`DEFAULT_TFT_FEATURES`) disponível no dataset
+- `run_ablation`: desabilitado
+- `training_config`: defaults do schema
+- `split_config`: defaults do schema
+
+É possível customizar `features`, `run_ablation`, `training_config` e `split_config`:
+- via CLI (`--features`, `--run-ablation`, parâmetros de treino e split)
+- via arquivo JSON (`--config-json`)
+
+Para exemplos práticos e referência completa, consulte `docs/TRAIN_TFT_PARAMS.md`.
+
+## Executar Pipeline Completo de Dados (Sem Treino)
+
+Executa todos os orquestradores de ingestão e pré-processamento na ordem documentada, até a geração do dataset TFT.
+Esta execução **não inclui** a etapa de treino do modelo nem a análise comparativa de experimentos.
 
 ```bash
-python -m src.main_train_tft --asset AAPL --features close,volume,rsi_14,ema_50,sentiment_score,news_volume
-```
-
-Com ajuste de hiperparâmetros:
-
-```bash
-python -m src.main_train_tft --asset AAPL --max-epochs 30 --batch-size 128 --learning-rate 0.0005
-```
-
-## Executar Pipeline Completo
-
-Executa todos os orquestradores na ordem documentada:
-
-```bash
-python -m src.main_pipeline --asset AAPL
+python -m src.main_data_pipeline --asset AAPL
 ```
 
 ## Rotinas de Qualidade
