@@ -35,7 +35,12 @@ class FakeFundamentalRepository(FundamentalRepository):
         self.saved.extend(reports)
 
     def list_reports(
-        self, asset_id: str, start_date: datetime, end_date: datetime, report_type: str | None = None
+        self,
+        asset_id: str,
+        start_date: datetime,
+        end_date: datetime,
+        report_type: str | None = None,
+        include_latest_before_start: bool = False,
     ):
         return []
 
