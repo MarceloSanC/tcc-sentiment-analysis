@@ -39,6 +39,7 @@ def _sample_df() -> pd.DataFrame:
 
 
 def test_save_and_load_dataset(tmp_path: Path) -> None:
+    pytest.importorskip("pyarrow")
     repo = ParquetTFTDatasetRepository(output_dir=tmp_path)
 
     df = _sample_df()
@@ -69,3 +70,44 @@ def test_output_dir_is_file_raises(tmp_path: Path) -> None:
 
     with pytest.raises(NotADirectoryError):
         ParquetTFTDatasetRepository(output_dir=file_path)
+
+
+def test_save_empty_dataset_raises(tmp_path: Path) -> None:
+    repo = ParquetTFTDatasetRepository(output_dir=tmp_path)
+    with pytest.raises(ValueError, match="empty"):
+        repo.save("AAPL", pd.DataFrame())
+
+
+def test_load_missing_dataset_raises(tmp_path: Path) -> None:
+    repo = ParquetTFTDatasetRepository(output_dir=tmp_path)
+    with pytest.raises(FileNotFoundError):
+        repo.load("AAPL")
+
+
+def test_save_coerces_timestamp_and_base_dtypes(tmp_path: Path) -> None:
+    pytest.importorskip("pyarrow")
+    repo = ParquetTFTDatasetRepository(output_dir=tmp_path)
+    df = pd.DataFrame(
+        [
+            {
+                "asset_id": "aapl",
+                "timestamp": "2024-01-01T00:00:00Z",
+                "time_idx": "0",
+                "day_of_week": "0",
+                "month": "1",
+                "target_return": "0.01",
+                "close": 100.0,
+            }
+        ]
+    )
+
+    repo.save("AAPL", df)
+    loaded = repo.load("AAPL")
+
+    assert str(loaded["asset_id"].dtype) == "string"
+    assert str(loaded["time_idx"].dtype) == "int64"
+    assert str(loaded["day_of_week"].dtype) == "int64"
+    assert str(loaded["month"].dtype) == "int64"
+    assert str(loaded["target_return"].dtype) == "float64"
+    ts = pd.to_datetime(loaded["timestamp"], utc=True, errors="coerce")
+    assert ts.isna().sum() == 0
