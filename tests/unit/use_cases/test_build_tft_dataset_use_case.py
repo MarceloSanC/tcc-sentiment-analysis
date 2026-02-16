@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -72,9 +72,30 @@ class FakeFundamentalRepository(FundamentalRepository):
         raise NotImplementedError
 
     def list_reports(
-        self, asset_id: str, start_date: datetime, end_date: datetime, report_type: str | None = None
+        self,
+        asset_id: str,
+        start_date: datetime,
+        end_date: datetime,
+        report_type: str | None = None,
+        include_latest_before_start: bool = False,
     ) -> list[FundamentalReport]:
-        return self._reports
+        start_day = start_date.date()
+        end_day = end_date.date()
+
+        selected: list[FundamentalReport] = []
+        prior: list[tuple[date, FundamentalReport]] = []
+        for report in self._reports:
+            if report_type and report.report_type != report_type:
+                continue
+            effective_day = report.reported_date or (report.fiscal_date_end + timedelta(days=45))
+            if start_day <= effective_day <= end_day:
+                selected.append(report)
+            elif effective_day < start_day:
+                prior.append((effective_day, report))
+
+        if include_latest_before_start and prior:
+            selected.append(max(prior, key=lambda x: x[0])[1])
+        return selected
 
 
 @dataclass
@@ -260,3 +281,35 @@ def test_raises_when_insufficient_rows_for_target(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="Not enough rows to compute target_return"):
         use_case.execute("AAPL", _dt_utc(2024, 1, 1), _dt_utc(2024, 1, 1))
+
+
+def test_fundamentals_forward_fill_uses_latest_before_start(tmp_path: Path) -> None:
+    asset_id = "AAPL"
+    repo = FakeTFTDatasetRepository(output_dir=tmp_path)
+    fundamentals = [
+        FundamentalReport(
+            asset_id=asset_id,
+            fiscal_date_end=date(2023, 12, 31),
+            report_type="annual",
+            revenue=999.0,
+            net_income=111.0,
+            operating_cash_flow=222.0,
+            total_shareholder_equity=333.0,
+            total_liabilities=444.0,
+            reported_date=date(2023, 12, 20),
+            source="mock",
+        )
+    ]
+
+    use_case = BuildTFTDatasetUseCase(
+        candle_repository=FakeCandleRepository(_candles()),
+        indicator_repository=FakeTechnicalIndicatorRepository(_indicators(asset_id)),
+        daily_sentiment_repository=FakeDailySentimentRepository(_daily_sentiment(asset_id)),
+        fundamental_repository=FakeFundamentalRepository(fundamentals),
+        tft_dataset_repository=repo,
+    )
+
+    use_case.execute(asset_id, _dt_utc(2024, 1, 1), _dt_utc(2024, 1, 3))
+
+    assert repo.saved is not None
+    assert repo.saved["revenue"].iloc[0] == pytest.approx(999.0)
