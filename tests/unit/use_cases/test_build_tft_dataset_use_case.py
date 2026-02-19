@@ -244,6 +244,12 @@ def test_news_volume_defaults_to_zero_when_missing(tmp_path: Path) -> None:
     missing_day = _dt_utc(2024, 1, 2)
     value = repo.saved.loc[repo.saved["timestamp"] == missing_day, "news_volume"].item()
     assert value == 0
+    has_news = repo.saved.loc[repo.saved["timestamp"] == missing_day, "has_news"].item()
+    assert has_news == 0
+    sentiment_score = repo.saved.loc[repo.saved["timestamp"] == missing_day, "sentiment_score"].item()
+    assert sentiment_score == pytest.approx(0.0)
+    sentiment_std = repo.saved.loc[repo.saved["timestamp"] == missing_day, "sentiment_std"].item()
+    assert sentiment_std == pytest.approx(0.0)
 
 
 def test_raises_on_invalid_date_range(tmp_path: Path) -> None:
