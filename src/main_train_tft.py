@@ -46,6 +46,15 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--models-dir",
+        type=str,
+        required=False,
+        help=(
+            "Optional base directory for model artifacts. "
+            "If omitted, uses configured default path from data_paths."
+        ),
+    )
+    parser.add_argument(
         "--max-encoder-length",
         type=int,
         help=f"Encoder length (>=2). Default: {TFT_TRAINING_DEFAULTS['max_encoder_length']}",
@@ -165,7 +174,7 @@ def main() -> None:
 
     paths = load_data_paths()
     dataset_dir = paths["dataset_tft"]
-    models_dir = paths["models"]
+    models_dir = Path(args.models_dir) if args.models_dir else paths["models"]
 
     dataset_repo = ParquetTFTDatasetRepository(output_dir=dataset_dir)
     model_repo = LocalTFTModelRepository(base_dir=models_dir)
