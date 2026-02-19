@@ -95,6 +95,7 @@ Não use TODO para:
 - [ ] Gerar relatório automático de correlação entre features
 - [ ] Criar alerta para features altamente colineares
 - [ ] Persistir métricas estatísticas em `reports/`
+- [ ] Implementar rotinas de explainability do TFT (atenção nativa e/ou SHAP) com export de artefatos
 
 ---
 
