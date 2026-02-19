@@ -13,7 +13,6 @@ from src.adapters.parquet_technical_indicator_repository import (
     ParquetTechnicalIndicatorRepository,
 )
 from src.adapters.technical_indicator_calculator import TechnicalIndicatorCalculator
-from src.adapters.sklearn_indicator_normalizer import SklearnTechnicalIndicatorNormalizer
 from src.use_cases.technical_indicator_engineering_use_case import (
     TechnicalIndicatorEngineeringUseCase,
 )
@@ -135,14 +134,12 @@ def main() -> None:
     )
 
     indicator_calculator = TechnicalIndicatorCalculator()
-    indicator_normalizer = SklearnTechnicalIndicatorNormalizer()
 
     # ---------- Use Case ----------
     use_case = TechnicalIndicatorEngineeringUseCase(
         candle_repository=candle_repository,
         indicator_calculator=indicator_calculator,
         indicator_repository=indicator_repository,
-        indicator_normalizer=indicator_normalizer,
     )
 
     # ---------- Execute ----------
