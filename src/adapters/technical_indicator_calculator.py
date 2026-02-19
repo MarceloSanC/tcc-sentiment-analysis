@@ -55,8 +55,6 @@ class TechnicalIndicatorCalculator(TechnicalIndicatorCalculatorPort):
         df["candle_range"] = df["high"] - df["low"]
         df["candle_body"] = (df["close"] - df["open"]).abs()
 
-        df = df.dropna()
-
         missing = TECHNICAL_INDICATORS - set(df.columns)
         if missing:
             raise RuntimeError(
