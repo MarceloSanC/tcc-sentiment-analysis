@@ -27,6 +27,9 @@ class FakeDatasetRepository(TFTDatasetRepository):
 class FakeTrainer(ModelTrainer):
     seen_features: list[str] | None = None
     calls: int = 0
+    seen_train_df: pd.DataFrame | None = None
+    seen_val_df: pd.DataFrame | None = None
+    seen_test_df: pd.DataFrame | None = None
 
     def train(
         self,
@@ -43,6 +46,9 @@ class FakeTrainer(ModelTrainer):
     ) -> TrainingResult:
         self.calls += 1
         self.seen_features = feature_cols
+        self.seen_train_df = train_df.copy()
+        self.seen_val_df = val_df.copy()
+        self.seen_test_df = test_df.copy()
         return TrainingResult(
             model=object(),
             metrics={"rmse": 1.0},
@@ -60,6 +66,7 @@ class FakeModelRepo(ModelRepository):
     saved: bool = False
     last_ablation_results: list[dict[str, float | str]] | None = None
     last_version: str | None = None
+    last_dataset_parameters: dict | None = None
 
     def save_training_artifacts(
         self,
@@ -83,6 +90,7 @@ class FakeModelRepo(ModelRepository):
         self.saved = True
         self.last_ablation_results = ablation_results
         self.last_version = version
+        self.last_dataset_parameters = dataset_parameters
         return "fake_dir"
 
 
@@ -370,3 +378,55 @@ def test_raises_when_features_list_is_empty() -> None:
     }
     with pytest.raises(ValueError, match="No valid features"):
         use_case.execute("AAPL", features=[], split_config=split_config)
+
+
+def test_applies_split_normalization_for_technical_features_and_persists_scalers() -> None:
+    df = pd.DataFrame(
+        {
+            "timestamp": pd.to_datetime(
+                ["2024-01-01", "2024-01-02", "2025-01-02"], utc=True
+            ),
+            "asset_id": ["AAPL", "AAPL", "AAPL"],
+            "time_idx": [0, 1, 2],
+            "target_return": [0.1, 0.2, 0.3],
+            "open": [10.0, 11.0, 12.0],
+            "high": [11.0, 12.0, 13.0],
+            "low": [9.0, 10.0, 11.0],
+            "close": [10.5, 11.5, 12.5],
+            "volume": [1000, 1100, 1200],
+            "volatility_20d": [10.0, 20.0, 30.0],
+            "day_of_week": [0, 1, 3],
+            "month": [1, 1, 1],
+        }
+    )
+    trainer = FakeTrainer()
+    repo = FakeModelRepo()
+    use_case = TrainTFTModelUseCase(
+        dataset_repository=FakeDatasetRepository(df),
+        model_trainer=trainer,
+        model_repository=repo,
+    )
+    split_config = {
+        "train_start": "20240101",
+        "train_end": "20240101",
+        "val_start": "20240102",
+        "val_end": "20240102",
+        "test_start": "20250102",
+        "test_end": "20250102",
+    }
+
+    use_case.execute(
+        "AAPL",
+        features=["BASELINE_FEATURES", "TECHNICAL_FEATURES"],
+        split_config=split_config,
+    )
+
+    assert trainer.seen_train_df is not None
+    assert trainer.seen_val_df is not None
+    assert trainer.seen_test_df is not None
+    assert float(trainer.seen_train_df["volatility_20d"].iloc[0]) == 0.0
+    assert float(trainer.seen_val_df["volatility_20d"].iloc[0]) == 10.0
+    assert float(trainer.seen_test_df["volatility_20d"].iloc[0]) == 20.0
+    assert repo.last_dataset_parameters is not None
+    assert "scalers" in repo.last_dataset_parameters
+    assert "volatility_20d" in repo.last_dataset_parameters["scalers"]
