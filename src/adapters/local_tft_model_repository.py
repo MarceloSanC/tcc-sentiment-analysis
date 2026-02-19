@@ -86,6 +86,23 @@ class LocalTFTModelRepository(ModelRepository):
             with dataset_params_path.open("wb") as fp:
                 pickle.dump(dataset_parameters, fp)
 
+        scaler_out = None
+        scaler_types: list[str] = []
+        if isinstance(dataset_parameters, dict):
+            scalers = dataset_parameters.get("scalers")
+            if isinstance(scalers, dict) and scalers:
+                scalers_path = version_dir / "scalers.pkl"
+                with scalers_path.open("wb") as fp:
+                    pickle.dump(scalers, fp)
+                scaler_out = str(scalers_path.resolve())
+                scaler_types = sorted(
+                    {
+                        type(v).__name__
+                        for v in scalers.values()
+                        if v is not None
+                    }
+                )
+
         checkpoint_out = None
         if checkpoint_path:
             src = Path(checkpoint_path)
@@ -168,10 +185,14 @@ class LocalTFTModelRepository(ModelRepository):
             "split_metrics": split_metrics,
             "training_config": config,
         }
+        if scaler_types:
+            metadata["scaler_type"] = scaler_types
         if checkpoint_out:
             metadata["best_checkpoint"] = checkpoint_out
         if analysis_out:
             metadata["analysis_artifacts"] = analysis_out
+        if scaler_out:
+            metadata["scaler_artifacts"] = {"scalers_pkl": scaler_out}
         merged_plots = {}
         if plots:
             merged_plots.update(plots)
