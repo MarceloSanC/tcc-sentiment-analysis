@@ -30,8 +30,11 @@ class SklearnTechnicalIndicatorNormalizer(TechnicalIndicatorNormalizer):
         # Agrupar valores por nome da feature
         for item in indicators:
             for name, value in item.indicators.items():
-                if value is not None:
-                    values_by_feature[name].append(value)
+                if value is None:
+                    continue
+                if not np.isfinite(value):
+                    continue
+                values_by_feature[name].append(value)
 
         # Ajustar um scaler por feature
         for name, values in values_by_feature.items():
