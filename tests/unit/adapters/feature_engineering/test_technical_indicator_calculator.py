@@ -26,7 +26,7 @@ def test_indicator_calculation_adds_expected_features():
         candles=candles,
     )
 
-    assert len(result) == len(candles) - 200 + 1
+    assert len(result) == len(candles)
 
     feature_keys = result[0].indicators.keys()
 
@@ -34,3 +34,5 @@ def test_indicator_calculation_adds_expected_features():
     assert "macd" in feature_keys
     assert "ema_50" in feature_keys
     assert "volatility_20d" in feature_keys
+    assert result[0].indicators["ema_200"] != result[0].indicators["ema_200"]  # NaN in warmup
+    assert result[-1].indicators["ema_200"] == result[-1].indicators["ema_200"]  # finite later
