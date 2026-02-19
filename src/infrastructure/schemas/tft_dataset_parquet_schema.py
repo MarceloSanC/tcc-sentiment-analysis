@@ -44,6 +44,7 @@ SENTIMENT_FEATURES: List[str] = [
     "sentiment_score",
     "news_volume",
     "sentiment_std",
+    "has_news",
 ]
 
 FUNDAMENTAL_FEATURES: List[str] = [
