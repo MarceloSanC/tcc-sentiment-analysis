@@ -4,7 +4,9 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 import logging
 
+import numpy as np
 import pandas as pd
+from sklearn.preprocessing import StandardScaler
 
 from src.domain.services.feature_warmup_inspector import FeatureWarmupInspector
 from src.infrastructure.schemas.tft_dataset_parquet_schema import (
@@ -140,6 +142,43 @@ class TrainTFTModelUseCase:
     @staticmethod
     def _available(df: pd.DataFrame, columns: list[str]) -> list[str]:
         return [c for c in columns if c in df.columns]
+
+    @staticmethod
+    def _apply_split_feature_normalization(
+        train_df: pd.DataFrame,
+        val_df: pd.DataFrame,
+        test_df: pd.DataFrame,
+        *,
+        feature_cols: list[str],
+    ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, dict[str, StandardScaler]]:
+        technical_cols = [c for c in feature_cols if c in TECHNICAL_FEATURES]
+        if not technical_cols:
+            return train_df, val_df, test_df, {}
+
+        train_norm = train_df.copy()
+        val_norm = val_df.copy()
+        test_norm = test_df.copy()
+        scalers: dict[str, StandardScaler] = {}
+
+        for col in technical_cols:
+            train_series = pd.to_numeric(train_norm[col], errors="coerce")
+            train_mask = np.isfinite(train_series.to_numpy())
+            if not train_mask.any():
+                continue
+
+            scaler = StandardScaler()
+            scaler.fit(train_series.to_numpy()[train_mask].reshape(-1, 1))
+            scalers[col] = scaler
+
+            for df_norm in (train_norm, val_norm, test_norm):
+                values = pd.to_numeric(df_norm[col], errors="coerce")
+                arr = values.to_numpy(dtype="float64")
+                mask = np.isfinite(arr)
+                if mask.any():
+                    arr[mask] = scaler.transform(arr[mask].reshape(-1, 1)).reshape(-1)
+                df_norm[col] = arr
+
+        return train_norm, val_norm, test_norm, scalers
 
     def _run_ablation(
         self,
@@ -288,11 +327,19 @@ class TrainTFTModelUseCase:
         if train_df.empty or val_df.empty or test_df.empty:
             raise ValueError("Train/validation/test split resulted in empty dataset")
 
+        train_df, val_df, test_df, split_scalers = self._apply_split_feature_normalization(
+            train_df,
+            val_df,
+            test_df,
+            feature_cols=feature_cols,
+        )
+
         trainer_config = self._build_trainer_config(training_config)
         metadata_config = dict(trainer_config)
         metadata_config["split_config"] = split_cfg
         metadata_config["feature_set_tag"] = feature_tag
         metadata_config["feature_tokens"] = features or ["DEFAULT_TFT_FEATURES"]
+        metadata_config["split_normalized_technical_features"] = sorted(split_scalers.keys())
 
         training_result: TrainingResult = self.model_trainer.train(
             train_df,
@@ -337,7 +384,17 @@ class TrainTFTModelUseCase:
             feature_importance=training_result.feature_importance,
             ablation_results=ablation_results,
             checkpoint_path=training_result.checkpoint_path,
-            dataset_parameters=training_result.dataset_parameters,
+            dataset_parameters={
+                **(training_result.dataset_parameters or {}),
+                "scalers": {
+                    **(
+                        (training_result.dataset_parameters or {}).get("scalers", {})
+                        if isinstance(training_result.dataset_parameters, dict)
+                        else {}
+                    ),
+                    **split_scalers,
+                },
+            },
         )
 
         return TrainTFTModelResult(
