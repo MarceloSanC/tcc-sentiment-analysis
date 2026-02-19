@@ -187,7 +187,22 @@ class BuildTFTDatasetUseCase:
             df["sentiment_score"] = pd.NA
             df["news_volume"] = pd.NA
             df["sentiment_std"] = pd.NA
-        df["news_volume"] = pd.to_numeric(df["news_volume"], errors="coerce").fillna(0).astype("int64")
+        df["news_volume"] = (
+            pd.to_numeric(df["news_volume"], errors="coerce")
+            .fillna(0)
+            .astype("int64")
+        )
+        df["has_news"] = (df["news_volume"] > 0).astype("int64")
+        df["sentiment_score"] = (
+            pd.to_numeric(df["sentiment_score"], errors="coerce")
+            .fillna(0.0)
+            .astype("float64")
+        )
+        df["sentiment_std"] = (
+            pd.to_numeric(df["sentiment_std"], errors="coerce")
+            .fillna(0.0)
+            .astype("float64")
+        )
 
         # Merge fundamentals with as-of join
         if not fundamentals_df.empty:
