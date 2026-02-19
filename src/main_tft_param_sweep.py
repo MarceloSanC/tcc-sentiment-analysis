@@ -3,58 +3,82 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import subprocess
-import sys
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+import re
 
-import pandas as pd
-
-from src.infrastructure.schemas.model_artifact_schema import TFT_TRAINING_DEFAULTS
+from src.adapters.cli_tft_train_runner import CLITFTTrainRunner
+from src.infrastructure.schemas.model_artifact_schema import (
+    TFT_SPLIT_DEFAULTS,
+    TFT_TRAINING_DEFAULTS,
+)
+from src.use_cases.run_tft_model_analysis_use_case import (
+    DEFAULT_SWEEP_PARAM_RANGES,
+    RunTFTModelAnalysisUseCase,
+)
 from src.utils.logging_config import setup_logging
 from src.utils.path_resolver import load_data_paths
 
 logger = logging.getLogger(__name__)
+DEFAULT_ANALYSIS_CONFIG_PATH = Path("config/model_analysis.default.json")
 
 
-# Realistic one-at-a-time sweep ranges for TFT training.
-PARAM_RANGES: dict[str, list[Any]] = {
-    "max_encoder_length": [30, 60, 90, 120],
-    "batch_size": [32, 64, 128],
-    "max_epochs": [20, 30, 50],
-    "learning_rate": [1e-4, 3e-4, 5e-4, 1e-3],
-    "hidden_size": [16, 32, 64],
-    "attention_head_size": [1, 2, 4],
-    "dropout": [0.05, 0.1, 0.2, 0.3],
-    "hidden_continuous_size": [4, 8, 16],
-    "seed": [7, 42, 123],
-    "early_stopping_patience": [3, 5, 10],
-    "early_stopping_min_delta": [0.0, 1e-5, 1e-4],
-}
+def _parse_csv_str(value: str | None) -> list[str]:
+    if not value:
+        return []
+    return [item.strip() for item in value.split(",") if item.strip()]
 
 
-@dataclass
-class SweepRun:
-    run_label: str
-    varied_param: str | None
-    varied_value: Any | None
-    version: str | None
-    status: str
-    error: str | None = None
-    test_rmse: float | None = None
-    test_mae: float | None = None
+def _parse_csv_int(value: str | None) -> list[int]:
+    return [int(item) for item in _parse_csv_str(value)]
+
+
+def _load_json_config(path: str | None) -> dict[str, Any]:
+    config_path = Path(path) if path else DEFAULT_ANALYSIS_CONFIG_PATH
+    if not config_path.exists() or not config_path.is_file():
+        raise ValueError(f"Config JSON not found: {config_path}")
+    try:
+        content = json.loads(config_path.read_text(encoding="utf-8")) 
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid JSON in config file: {config_path}") from exc
+    if not isinstance(content, dict):
+        raise ValueError("Config JSON root must be an object")
+    return content
+
+
+def _default_analysis_config() -> dict[str, Any]:
+    return {
+        "features": None,
+        "feature_sets": [],
+        "continue_on_error": False,
+        "max_runs": None,
+        "output_subdir": None,
+        "compute_confidence_interval": False,
+        "replica_seeds": [7, 42, 123],
+        "training_config": dict(TFT_TRAINING_DEFAULTS),
+        "split_config": dict(TFT_SPLIT_DEFAULTS),
+        "param_ranges": dict(DEFAULT_SWEEP_PARAM_RANGES),
+    }
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Run one-at-a-time hyperparameter sweep for TFT and build comparison tables "
-            "from metadata.json artifacts."
+            "Run one-at-a-time hyperparameter analysis for TFT and build comparison "
+            "artifacts from metadata.json files."
         )
     )
     parser.add_argument("--asset", required=True, help="Asset symbol. Example: AAPL")
+    parser.add_argument(
+        "--config-json",
+        type=str,
+        default=None,
+        help=(
+            "Optional path to analysis config JSON. "
+            "If omitted, uses config/model_analysis.default.json."
+        ),
+    )
     parser.add_argument(
         "--features",
         type=str,
@@ -65,9 +89,18 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--feature-sets",
+        type=str,
+        default=None,
+        help=(
+            "Optional comma-separated feature-set entries to run independently. "
+            "Example: BASELINE_FEATURES,BASELINE_FEATURES+TECHNICAL_FEATURES"
+        ),
+    )
+    parser.add_argument(
         "--continue-on-error",
         action="store_true",
-        help="Continue sweep when one run fails.",
+        help="Continue analysis when one run fails.",
     )
     parser.add_argument(
         "--max-runs",
@@ -81,305 +114,148 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional custom subdirectory name under data/models/{ASSET}/sweeps.",
     )
+    parser.add_argument(
+        "--replica-seeds",
+        type=str,
+        default=None,
+        help="Comma-separated seed list for repeated runs, e.g. 7,42,123",
+    )
+    parser.add_argument(
+        "--compute-confidence-interval",
+        action="store_true",
+        help="Compute 95%% CI columns in config_ranking.csv.",
+    )
+    parser.add_argument(
+        "--only-params",
+        type=str,
+        default=None,
+        help="Optional comma-separated list of params to keep in param_ranges.",
+    )
     return parser.parse_args()
 
 
-def _key_to_flag(key: str) -> str:
-    return "--" + key.replace("_", "-")
+def _resolve_effective_config(args: argparse.Namespace) -> dict[str, Any]:
+    effective = _default_analysis_config()
+    file_config = _load_json_config(args.config_json)
+
+    if isinstance(file_config.get("features"), str):
+        effective["features"] = file_config["features"].strip() or None
+    if isinstance(file_config.get("feature_sets"), list):
+        effective["feature_sets"] = [str(v).strip() for v in file_config["feature_sets"] if str(v).strip()]
+    if isinstance(file_config.get("continue_on_error"), bool):
+        effective["continue_on_error"] = file_config["continue_on_error"]
+    if isinstance(file_config.get("max_runs"), int):
+        effective["max_runs"] = file_config["max_runs"]
+    if isinstance(file_config.get("output_subdir"), str):
+        effective["output_subdir"] = file_config["output_subdir"]
+    if isinstance(file_config.get("compute_confidence_interval"), bool):
+        effective["compute_confidence_interval"] = file_config["compute_confidence_interval"]
+    if isinstance(file_config.get("replica_seeds"), list):
+        effective["replica_seeds"] = [int(v) for v in file_config["replica_seeds"]]
+    if isinstance(file_config.get("training_config"), dict):
+        merged_training = dict(effective["training_config"])
+        merged_training.update(file_config["training_config"])
+        effective["training_config"] = merged_training
+    if isinstance(file_config.get("split_config"), dict):
+        merged_split = dict(effective["split_config"])
+        merged_split.update(file_config["split_config"])
+        effective["split_config"] = merged_split
+    if isinstance(file_config.get("param_ranges"), dict):
+        sanitized: dict[str, list[Any]] = {}
+        for key, values in file_config["param_ranges"].items():
+            if isinstance(values, list):
+                sanitized[str(key)] = list(values)
+        if sanitized:
+            effective["param_ranges"] = sanitized
+
+    if args.features is not None:
+        effective["features"] = args.features.strip() or None
+    if args.feature_sets is not None:
+        effective["feature_sets"] = _parse_csv_str(args.feature_sets)
+    if args.continue_on_error:
+        effective["continue_on_error"] = True
+    if args.max_runs is not None:
+        effective["max_runs"] = args.max_runs
+    if args.output_subdir is not None:
+        effective["output_subdir"] = args.output_subdir
+    if args.compute_confidence_interval:
+        effective["compute_confidence_interval"] = True
+    if args.replica_seeds is not None:
+        effective["replica_seeds"] = _parse_csv_int(args.replica_seeds)
+
+    only_params = _parse_csv_str(args.only_params)
+    if only_params:
+        effective["param_ranges"] = {
+            k: v for k, v in effective["param_ranges"].items() if k in set(only_params)
+        }
+    return effective
 
 
-def _build_experiments() -> list[tuple[str, dict[str, Any], str | None, Any | None]]:
-    """
-    Returns list of:
-    - run_label
-    - config dict
-    - varied_param (None for baseline)
-    - varied_value (None for baseline)
-    """
-    base = dict(TFT_TRAINING_DEFAULTS)
-    experiments: list[tuple[str, dict[str, Any], str | None, Any | None]] = [
-        ("baseline", base, None, None)
-    ]
-    for param, values in PARAM_RANGES.items():
-        default_value = base.get(param)
-        for value in values:
-            if value == default_value:
-                continue
-            cfg = dict(base)
-            cfg[param] = value
-            # Keep valid relation.
-            if cfg["max_prediction_length"] > cfg["max_encoder_length"]:
-                continue
-            label = f"{param}={value}"
-            experiments.append((label, cfg, param, value))
-    return experiments
-
-
-def _load_metadata(metrics_path: Path) -> dict[str, Any]:
-    return json.loads(metrics_path.read_text(encoding="utf-8"))
-
-
-def _pick_new_version(models_asset_dir: Path, before_versions: set[str]) -> str | None:
-    after_versions = {p.name for p in models_asset_dir.iterdir() if p.is_dir()}
-    created = sorted(after_versions - before_versions)
-    if not created:
-        return None
-    # Pick newest by mtime to handle edge cases.
-    newest = max(created, key=lambda v: (models_asset_dir / v).stat().st_mtime)
-    return newest
-
-
-def _run_train(
-    asset: str,
-    features: str | None,
-    cfg: dict[str, Any],
-    models_asset_dir: Path,
-) -> tuple[str | None, dict[str, Any] | None]:
-    before_versions = {p.name for p in models_asset_dir.iterdir() if p.is_dir()}
-    cmd = [sys.executable, "-m", "src.main_train_tft", "--asset", asset]
-    if features:
-        cmd.extend(["--features", features])
-    for key, value in cfg.items():
-        cmd.extend([_key_to_flag(key), str(value)])
-
-    logger.info("Starting sweep run", extra={"cmd": cmd})
-    subprocess.run(cmd, check=True)
-
-    version = _pick_new_version(models_asset_dir, before_versions)
-    if version is None:
-        return None, None
-    metadata_path = models_asset_dir / version / "metadata.json"
-    if not metadata_path.exists():
-        return version, None
-    return version, _load_metadata(metadata_path)
-
-
-def _collect_all_models(models_asset_dir: Path) -> pd.DataFrame:
-    rows: list[dict[str, Any]] = []
-    for run_dir in sorted([p for p in models_asset_dir.iterdir() if p.is_dir()]):
-        meta_path = run_dir / "metadata.json"
-        if not meta_path.exists():
-            continue
-        try:
-            meta = _load_metadata(meta_path)
-        except Exception:
-            continue
-        split_metrics = meta.get("split_metrics", {})
-        test_metrics = split_metrics.get("test", {})
-        val_metrics = split_metrics.get("val", {})
-        train_metrics = split_metrics.get("train", {})
-        training_cfg = meta.get("training_config", {})
-        rows.append(
-            {
-                "version": meta.get("version", run_dir.name),
-                "created_at": meta.get("created_at"),
-                "feature_set_tag": training_cfg.get("feature_set_tag"),
-                "features_count": len(meta.get("features_used", [])),
-                "test_rmse": test_metrics.get("rmse"),
-                "test_mae": test_metrics.get("mae"),
-                "val_rmse": val_metrics.get("rmse"),
-                "val_mae": val_metrics.get("mae"),
-                "train_rmse": train_metrics.get("rmse"),
-                "train_mae": train_metrics.get("mae"),
-                "learning_rate": training_cfg.get("learning_rate"),
-                "hidden_size": training_cfg.get("hidden_size"),
-                "max_encoder_length": training_cfg.get("max_encoder_length"),
-                "batch_size": training_cfg.get("batch_size"),
-                "dropout": training_cfg.get("dropout"),
-                "seed": training_cfg.get("seed"),
-            }
-        )
-    df = pd.DataFrame(rows)
-    if not df.empty:
-        df = df.sort_values(["test_rmse", "test_mae"], ascending=[True, True]).reset_index(
-            drop=True
-        )
-    return df
-
-
-def _build_param_impact(
-    run_df: pd.DataFrame,
-    baseline_test_rmse: float,
-    baseline_test_mae: float,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    if run_df.empty:
-        return pd.DataFrame(), pd.DataFrame()
-    varied = run_df[run_df["varied_param"].notna()].copy()
-    if varied.empty:
-        return pd.DataFrame(), pd.DataFrame()
-    varied["delta_test_rmse_vs_baseline"] = varied["test_rmse"] - baseline_test_rmse
-    varied["delta_test_mae_vs_baseline"] = varied["test_mae"] - baseline_test_mae
-
-    summary = (
-        varied.groupby("varied_param", dropna=True)
-        .agg(
-            runs=("run_label", "count"),
-            best_test_rmse=("test_rmse", "min"),
-            avg_test_rmse=("test_rmse", "mean"),
-            median_test_rmse=("test_rmse", "median"),
-            best_delta_rmse_vs_baseline=("delta_test_rmse_vs_baseline", "min"),
-            worst_delta_rmse_vs_baseline=("delta_test_rmse_vs_baseline", "max"),
-            avg_delta_rmse_vs_baseline=("delta_test_rmse_vs_baseline", "mean"),
-            avg_delta_mae_vs_baseline=("delta_test_mae_vs_baseline", "mean"),
-        )
-        .reset_index()
-        .sort_values("best_delta_rmse_vs_baseline", ascending=True)
-    )
-    return varied.sort_values("test_rmse", ascending=True), summary
+def _sanitize_slug(value: str) -> str:
+    slug = re.sub(r"[^A-Za-z0-9._-]+", "_", value.strip())
+    slug = slug.strip("_")
+    return slug or "features"
 
 
 def main() -> None:
     setup_logging(logging.INFO)
     args = parse_args()
-
     asset = args.asset.strip().upper()
-    features = args.features.strip() if args.features else None
+    effective_cfg = _resolve_effective_config(args)
 
     paths = load_data_paths()
     models_asset_dir = Path(paths["models"]) / asset
-    models_asset_dir.mkdir(parents=True, exist_ok=True)
 
-    sweep_ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    sweep_name = args.output_subdir or f"sweep_{sweep_ts}"
-    sweep_dir = models_asset_dir / "sweeps" / sweep_name
-    sweep_dir.mkdir(parents=True, exist_ok=True)
-
-    experiments = _build_experiments()
-    if args.max_runs is not None:
-        experiments = experiments[: max(1, args.max_runs)]
-
-    logger.info(
-        "Starting TFT parameter sweep",
-        extra={
-            "asset": asset,
-            "runs": len(experiments),
-            "features": features or "(default from main_train_tft)",
-            "sweep_dir": str(sweep_dir),
-        },
+    use_case = RunTFTModelAnalysisUseCase(
+        train_runner=CLITFTTrainRunner(),
+        base_training_config=effective_cfg["training_config"],
+        param_ranges=effective_cfg["param_ranges"],
+        replica_seeds=effective_cfg["replica_seeds"],
+        split_config=effective_cfg["split_config"],
+        compute_confidence_interval=effective_cfg["compute_confidence_interval"],
     )
+    explicit_features = effective_cfg["features"]
+    feature_sets = effective_cfg.get("feature_sets") or []
+    if explicit_features:
+        feature_runs = [explicit_features]
+    elif feature_sets:
+        feature_runs = feature_sets
+    else:
+        feature_runs = [None]
 
-    run_records: list[SweepRun] = []
-    baseline_rmse: float | None = None
-    baseline_mae: float | None = None
+    base_output_subdir = effective_cfg.get("output_subdir")
+    for idx, feature_entry in enumerate(feature_runs, start=1):
+        run_cfg = dict(effective_cfg)
+        run_cfg["features"] = feature_entry
+        if len(feature_runs) > 1:
+            label = _sanitize_slug(feature_entry or "default")
+            if base_output_subdir:
+                run_output_subdir = f"{base_output_subdir}__{label}"
+            else:
+                run_output_subdir = f"sweep_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}_{idx:02d}_{label}"
+        else:
+            run_output_subdir = base_output_subdir
 
-    for idx, (run_label, cfg, varied_param, varied_value) in enumerate(experiments, start=1):
+        result = use_case.execute(
+            asset=asset,
+            models_asset_dir=models_asset_dir,
+            features=feature_entry,
+            continue_on_error=effective_cfg["continue_on_error"],
+            max_runs=effective_cfg["max_runs"],
+            output_subdir=run_output_subdir,
+            analysis_config=run_cfg,
+        )
         logger.info(
-            "Sweep run started",
+            "Model analysis finished",
             extra={
-                "run_index": idx,
-                "total_runs": len(experiments),
-                "run_label": run_label,
+                "asset": result.asset,
+                "features": feature_entry or "(default)",
+                "sweep_dir": result.sweep_dir,
+                "runs_ok": result.runs_ok,
+                "runs_failed": result.runs_failed,
+                "top_5_runs": result.top_5_runs,
             },
         )
-        try:
-            version, metadata = _run_train(asset, features, cfg, models_asset_dir)
-            if version is None or metadata is None:
-                run_records.append(
-                    SweepRun(
-                        run_label=run_label,
-                        varied_param=varied_param,
-                        varied_value=varied_value,
-                        version=version,
-                        status="failed",
-                        error="Missing generated model version or metadata.json",
-                    )
-                )
-                if not args.continue_on_error:
-                    break
-                continue
-
-            test_metrics = metadata.get("split_metrics", {}).get("test", {})
-            test_rmse = float(test_metrics.get("rmse"))
-            test_mae = float(test_metrics.get("mae"))
-            run_records.append(
-                SweepRun(
-                    run_label=run_label,
-                    varied_param=varied_param,
-                    varied_value=varied_value,
-                    version=version,
-                    status="ok",
-                    test_rmse=test_rmse,
-                    test_mae=test_mae,
-                )
-            )
-            if run_label == "baseline":
-                baseline_rmse = test_rmse
-                baseline_mae = test_mae
-        except Exception as exc:
-            run_records.append(
-                SweepRun(
-                    run_label=run_label,
-                    varied_param=varied_param,
-                    varied_value=varied_value,
-                    version=None,
-                    status="failed",
-                    error=str(exc),
-                )
-            )
-            logger.exception("Sweep run failed", extra={"run_label": run_label})
-            if not args.continue_on_error:
-                break
-
-    run_df = pd.DataFrame([r.__dict__ for r in run_records])
-    run_df.to_csv(sweep_dir / "sweep_runs.csv", index=False)
-    (sweep_dir / "sweep_runs.json").write_text(
-        json.dumps(run_df.to_dict(orient="records"), indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
-
-    all_models_df = _collect_all_models(models_asset_dir)
-    all_models_df.to_csv(sweep_dir / "all_models_ranked.csv", index=False)
-
-    if baseline_rmse is not None and baseline_mae is not None:
-        impact_detail, impact_summary = _build_param_impact(
-            run_df[run_df["status"] == "ok"].copy(),
-            baseline_rmse,
-            baseline_mae,
-        )
-        impact_detail.to_csv(sweep_dir / "param_impact_detail.csv", index=False)
-        impact_summary.to_csv(sweep_dir / "param_impact_summary.csv", index=False)
-    else:
-        impact_detail = pd.DataFrame()
-        impact_summary = pd.DataFrame()
-
-    summary = {
-        "asset": asset,
-        "sweep_name": sweep_name,
-        "features": features or "(default from main_train_tft)",
-        "runs_total": int(len(run_df)),
-        "runs_ok": int((run_df["status"] == "ok").sum()) if not run_df.empty else 0,
-        "runs_failed": int((run_df["status"] == "failed").sum()) if not run_df.empty else 0,
-        "baseline_test_rmse": baseline_rmse,
-        "baseline_test_mae": baseline_mae,
-        "best_run": (
-            run_df[run_df["status"] == "ok"]
-            .sort_values("test_rmse", ascending=True)
-            .head(1)
-            .to_dict(orient="records")
-        )
-        if not run_df.empty and (run_df["status"] == "ok").any()
-        else [],
-        "artifacts": {
-            "sweep_runs_csv": str(sweep_dir / "sweep_runs.csv"),
-            "all_models_ranked_csv": str(sweep_dir / "all_models_ranked.csv"),
-            "param_impact_detail_csv": str(sweep_dir / "param_impact_detail.csv"),
-            "param_impact_summary_csv": str(sweep_dir / "param_impact_summary.csv"),
-        },
-    }
-    (sweep_dir / "summary.json").write_text(
-        json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8"
-    )
-
-    logger.info(
-        "TFT sweep completed",
-        extra={
-            "asset": asset,
-            "sweep_dir": str(sweep_dir),
-            "runs_ok": summary["runs_ok"],
-            "runs_failed": summary["runs_failed"],
-            "best_run": summary["best_run"],
-        },
-    )
 
 
 if __name__ == "__main__":
