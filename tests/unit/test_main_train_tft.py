@@ -14,6 +14,7 @@ def _base_args(config_json: str | None = None, features: str | None = None) -> N
         asset="AAPL",
         features=features,
         config_json=config_json,
+        models_dir=None,
         max_encoder_length=None,
         max_prediction_length=None,
         batch_size=None,
