@@ -188,7 +188,7 @@
 - [x] Dataset contém features sincronizadas e alvo
 - [x] Sem leakage temporal
 - [x] Schema consistente e validado
-- [ ] Política explícita de missing por feature (ex.: `news_volume=0`) 
+- [x] Política explícita de missing por feature (ex.: `news_volume=0`, `sentiment_score/sentiment_std=0` + `has_news`) 
 - [x] Validador de warmup para detectar e alertar `null` iniciais por feature no período de treino
 
 **Justificativa (TCC)**:
@@ -197,7 +197,7 @@
 
 ---
 
-- [ ] **Etapa 8: Treinamento do TFT e Análise de Features**
+- [x] **Etapa 8: Treinamento do TFT e Análise de Features**
 
 **Objetivo**: Treinar o modelo e produzir análises de contribuição de features.
 
@@ -205,20 +205,19 @@
 
 - [x] Adapter de treino TFT (pytorch-forecasting)
 - [x] Use case de treino e validação temporal
-- [ ] Rotinas de explainability (ex: SHAP ou atenção do TFT)
 - [x] Estratégia de experimentos para relevância (ablação + permutation importance)
 
 **Critério de aceite**:
 
 - [x] Treina modelo com alvo `retorno_t+1`
 - [x] Avalia em test e salva métricas separadas (`train`, `val`, `test`)
-- [ ] Salva checkpoint e artefatos (scalers, config, `metadata.json` com split efetivo)
+- [x] Salva checkpoint e artefatos (scalers, config, `metadata.json` com split efetivo)
 - [x] Relatório de importância das features
 - [x] Split temporal (train/val/test) sem leakage
-- [ ] Normalização ajustada no treino e aplicada no val/test
+- [x] Normalização ajustada no treino e aplicada no val/test
 - [x] Early stopping + checkpoint do melhor `val_loss`
 - [x] Relevância em duas camadas: ablação controlada (baseline vs +sentimento vs +fundamentals) e permutation importance no conjunto de teste
-- [ ] Exporta artefatos de análise (`feature_importance.csv`, gráfico comparativo por experimento)
+- [x] Exporta artefatos de análise (`feature_importance.csv`, gráfico comparativo por experimento)
 
 **Justificativa (TCC)**:
 
@@ -226,7 +225,30 @@
 
 ---
 
-- [ ] **Etapa 9: Inferência do Modelo em Novos Dados**
+- [x] **Etapa 9: Análise do Modelo e Sensibilidade de Hiperparâmetros**
+
+**Objetivo**: Executar análise sistemática do modelo treinado para apoiar seleção de configuração.
+
+**Componentes**:
+
+- [x] Use case modular de análise de modelo (`RunTFTModelAnalysisUseCase`)
+- [x] Serviço de domínio para geração de experimentos one-at-a-time
+- [x] Adapter de execução de treino via CLI para runs controlados
+- [x] Orquestrador CLI (`main_model_analysis`), mantendo compatibilidade com `main_tft_param_sweep`
+
+**Critério de aceite**:
+
+- [x] Executa baseline + variações de hiperparâmetros em runs independentes
+- [x] Consolida resultados em artefatos comparativos (`sweep_runs`, ranking e impacto por parâmetro)
+- [x] Gera `summary.json` com melhor run e métricas de referência
+
+**Justificativa (TCC)**:
+
+> A análise estruturada de sensibilidade reduz overfitting de configuração e torna a escolha de hiperparâmetros mais transparente e reprodutível.
+
+---
+
+- [ ] **Etapa 10: Inferência do Modelo em Novos Dados**
 
 **Objetivo**: Executar inferência com o modelo treinado em dados novos e registrar outputs.
 
