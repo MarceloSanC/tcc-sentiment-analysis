@@ -1,0 +1,33 @@
+{
+  "features": "BASELINE_FEATURES",
+  "continue_on_error": false,
+  "max_runs": null,
+  "output_subdir": "0_0_1_sweep_baseline_vs_encoder120_10seeds",
+  "compute_confidence_interval": true,
+  "replica_seeds": [7, 11, 13, 17, 19, 23, 29, 31, 37, 42],
+  "training_config": {
+    "max_encoder_length": 60,
+    "max_prediction_length": 1,
+    "batch_size": 64,
+    "max_epochs": 20,
+    "learning_rate": 0.0005,
+    "hidden_size": 32,
+    "attention_head_size": 2,
+    "dropout": 0.1,
+    "hidden_continuous_size": 8,
+    "seed": 42,
+    "early_stopping_patience": 5,
+    "early_stopping_min_delta": 0.0
+  },
+  "split_config": {
+    "train_start": "20100101",
+    "train_end": "20221231",
+    "val_start": "20230101",
+    "val_end": "20241231",
+    "test_start": "20250101",
+    "test_end": "20251231"
+  },
+  "param_ranges": {
+    "max_encoder_length": [120]
+  }
+}
