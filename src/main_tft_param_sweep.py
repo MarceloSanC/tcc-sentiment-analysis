@@ -13,6 +13,7 @@ from src.infrastructure.schemas.model_artifact_schema import (
     TFT_SPLIT_DEFAULTS,
     TFT_TRAINING_DEFAULTS,
 )
+from src.main_generate_sweep_plots import generate_for_sweep
 from src.use_cases.run_tft_model_analysis_use_case import (
     DEFAULT_SWEEP_PARAM_RANGES,
     RunTFTModelAnalysisUseCase,
@@ -39,7 +40,7 @@ def _load_json_config(path: str | None) -> dict[str, Any]:
     if not config_path.exists() or not config_path.is_file():
         raise ValueError(f"Config JSON not found: {config_path}")
     try:
-        content = json.loads(config_path.read_text(encoding="utf-8")) 
+        content = json.loads(config_path.read_text(encoding="utf-8-sig"))
     except json.JSONDecodeError as exc:
         raise ValueError(f"Invalid JSON in config file: {config_path}") from exc
     if not isinstance(content, dict):
@@ -52,10 +53,13 @@ def _default_analysis_config() -> dict[str, Any]:
         "features": None,
         "feature_sets": [],
         "continue_on_error": False,
+        "merge_tests": False,
         "max_runs": None,
         "output_subdir": None,
         "compute_confidence_interval": False,
+        "generate_comparison_plots": True,
         "replica_seeds": [7, 42, 123],
+        "walk_forward": {"enabled": False, "folds": []},
         "training_config": dict(TFT_TRAINING_DEFAULTS),
         "split_config": dict(TFT_SPLIT_DEFAULTS),
         "param_ranges": dict(DEFAULT_SWEEP_PARAM_RANGES),
@@ -109,6 +113,14 @@ def parse_args() -> argparse.Namespace:
         help="Optional cap for number of runs (useful for quick testing).",
     )
     parser.add_argument(
+        "--merge-tests",
+        action="store_true",
+        help=(
+            "Merge new runs into existing sweep_runs.csv when using the same --output-subdir, "
+            "then regenerate summaries/plots from the unified records."
+        ),
+    )
+    parser.add_argument(
         "--output-subdir",
         type=str,
         default=None,
@@ -144,14 +156,20 @@ def _resolve_effective_config(args: argparse.Namespace) -> dict[str, Any]:
         effective["feature_sets"] = [str(v).strip() for v in file_config["feature_sets"] if str(v).strip()]
     if isinstance(file_config.get("continue_on_error"), bool):
         effective["continue_on_error"] = file_config["continue_on_error"]
+    if isinstance(file_config.get("merge_tests"), bool):
+        effective["merge_tests"] = file_config["merge_tests"]
     if isinstance(file_config.get("max_runs"), int):
         effective["max_runs"] = file_config["max_runs"]
     if isinstance(file_config.get("output_subdir"), str):
         effective["output_subdir"] = file_config["output_subdir"]
     if isinstance(file_config.get("compute_confidence_interval"), bool):
         effective["compute_confidence_interval"] = file_config["compute_confidence_interval"]
+    if isinstance(file_config.get("generate_comparison_plots"), bool):
+        effective["generate_comparison_plots"] = file_config["generate_comparison_plots"]
     if isinstance(file_config.get("replica_seeds"), list):
         effective["replica_seeds"] = [int(v) for v in file_config["replica_seeds"]]
+    if isinstance(file_config.get("walk_forward"), dict):
+        effective["walk_forward"] = dict(file_config["walk_forward"])
     if isinstance(file_config.get("training_config"), dict):
         merged_training = dict(effective["training_config"])
         merged_training.update(file_config["training_config"])
@@ -174,6 +192,8 @@ def _resolve_effective_config(args: argparse.Namespace) -> dict[str, Any]:
         effective["feature_sets"] = _parse_csv_str(args.feature_sets)
     if args.continue_on_error:
         effective["continue_on_error"] = True
+    if args.merge_tests:
+        effective["merge_tests"] = True
     if args.max_runs is not None:
         effective["max_runs"] = args.max_runs
     if args.output_subdir is not None:
@@ -213,6 +233,8 @@ def main() -> None:
         replica_seeds=effective_cfg["replica_seeds"],
         split_config=effective_cfg["split_config"],
         compute_confidence_interval=effective_cfg["compute_confidence_interval"],
+        walk_forward_config=effective_cfg.get("walk_forward"),
+        generate_comparison_plots=effective_cfg.get("generate_comparison_plots", True),
     )
     explicit_features = effective_cfg["features"]
     feature_sets = effective_cfg.get("feature_sets") or []
@@ -241,10 +263,12 @@ def main() -> None:
             models_asset_dir=models_asset_dir,
             features=feature_entry,
             continue_on_error=effective_cfg["continue_on_error"],
+            merge_tests=effective_cfg["merge_tests"],
             max_runs=effective_cfg["max_runs"],
             output_subdir=run_output_subdir,
             analysis_config=run_cfg,
         )
+        generated_artifacts = generate_for_sweep(Path(result.sweep_dir))
         logger.info(
             "Model analysis finished",
             extra={
@@ -254,6 +278,7 @@ def main() -> None:
                 "runs_ok": result.runs_ok,
                 "runs_failed": result.runs_failed,
                 "top_5_runs": result.top_5_runs,
+                "artifacts_generated": len(generated_artifacts),
             },
         )
 
