@@ -5,7 +5,12 @@
   "max_runs": null,
   "output_subdir": null,
   "compute_confidence_interval": false,
+  "generate_comparison_plots": true,
   "replica_seeds": [7, 42, 123],
+  "walk_forward": {
+    "enabled": false,
+    "folds": []
+  },
   "training_config": {
     "max_encoder_length": 60,
     "max_prediction_length": 1,
