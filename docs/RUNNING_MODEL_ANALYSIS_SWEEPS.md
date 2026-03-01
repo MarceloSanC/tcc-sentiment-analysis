@@ -165,3 +165,30 @@ Estrutura por fold:
 3. Para comparacao justa entre sweeps:
 - compare apenas intersecao de folds/seeds/params iguais
 
+
+## 9) HPO com Optuna (top-k para sweep)
+
+Use quando quiser buscar hiperparametros com estrategia bayesiana e depois
+rodar somente os melhores na pipeline de sweep tradicional.
+
+Comando:
+
+```bash
+python -m src.main_tft_optuna_sweep --asset AAPL --config-json config/optuna/default_tft_optuna_sweep.json
+```
+
+Artefatos gerados em:
+- `data/models/{ASSET}/optuna/{output_subdir}/...`
+
+Arquivos principais:
+- `optuna_summary.json`
+- `optuna_best_trial.json`
+- `optuna_top_k_configs.json`
+- `optuna_trials.csv`
+- `optuna_trials.json`
+- `optuna_study.db`
+
+Fluxo recomendado:
+1. Executar Optuna para obter top-k configuracoes (`optuna_top_k_configs.json`).
+2. Levar as configuracoes para um sweep dedicado e gerar relatorios/plots finais.
+
