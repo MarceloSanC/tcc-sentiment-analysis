@@ -231,6 +231,9 @@ class TrainTFTModelUseCase:
                     "train_mae": float(run.split_metrics.get("train", {}).get("mae", float("nan"))),
                     "val_mae": float(run.split_metrics.get("val", {}).get("mae", float("nan"))),
                     "test_mae": float(run.split_metrics.get("test", {}).get("mae", float("nan"))),
+                    "train_da": float(run.split_metrics.get("train", {}).get("directional_accuracy", float("nan"))),
+                    "val_da": float(run.split_metrics.get("val", {}).get("directional_accuracy", float("nan"))),
+                    "test_da": float(run.split_metrics.get("test", {}).get("directional_accuracy", float("nan"))),
                 }
             )
         return results
