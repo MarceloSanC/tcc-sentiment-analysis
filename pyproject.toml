@@ -18,6 +18,7 @@ dependencies = [
     "pytorch-forecasting",
     "pyarrow",
     "pandas-ta==0.4.71b0",
+    "optuna",
 ]
 
 [project.optional-dependencies]
