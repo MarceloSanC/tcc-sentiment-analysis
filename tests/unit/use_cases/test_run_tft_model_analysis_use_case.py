@@ -10,6 +10,30 @@ import pytest
 from src.use_cases.run_tft_model_analysis_use_case import RunTFTModelAnalysisUseCase
 
 
+def test_param_ranges_empty_dict_is_preserved_for_optuna_usage() -> None:
+    use_case = RunTFTModelAnalysisUseCase(
+        train_runner=_FakeTrainRunner(),
+        base_training_config={
+            "max_encoder_length": 60,
+            "max_prediction_length": 1,
+            "batch_size": 64,
+            "max_epochs": 20,
+            "learning_rate": 5e-4,
+            "hidden_size": 32,
+            "attention_head_size": 2,
+            "dropout": 0.1,
+            "hidden_continuous_size": 8,
+            "seed": 42,
+            "early_stopping_patience": 5,
+            "early_stopping_min_delta": 0.0,
+        },
+        param_ranges={},
+        generate_comparison_plots=False,
+    )
+
+    assert use_case.param_ranges == {}
+
+
 class _FakeTrainRunner:
     def __init__(self, fail_after: int | None = None) -> None:
         self.index = 0
