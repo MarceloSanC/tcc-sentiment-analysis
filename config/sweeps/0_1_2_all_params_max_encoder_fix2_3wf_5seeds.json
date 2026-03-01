@@ -21,7 +21,7 @@
         "name": "wf_1",
         "train_start": "20100101",
         "train_end": "20161231",
-        "val_start": "20170101",
+        "val_start": "20170101", 
         "val_end": "20181231",
         "test_start": "20190101",
         "test_end": "20201231"
