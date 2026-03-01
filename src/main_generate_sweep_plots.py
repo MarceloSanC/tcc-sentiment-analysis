@@ -52,6 +52,38 @@ def _update_summary_plot_artifacts(sweep_dir: Path, plot_paths: list[str]) -> No
     summary_path.write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
+def _update_summary_global_ranking_fields(sweep_dir: Path) -> None:
+    summary_path = sweep_dir / "summary.json"
+    if not summary_path.exists():
+        return
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+
+    run_df = _read_csv(sweep_dir / "sweep_runs.csv")
+    config_ranking = _read_csv(sweep_dir / "config_ranking.csv")
+
+    baseline_rmse = None
+    baseline_mae = None
+    baseline_da = None
+    if not run_df.empty and {"status", "varied_param", "test_rmse", "test_mae"}.issubset(set(run_df.columns)):
+        baseline_rows = run_df[(run_df["status"] == "ok") & (run_df["varied_param"].isna())].copy()
+        if not baseline_rows.empty:
+            baseline_rmse = float(pd.to_numeric(baseline_rows["test_rmse"], errors="coerce").mean())
+            baseline_mae = float(pd.to_numeric(baseline_rows["test_mae"], errors="coerce").mean())
+            if "test_da" in baseline_rows.columns:
+                baseline_da = float(pd.to_numeric(baseline_rows["test_da"], errors="coerce").mean())
+
+    top_5_runs: list[dict[str, Any]] = []
+    if not config_ranking.empty:
+        ranked = RunTFTModelAnalysisUseCase._sort_config_ranking_for_performance(config_ranking)
+        top_5_runs = ranked.head(5).to_dict(orient="records")
+
+    summary["baseline_test_rmse"] = baseline_rmse
+    summary["baseline_test_mae"] = baseline_mae
+    summary["baseline_test_da"] = baseline_da
+    summary["top_5_runs"] = top_5_runs
+    summary_path.write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
 def _update_summary_fold_plot_artifacts(
     sweep_dir: Path,
     fold_plot_paths: dict[str, list[str]],
@@ -280,11 +312,14 @@ def _build_reports_for_analysis_dir(
 
     baseline_rmse = None
     baseline_mae = None
+    baseline_da = None
     if not run_df.empty:
         baseline_rows = run_df[(run_df["status"] == "ok") & (run_df["varied_param"].isna())].copy()
         if not baseline_rows.empty:
             baseline_rmse = float(pd.to_numeric(baseline_rows["test_rmse"], errors="coerce").mean())
             baseline_mae = float(pd.to_numeric(baseline_rows["test_mae"], errors="coerce").mean())
+            if "test_da" in baseline_rows.columns:
+                baseline_da = float(pd.to_numeric(baseline_rows["test_da"], errors="coerce").mean())
 
     impact_detail = pd.DataFrame()
     impact_summary = pd.DataFrame()
@@ -391,6 +426,8 @@ def _bootstrap_fold_reports_if_missing(
         if not baseline_rows.empty:
             baseline_rmse = float(pd.to_numeric(baseline_rows["test_rmse"], errors="coerce").mean())
             baseline_mae = float(pd.to_numeric(baseline_rows["test_mae"], errors="coerce").mean())
+            if "test_da" in baseline_rows.columns:
+                baseline_da = float(pd.to_numeric(baseline_rows["test_da"], errors="coerce").mean())
 
         impact_detail = pd.DataFrame()
         impact_summary = pd.DataFrame()
@@ -481,6 +518,7 @@ def generate_for_sweep(sweep_dir: Path) -> list[str]:
         param_ranges=param_ranges,
         baseline_config=baseline_config,
     )
+    _update_summary_global_ranking_fields(sweep_dir)
     _update_summary_plot_artifacts(sweep_dir, root_plot_paths)
 
     if folds_dir.exists() and folds_dir.is_dir():
