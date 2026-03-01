@@ -307,9 +307,11 @@ class PytorchForecastingTFTTrainer(ModelTrainer):
                     f"(preds={preds_np.shape[0]}, actuals={actuals_np.shape[0]})."
                 )
 
+            direction_acc = float(np.mean(np.sign(preds_np) == np.sign(actuals_np)))
             return {
                 "rmse": float(np.sqrt(np.mean((preds_np - actuals_np) ** 2))),
                 "mae": float(np.mean(np.abs(preds_np - actuals_np))),
+                "directional_accuracy": direction_acc,
             }
 
         split_metrics = {
