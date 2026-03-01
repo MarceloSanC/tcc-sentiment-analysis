@@ -1,0 +1,79 @@
+{
+  "output_subdir": "optuna_0_1_baseline_hpo",
+  "study_name": "tft_optuna_baseline",
+  "features": "BASELINE_FEATURES",
+  "feature_sets": [],
+  "continue_on_error": true,
+  "n_trials": 30,
+  "top_k": 5,
+  "timeout_seconds": null,
+  "sampler_seed": 42,
+  "objective_metric": "robust_score",
+  "objective_lambda": 1.0,
+  "replica_seeds": [7, 11, 13],
+  "walk_forward": {
+    "enabled": true,
+    "folds": [
+      {
+        "name": "wf_1",
+        "train_start": "20100101",
+        "train_end": "20161231",
+        "val_start": "20170101",
+        "val_end": "20181231",
+        "test_start": "20190101",
+        "test_end": "20201231"
+      },
+      {
+        "name": "wf_2",
+        "train_start": "20100101",
+        "train_end": "20181231",
+        "val_start": "20190101",
+        "val_end": "20201231",
+        "test_start": "20210101",
+        "test_end": "20221231"
+      },
+      {
+        "name": "wf_3",
+        "train_start": "20100101",
+        "train_end": "20201231",
+        "val_start": "20210101",
+        "val_end": "20221231",
+        "test_start": "20230101",
+        "test_end": "20241231"
+      }
+    ]
+  },
+  "training_config": {
+    "max_encoder_length": 60,
+    "max_prediction_length": 1,
+    "batch_size": 64,
+    "max_epochs": 20,
+    "learning_rate": 0.0005,
+    "hidden_size": 32,
+    "attention_head_size": 2,
+    "dropout": 0.1,
+    "hidden_continuous_size": 8,
+    "seed": 42,
+    "early_stopping_patience": 5,
+    "early_stopping_min_delta": 0.0
+  },
+  "split_config": {
+    "train_start": "20100101",
+    "train_end": "20201231",
+    "val_start": "20210101",
+    "val_end": "20221231",
+    "test_start": "20230101",
+    "test_end": "20241231"
+  },
+  "search_space": {
+    "max_encoder_length": { "type": "int", "low": 2, "high": 120, "step": 1 },
+    "batch_size": { "type": "categorical", "choices": [8, 16, 32, 64, 128] },
+    "learning_rate": { "type": "float", "low": 0.0001, "high": 0.001, "log": true },
+    "hidden_size": { "type": "categorical", "choices": [8, 16, 32, 64] },
+    "attention_head_size": { "type": "categorical", "choices": [1, 2, 4, 8, 16] },
+    "dropout": { "type": "float", "low": 0.05, "high": 0.3, "step": 0.05 },
+    "hidden_continuous_size": { "type": "categorical", "choices": [4, 8, 16, 24] },
+    "early_stopping_patience": { "type": "categorical", "choices": [3, 5, 8, 12] },
+    "early_stopping_min_delta": { "type": "categorical", "choices": [0.0, 1e-6, 1e-5, 5e-5, 1e-4] }
+  }
+}
