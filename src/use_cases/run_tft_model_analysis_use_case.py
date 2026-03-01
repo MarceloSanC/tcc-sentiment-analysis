@@ -56,8 +56,10 @@ class AnalysisRunRecord:
     error: str | None = None
     val_rmse: float | None = None
     val_mae: float | None = None
+    val_da: float | None = None
     test_rmse: float | None = None
     test_mae: float | None = None
+    test_da: float | None = None
 
 
 @dataclass(frozen=True)
@@ -85,7 +87,9 @@ class RunTFTModelAnalysisUseCase:
     ) -> None:
         self.train_runner = train_runner
         self.base_training_config = dict(base_training_config)
-        self.param_ranges = param_ranges or DEFAULT_SWEEP_PARAM_RANGES
+        self.param_ranges = (
+            DEFAULT_SWEEP_PARAM_RANGES if param_ranges is None else dict(param_ranges)
+        )
         self.replica_seeds = replica_seeds or [7, 42, 123]
         self.split_config = dict(split_config or {})
         self.compute_confidence_interval = bool(compute_confidence_interval)
@@ -883,11 +887,159 @@ class RunTFTModelAnalysisUseCase:
                 fig.suptitle("Parameter Trend by Value (Mean Val/Test RMSE)", y=1.02)
                 _save(fig, "05_param_trend_by_value.png")
 
-        # 6) Run-by-run progression (val/test overlay).
+        # 6) Parameter trend by value for Directional Accuracy (same layout as plot 05).
+        if config_ranking.empty:
+            _empty_plot(
+                "Parameter Trend by Value (DA)",
+                "06_param_trend_da_by_value.png",
+                "No ranking data available.",
+            )
+        else:
+            trend_da = config_ranking.copy()
+            for c in ["mean_val_da", "mean_test_da"]:
+                if c in trend_da.columns:
+                    trend_da[c] = pd.to_numeric(trend_da[c], errors="coerce")
+
+            baseline_rows_da = trend_da[trend_da["varied_param"].isna()].copy()
+            baseline_val_da_mean: float | None = None
+            baseline_test_da_mean: float | None = None
+            if not baseline_rows_da.empty:
+                if "mean_val_da" in baseline_rows_da.columns:
+                    baseline_val_da_mean = float(pd.to_numeric(baseline_rows_da["mean_val_da"], errors="coerce").mean())
+                if "mean_test_da" in baseline_rows_da.columns:
+                    baseline_test_da_mean = float(pd.to_numeric(baseline_rows_da["mean_test_da"], errors="coerce").mean())
+
+            if not {"mean_val_da", "mean_test_da"}.issubset(set(trend_da.columns)):
+                _empty_plot(
+                    "Parameter Trend by Value (DA)",
+                    "06_param_trend_da_by_value.png",
+                    "Directional Accuracy columns not available in ranking.",
+                )
+            else:
+                trend_da = trend_da.dropna(subset=["varied_param", "varied_value", "mean_val_da", "mean_test_da"])
+                if trend_da.empty:
+                    _empty_plot(
+                        "Parameter Trend by Value (DA)",
+                        "06_param_trend_da_by_value.png",
+                        "No parameter variation data available.",
+                    )
+                else:
+                    def _value_key_da(v: Any) -> Any:
+                        try:
+                            return float(v)
+                        except Exception:
+                            return str(v).strip()
+
+                    if param_ranges:
+                        params_da = [str(k) for k in param_ranges.keys()]
+                        present_params_da = trend_da["varied_param"].astype(str).unique().tolist()
+                        for p in sorted(present_params_da):
+                            if p not in params_da:
+                                params_da.append(p)
+                    else:
+                        params_da = sorted(trend_da["varied_param"].astype(str).unique().tolist())
+
+                    n_params_da = len(params_da)
+                    n_cols_da = 3 if n_params_da >= 3 else n_params_da
+                    n_rows_da = int(np.ceil(n_params_da / max(n_cols_da, 1)))
+                    fig, axes = plt.subplots(
+                        n_rows_da,
+                        n_cols_da,
+                        figsize=(5 * max(n_cols_da, 1), 3.6 * max(n_rows_da, 1)),
+                        squeeze=False,
+                    )
+                    axes_flat = axes.flatten()
+
+                    for idx, param_name in enumerate(params_da):
+                        ax = axes_flat[idx]
+                        part = trend_da[trend_da["varied_param"].astype(str) == param_name].copy()
+                        if part.empty:
+                            ax.set_title(param_name)
+                            ax.text(0.5, 0.5, "No data", ha="center", va="center")
+                            ax.set_axis_off()
+                            continue
+
+                        available_values = part["varied_value"].dropna().unique().tolist()
+                        baseline_param_value = None
+                        if isinstance(baseline_config, dict) and param_name in baseline_config:
+                            baseline_param_value = baseline_config.get(param_name)
+                        if baseline_param_value is not None:
+                            keys_now = {_value_key_da(v) for v in available_values}
+                            if _value_key_da(baseline_param_value) not in keys_now:
+                                available_values.append(baseline_param_value)
+
+                        if param_ranges and param_name in param_ranges:
+                            ordered_values_raw = []
+                            available_keys = {_value_key_da(v) for v in available_values}
+                            for v in param_ranges.get(param_name, []):
+                                if _value_key_da(v) in available_keys:
+                                    ordered_values_raw.append(v)
+                        else:
+                            ordered_values_raw = available_values
+                            try:
+                                ordered_values_raw = sorted(ordered_values_raw, key=lambda x: float(x))
+                            except Exception:
+                                ordered_values_raw = sorted([str(v) for v in ordered_values_raw])
+
+                        grouped = (
+                            part.groupby(part["varied_value"].apply(_value_key_da), dropna=False)
+                            .agg(
+                                mean_val_da=("mean_val_da", "mean"),
+                                mean_test_da=("mean_test_da", "mean"),
+                            )
+                            .reset_index()
+                            .rename(columns={"varied_value": "value_key"})
+                        )
+                        val_map = {_value_key_da(r["value_key"]): float(r["mean_val_da"]) for _, r in grouped.iterrows()}
+                        test_map = {_value_key_da(r["value_key"]): float(r["mean_test_da"]) for _, r in grouped.iterrows()}
+
+                        labels = [str(v) for v in ordered_values_raw]
+                        keys = [_value_key_da(v) for v in ordered_values_raw]
+                        y_val = [
+                            baseline_val_da_mean if (baseline_param_value is not None and k == _value_key_da(baseline_param_value))
+                            else val_map.get(k, np.nan)
+                            for k in keys
+                        ]
+                        y_test = [
+                            baseline_test_da_mean if (baseline_param_value is not None and k == _value_key_da(baseline_param_value))
+                            else test_map.get(k, np.nan)
+                            for k in keys
+                        ]
+                        x = np.arange(len(labels))
+                        ax.plot(x, y_val, linestyle="-", linewidth=1.5, label="mean_val_da")
+                        ax.plot(x, y_test, linestyle="-", linewidth=1.5, label="mean_test_da")
+
+                        baseline_x = None
+                        if baseline_param_value is not None:
+                            try:
+                                baseline_x = keys.index(_value_key_da(baseline_param_value))
+                            except ValueError:
+                                baseline_x = None
+                        normal_x = [xi for xi in x if baseline_x is None or xi != baseline_x]
+                        if normal_x:
+                            ax.scatter(normal_x, [y_val[xi] for xi in normal_x], marker="o", s=35, zorder=4)
+                            ax.scatter(normal_x, [y_test[xi] for xi in normal_x], marker="s", s=35, zorder=4)
+                        if baseline_x is not None:
+                            ax.scatter([baseline_x], [y_val[baseline_x]], marker="*", s=180, color="black", edgecolor="white", linewidth=0.8, zorder=6)
+                            ax.scatter([baseline_x], [y_test[baseline_x]], marker="*", s=180, color="black", edgecolor="white", linewidth=0.8, zorder=6)
+
+                        ax.set_xticks(x)
+                        ax.set_xticklabels(labels, rotation=35, ha="right")
+                        ax.set_title(param_name)
+                        ax.set_ylabel("Directional Accuracy")
+                        ax.legend(loc="best", framealpha=0.35, fontsize=8)
+
+                    for idx in range(n_params_da, len(axes_flat)):
+                        axes_flat[idx].set_axis_off()
+
+                    fig.suptitle("Parameter Trend by Value (Mean Val/Test Directional Accuracy)", y=1.02)
+                    _save(fig, "06_param_trend_da_by_value.png")
+
+        # 7) Run-by-run progression (val/test overlay).
         if ok_runs.empty:
             _empty_plot(
                 "Run Order Metrics",
-                "06_run_order_metrics.png",
+                "07_run_order_metrics.png",
                 "No successful runs available.",
             )
         else:
@@ -901,13 +1053,13 @@ class RunTFTModelAnalysisUseCase:
             ax.set_ylabel("RMSE")
             ax.set_title("Run-by-Run Metrics Progression")
             ax.legend()
-            _save(fig, "06_run_order_metrics.png")
+            _save(fig, "07_run_order_metrics.png")
 
-        # 7) Top-5 leaderboard (val/test/robust).
+        # 8) Top-5 leaderboard (val/test/robust).
         if config_ranking.empty:
             _empty_plot(
                 "Top-5 Leaderboard",
-                "07_top5_leaderboard.png",
+                "08_top5_leaderboard.png",
                 "No ranking data available.",
             )
         else:
@@ -925,9 +1077,9 @@ class RunTFTModelAnalysisUseCase:
             ax.set_xlabel("score")
             ax.set_title("Top-5 Configurations Comparison")
             ax.legend()
-            _save(fig, "07_top5_leaderboard.png")
+            _save(fig, "08_top5_leaderboard.png")
 
-        # 8) Walk-forward comparison by fold (generated only for walk-forward runs).
+        # 9) Walk-forward comparison by fold (generated only for walk-forward runs).
         if "fold_name" in ok_runs.columns:
             fold_values = ok_runs["fold_name"].dropna().astype(str).unique().tolist()
             valid_folds = [f for f in fold_values if f and f != "default"]
@@ -980,9 +1132,9 @@ class RunTFTModelAnalysisUseCase:
                 ax_val.set_title("Walk-forward Fold Comparison (Top Configurations)")
                 ax_val.legend(loc="best", framealpha=0.35, fontsize=8)
                 ax_test.legend(loc="best", framealpha=0.35, fontsize=8)
-                _save(fig, "08_walk_forward_by_fold.png")
+                _save(fig, "09_walk_forward_by_fold.png")
 
-        # 9) Drift by fold summary (generated when aggregated drift report exists).
+        # 10) Drift by fold summary (generated when aggregated drift report exists).
         drift_by_fold_path = sweep_dir / "drift_ks_psi_by_fold.csv"
         if drift_by_fold_path.exists():
             try:
@@ -992,7 +1144,7 @@ class RunTFTModelAnalysisUseCase:
             if drift_folds.empty:
                 _empty_plot(
                     "Drift Summary by Fold",
-                    "09_drift_by_fold.png",
+                    "10_drift_by_fold.png",
                     "No drift-by-fold data available.",
                 )
             else:
@@ -1022,9 +1174,9 @@ class RunTFTModelAnalysisUseCase:
                 ax_psi.legend(loc="best", framealpha=0.35, fontsize=8)
                 ax_psi.set_xticks(x)
                 ax_psi.set_xticklabels(x_labels, rotation=35, ha="right")
-                _save(fig, "09_drift_by_fold.png")
+                _save(fig, "10_drift_by_fold.png")
 
-        # 10) Drift feature detail for a fold (generated when fold-level drift detail exists).
+        # 11) Drift feature detail for a fold (generated when fold-level drift detail exists).
         drift_detail_path = sweep_dir / "drift_ks_psi_detail.csv"
         if drift_detail_path.exists():
             try:
@@ -1034,7 +1186,7 @@ class RunTFTModelAnalysisUseCase:
             if drift_detail_df.empty:
                 _empty_plot(
                     "Drift Detail by Feature",
-                    "10_drift_feature_detail.png",
+                    "11_drift_feature_detail.png",
                     "No drift detail data available.",
                 )
             else:
@@ -1066,7 +1218,7 @@ class RunTFTModelAnalysisUseCase:
                 ax_psi.set_yticks(y)
                 ax_psi.set_yticklabels(labels)
                 ax_psi.legend(loc="best", framealpha=0.35, fontsize=8)
-                _save(fig, "10_drift_feature_detail.png")
+                _save(fig, "11_drift_feature_detail.png")
 
         return generated_paths
 
@@ -1102,10 +1254,13 @@ class RunTFTModelAnalysisUseCase:
                     "features_count": len(meta.get("features_used", [])),
                     "test_rmse": test_metrics.get("rmse"),
                     "test_mae": test_metrics.get("mae"),
+                    "test_da": test_metrics.get("directional_accuracy"),
                     "val_rmse": val_metrics.get("rmse"),
                     "val_mae": val_metrics.get("mae"),
+                    "val_da": val_metrics.get("directional_accuracy"),
                     "train_rmse": train_metrics.get("rmse"),
                     "train_mae": train_metrics.get("mae"),
+                    "train_da": train_metrics.get("directional_accuracy"),
                     "learning_rate": training_cfg.get("learning_rate"),
                     "hidden_size": training_cfg.get("hidden_size"),
                     "max_encoder_length": training_cfg.get("max_encoder_length"),
@@ -1116,9 +1271,15 @@ class RunTFTModelAnalysisUseCase:
             )
         df = pd.DataFrame(rows)
         if not df.empty:
-            df = df.sort_values(["test_rmse", "test_mae"], ascending=[True, True]).reset_index(
-                drop=True
-            )
+            if "test_da" in df.columns:
+                df["test_da"] = pd.to_numeric(df["test_da"], errors="coerce")
+                df = df.sort_values(["test_rmse", "test_mae", "test_da"], ascending=[True, True, False]).reset_index(
+                    drop=True
+                )
+            else:
+                df = df.sort_values(["test_rmse", "test_mae"], ascending=[True, True]).reset_index(
+                    drop=True
+                )
         return df
 
     @staticmethod
@@ -1134,7 +1295,7 @@ class RunTFTModelAnalysisUseCase:
         if config_ranking.empty:
             return config_ranking
         ordered = config_ranking.copy()
-        for c in ["robust_score", "mean_val_rmse", "mean_test_rmse", "mean_val_mae", "mean_test_mae"]:
+        for c in ["robust_score", "mean_val_rmse", "mean_test_rmse", "mean_val_mae", "mean_test_mae", "mean_val_da", "mean_test_da"]:
             if c in ordered.columns:
                 ordered[c] = pd.to_numeric(ordered[c], errors="coerce")
         sort_cols = cls._ranking_sort_columns(ordered)
@@ -1161,12 +1322,17 @@ class RunTFTModelAnalysisUseCase:
                     .to_dict()
                 )
                 ordered["robust_score"] = ordered["config_signature"].map(robust_map)
-        for col in ["robust_score", "val_rmse", "test_rmse", "val_mae", "test_mae"]:
+        for col in ["robust_score", "val_rmse", "test_rmse", "val_mae", "test_mae", "val_da", "test_da"]:
             if col in ordered.columns:
                 ordered[col] = pd.to_numeric(ordered[col], errors="coerce")
         sort_cols = [c for c in ["robust_score", "val_rmse", "test_rmse", "val_mae", "test_mae"] if c in ordered.columns]
+        if "test_da" in ordered.columns:
+            sort_cols.append("test_da")
         if sort_cols:
-            ordered = ordered.sort_values(sort_cols, ascending=[True] * len(sort_cols))
+            ascending = [True] * len(sort_cols)
+            if sort_cols and sort_cols[-1] == "test_da":
+                ascending[-1] = False
+            ordered = ordered.sort_values(sort_cols, ascending=ascending)
         return ordered.reset_index(drop=True)
 
     @staticmethod
@@ -1215,6 +1381,10 @@ class RunTFTModelAnalysisUseCase:
         ok["val_mae"] = pd.to_numeric(ok["val_mae"], errors="coerce")
         ok["test_rmse"] = pd.to_numeric(ok["test_rmse"], errors="coerce")
         ok["test_mae"] = pd.to_numeric(ok["test_mae"], errors="coerce")
+        if "val_da" in ok.columns:
+            ok["val_da"] = pd.to_numeric(ok["val_da"], errors="coerce")
+        if "test_da" in ok.columns:
+            ok["test_da"] = pd.to_numeric(ok["test_da"], errors="coerce")
 
         candidates = ok[ok["val_rmse"].notna()].copy()
         if candidates.empty:
@@ -1235,6 +1405,10 @@ class RunTFTModelAnalysisUseCase:
                 std_test_rmse=("test_rmse", "std"),
                 mean_test_mae=("test_mae", "mean"),
                 std_test_mae=("test_mae", "std"),
+                mean_val_da=("val_da", "mean"),
+                std_val_da=("val_da", "std"),
+                mean_test_da=("test_da", "mean"),
+                std_test_da=("test_da", "std"),
             )
             .reset_index()
         )
@@ -1276,8 +1450,9 @@ class RunTFTModelAnalysisUseCase:
             ranking["run_label"] = ranking["run_label"].astype(str).map(
                 lambda v: v.split("|seed=")[0]
             )
-        for col in ["std_val_rmse", "std_val_mae", "std_test_rmse", "std_test_mae"]:
-            ranking[col] = ranking[col].fillna(0.0)
+        for col in ["std_val_rmse", "std_val_mae", "std_test_rmse", "std_test_mae", "std_val_da", "std_test_da"]:
+            if col in ranking.columns:
+                ranking[col] = ranking[col].fillna(0.0)
         ranking["robust_score"] = ranking["mean_val_rmse"] + ranking["std_val_rmse"]
         if compute_confidence_interval:
             z = 1.96
@@ -1482,9 +1657,11 @@ class RunTFTModelAnalysisUseCase:
                             if valid:
                                 val_rmse = self._to_float_or_none(existing_row.get("val_rmse"))
                                 val_mae = self._to_float_or_none(existing_row.get("val_mae"))
+                                val_da = self._to_float_or_none(existing_row.get("val_da"))
                                 test_rmse = self._to_float_or_none(existing_row.get("test_rmse"))
                                 test_mae = self._to_float_or_none(existing_row.get("test_mae"))
-                                if metadata and (val_rmse is None or val_mae is None or test_rmse is None or test_mae is None):
+                                test_da = self._to_float_or_none(existing_row.get("test_da"))
+                                if metadata and (val_rmse is None or val_mae is None or val_da is None or test_rmse is None or test_mae is None or test_da is None):
                                     split_metrics = (
                                         metadata.get("split_metrics", {})
                                         if isinstance(metadata, dict)
@@ -1494,8 +1671,10 @@ class RunTFTModelAnalysisUseCase:
                                     test_metrics = split_metrics.get("test", {}) if isinstance(split_metrics, dict) else {}
                                     val_rmse = val_rmse if val_rmse is not None else self._to_float_or_none(val_metrics.get("rmse"))
                                     val_mae = val_mae if val_mae is not None else self._to_float_or_none(val_metrics.get("mae"))
+                                    val_da = val_da if val_da is not None else self._to_float_or_none(val_metrics.get("directional_accuracy"))
                                     test_rmse = test_rmse if test_rmse is not None else self._to_float_or_none(test_metrics.get("rmse"))
                                     test_mae = test_mae if test_mae is not None else self._to_float_or_none(test_metrics.get("mae"))
+                                    test_da = test_da if test_da is not None else self._to_float_or_none(test_metrics.get("directional_accuracy"))
 
                                 run_records.append(
                                     AnalysisRunRecord(
@@ -1508,8 +1687,10 @@ class RunTFTModelAnalysisUseCase:
                                         status="ok",
                                         val_rmse=val_rmse,
                                         val_mae=val_mae,
+                                        val_da=val_da,
                                         test_rmse=test_rmse,
                                         test_mae=test_mae,
+                                        test_da=test_da,
                                     )
                                 )
                                 logger.info(
@@ -1577,8 +1758,10 @@ class RunTFTModelAnalysisUseCase:
                                 status="ok",
                                 val_rmse=float(val_metrics.get("rmse")),
                                 val_mae=float(val_metrics.get("mae")),
+                                val_da=self._to_float_or_none(val_metrics.get("directional_accuracy")),
                                 test_rmse=float(test_metrics.get("rmse")),
                                 test_mae=float(test_metrics.get("mae")),
+                                test_da=self._to_float_or_none(test_metrics.get("directional_accuracy")),
                             )
                         )
                         staged_version_dir = fold_staging_dir / version
@@ -1627,6 +1810,7 @@ class RunTFTModelAnalysisUseCase:
         top_5_runs: list[dict[str, Any]] = []
         baseline_rmse: float | None = None
         baseline_mae: float | None = None
+        baseline_da: float | None = None
         drift_by_fold: list[dict[str, Any]] = []
 
         report_fold_names = sorted(
@@ -1654,6 +1838,7 @@ class RunTFTModelAnalysisUseCase:
 
             fold_baseline_rmse: float | None = None
             fold_baseline_mae: float | None = None
+            fold_baseline_da: float | None = None
             if not fold_df.empty:
                 fold_baseline_rows = fold_df[
                     (fold_df["status"] == "ok") & (fold_df["varied_param"].isna())
@@ -1665,6 +1850,10 @@ class RunTFTModelAnalysisUseCase:
                     fold_baseline_mae = float(
                         pd.to_numeric(fold_baseline_rows["test_mae"], errors="coerce").mean()
                     )
+                    if "test_da" in fold_baseline_rows.columns:
+                        fold_baseline_da = float(
+                            pd.to_numeric(fold_baseline_rows["test_da"], errors="coerce").mean()
+                        )
 
             fold_impact_detail = pd.DataFrame()
             fold_impact_summary = pd.DataFrame()
@@ -1698,10 +1887,6 @@ class RunTFTModelAnalysisUseCase:
             fold_all_models_df.to_csv(fold_dir / "all_models_ranked.csv", index=False)
 
             fold_top_5 = fold_config_ranking_raw.head(5).to_dict(orient="records")
-            if len(report_fold_names) == 1:
-                top_5_runs = fold_top_5
-                baseline_rmse = fold_baseline_rmse
-                baseline_mae = fold_baseline_mae
 
             drift_detail = pd.DataFrame()
             drift_summary: dict[str, Any] = {}
@@ -1761,6 +1946,7 @@ class RunTFTModelAnalysisUseCase:
                     "runs_failed": int((fold_df["status"] == "failed").sum()) if not fold_df.empty else 0,
                     "baseline_test_rmse": fold_baseline_rmse,
                     "baseline_test_mae": fold_baseline_mae,
+                    "baseline_test_da": fold_baseline_da,
                     "top_5_runs": fold_top_5,
                     "drift": drift_summary_payload,
                     "artifacts": {
@@ -1807,6 +1993,29 @@ class RunTFTModelAnalysisUseCase:
             encoding="utf-8",
         )
 
+        # Global sweep ranking/top5 and baseline summary must be computed for
+        # both single-fold and multi-fold runs.
+        global_config_ranking = self._build_config_ranking(
+            run_df,
+            compute_confidence_interval=self.compute_confidence_interval,
+        )
+        top_5_runs = global_config_ranking.head(5).to_dict(orient="records")
+        if not run_df.empty:
+            global_baseline_rows = run_df[
+                (run_df["status"] == "ok") & (run_df["varied_param"].isna())
+            ].copy()
+            if not global_baseline_rows.empty:
+                baseline_rmse = float(
+                    pd.to_numeric(global_baseline_rows["test_rmse"], errors="coerce").mean()
+                )
+                baseline_mae = float(
+                    pd.to_numeric(global_baseline_rows["test_mae"], errors="coerce").mean()
+                )
+                if "test_da" in global_baseline_rows.columns:
+                    baseline_da = float(
+                        pd.to_numeric(global_baseline_rows["test_da"], errors="coerce").mean()
+                    )
+
         summary = {
             "asset": asset,
             "sweep_name": sweep_name,
@@ -1816,6 +2025,7 @@ class RunTFTModelAnalysisUseCase:
             "runs_failed": int((run_df["status"] == "failed").sum()) if not run_df.empty else 0,
             "baseline_test_rmse": baseline_rmse,
             "baseline_test_mae": baseline_mae,
+            "baseline_test_da": baseline_da,
             "replica_seeds": self.replica_seeds,
             "split_config": self.split_config or None,
             "walk_forward": {
