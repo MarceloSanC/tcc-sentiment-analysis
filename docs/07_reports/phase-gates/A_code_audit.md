@@ -97,16 +97,95 @@ end-to-end com uma config all-features + multi-horizonte.
 
 | # | Questao | Arquivo:linha | Veredicto |
 |---|---|---|---|
-| Q1 | Early stopping: o `monitor` e `val_loss` (correto) ou `train_loss`/metrica de test (invalido)? | `pytorch_forecasting_tft_trainer.py`: procurar `EarlyStopping` / `ModelCheckpoint` | |
-| Q2 | `QuantileLoss(quantiles=[0.1, 0.5, 0.9])`: os pesos sao uniformes? Algum override reduz o peso de p10/p90 a zero (causaria colapso de gradiente)? | `pytorch_forecasting_tft_trainer.py:254` | |
-| Q3 | O novo fallback `_manual_forward_quantiles_and_actuals` funciona para `max_prediction_length > 1`? O cubo `[N, H, Q]` e indexado corretamente para H > 1? | `pytorch_forecasting_tft_trainer.py:358-430` | |
-| Q4 | Gate de degeneracao: apos o treino, ha verificacao de que `% linhas com p10==p90 < 5%` no OOS? Ou o pipeline passa silenciosamente com quantis degenerados? | `train_tft_model_use_case.py`: buscar check de MPIW | |
+| Q1 | Early stopping: o `monitor` e `val_loss` (correto) ou `train_loss`/metrica de test (invalido)? | `pytorch_forecasting_tft_trainer.py`: procurar `EarlyStopping` / `ModelCheckpoint` | GREEN |
+| Q2 | `QuantileLoss(quantiles=[0.1, 0.5, 0.9])`: os pesos sao uniformes? Algum override reduz o peso de p10/p90 a zero (causaria colapso de gradiente)? | `pytorch_forecasting_tft_trainer.py:254` | GREEN |
+| Q3 | O novo fallback `_manual_forward_quantiles_and_actuals` funciona para `max_prediction_length > 1`? O cubo `[N, H, Q]` e indexado corretamente para H > 1? | `pytorch_forecasting_tft_trainer.py:358-430` | YELLOW |
+| Q4 | Gate de degeneracao: apos o treino, ha verificacao de que `% linhas com p10==p90 < 5%` no OOS? Ou o pipeline passa silenciosamente com quantis degenerados? | `train_tft_model_use_case.py`: buscar check de MPIW | RED |
 
-**Veredicto geral:** ___
+**Veredicto geral:** RED
 
 **Achados:**
 
+- Q1: `ModelCheckpoint` e `EarlyStopping` monitoram `val_loss` com
+  `mode="min"`; a selecao de melhor epoca tambem usa `val_loss`. Nao foi
+  encontrado uso de `train_loss` ou metrica de test como criterio de parada ou
+  checkpoint.
+- Q2: o modo quantil instancia `QuantileLoss(quantiles=list(cfg.quantile_levels))`
+  e os defaults do trainer sao `(0.1, 0.5, 0.9)`. A introspeccao local de
+  `QuantileLoss(quantiles=[0.1,0.5,0.9])` mostrou `quantiles=[0.1, 0.5, 0.9]`
+  e nenhum atributo de peso/ponderacao customizada. Nao ha override no trainer
+  zerando p10/p90.
+- Q3: por inspecao estatica, `_manual_forward_quantiles_and_actuals` aceita
+  saida 3D e trata dois layouts esperados: `[batch, horizon, quantile]` e
+  `[batch, quantile, horizon]` (via `swapaxes`). Depois seleciona p10/p50/p90
+  por indice de quantil e retorna matrizes `[N, H]`. O caminho principal
+  `_extract_quantiles` tambem espera `[batch, horizon, quantile]`.
+- Q3: o trainer seleciona horizontes por `selected_idx = [h - 1]`, corta
+  `preds_matrix`/`actuals_matrix` pelo menor `horizon_dim` e persiste detalhes
+  em `quantile_p*_matrix`. A persistencia em
+  `_persist_fact_oos_predictions` ja possui teste unitario para alinhamento
+  `h=1,7,30` por split.
+- Q3: apesar da logica estar coerente por leitura e haver teste para
+  persistencia multi-horizonte, nao foi encontrado teste unitario dedicado
+  exercitando `_manual_forward_quantiles_and_actuals` com `H>1`, nem smoke
+  end-to-end real com `max_prediction_length >= 7`. Portanto o ponto fica
+  YELLOW ate validacao por teste dedicado ou smoke M7.
+- Q4: `train_tft_model_use_case.py` aplica `QuantileGuardrailService` antes de
+  persistir OOS e grava colunas `quantile_p10_post_guardrail`,
+  `quantile_p50_post_guardrail`, `quantile_p90_post_guardrail` e
+  `quantile_guardrail_applied`. Isso corrige ordenacao monotona, mas nao
+  detecta nem bloqueia degeneracao de largura zero (`p10==p90`).
+- Q4: `QuantileContractAnalyzer` e `ValidateAnalyticsQualityUseCase` checam
+  ordem dos quantis, largura negativa e crossing pos-guardrail; nao ha regra
+  equivalente para `% quantile_p10 == quantile_p90` ou
+  `% quantile_p10 == quantile_p50 == quantile_p90`. Assim, uma coorte com
+  quantis colapsados pode passar por treino/persistencia e so ser descoberta
+  por diagnostico posterior, repetindo a classe de risco que motivou a Fase A.
+- Validacao executada:
+  `tests/unit/adapters/test_pytorch_forecasting_tft_trainer.py`,
+  `tests/unit/use_cases/test_train_tft_model_use_case.py::test_persist_fact_oos_predictions_keeps_horizon_index_alignment_per_split`,
+  `tests/unit/use_cases/test_train_tft_model_use_case.py::test_persist_fact_oos_predictions_applies_quantile_guardrail_columns`,
+  `tests/unit/domain/services/test_quantile_contract_analyzer.py`,
+  `tests/unit/use_cases/test_validate_analytics_quality_use_case.py::test_validate_analytics_quality_block_a_check_passes_on_minimal_valid_dataset` e
+  `tests/unit/use_cases/test_validate_analytics_quality_use_case.py::test_validate_analytics_quality_block_a_scope_filters_parent_sweep_prefix`
+  passaram (`18 passed`, 1 warning de deprecacao de parametros antigos de
+  Block A).
+
 **Acao (se YELLOW/RED):**
+
+- Antes da Fase B, adicionar gate bloqueante de degeneracao quantilica
+  **condicional ao `prediction_mode` declarado em `fact_config`** (source of
+  truth, nao inferir do output):
+  - **Runs com `prediction_mode='quantile'`:** reportar `n_rows`, `% p10==p90`
+    e `% p10==p50==p90` por `parent_sweep_id`/split/horizonte, com limiar rigido
+    apenas quando `n_rows` for suficiente (mesma regra operacional do M7-Q6).
+    Degeneracao em massa bloqueia a Fase B porque viola o contrato declarado:
+    o run prometeu intervalo probabilistico e entregou ponto disfarcado.
+  - **Runs com `prediction_mode='point'`:** quantis colapsados
+    (`p10==p50==p90==y_pred`) sao permitidos apenas como campos de
+    compatibilidade de schema e devem ser explicitamente excluidos de
+    metricas/claims probabilisticos (PICP, MPIW, pinball, intervalo p10-p90).
+    Claims pontuais (RMSE, MAE, DA) permanecem validos para esses runs.
+- Decidir onde esse gate deve viver: preferencialmente em
+  `QuantileContractAnalyzer`/`ValidateAnalyticsQualityUseCase` para permitir
+  validacao scoped por coorte; alternativamente como verificacao pos-treino em
+  `TrainTFTModelUseCase` antes de aceitar a rodada.
+- Em M5, garantir que metricas probabilisticas em
+  `refresh_analytics_store_use_case.py` (PICP, MPIW, pinball, calibracao) sejam
+  computadas apenas sobre runs com `prediction_mode='quantile'` nao-degenerados.
+  Sem esse filtro, runs `point` (ou `quantile` degenerados antes do gate)
+  arrastam metricas globais. Considerar coluna auxiliar
+  `is_quantile_genuine` em `fact_oos_predictions` ou filtro por NULL nas
+  colunas quantilicas para runs `point`.
+- Adicionar teste unitario dedicado para o fallback
+  `_manual_forward_quantiles_and_actuals` com saida `H>1`, cobrindo pelo menos
+  o layout `[batch, horizon, quantile]` e, idealmente, o layout alternativo
+  `[batch, quantile, horizon]`. O teste deve validar valores especificos por
+  `(n, h, q)` com cubo sintetico, nao apenas ausencia de excecao.
+- Executar no M7 um smoke real com `max_prediction_length >= 7` e
+  `evaluation_horizons=[1,7]` para validar que o caminho completo produz
+  `fact_oos_predictions` com `h=7`, timestamps coerentes e quantis nao
+  degenerados.
 
 ---
 
