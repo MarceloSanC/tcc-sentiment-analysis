@@ -198,16 +198,101 @@ contamina todos os runs — nao pode ser detectado por metricas OOS.
 
 | # | Questao | Arquivo:linha | Veredicto |
 |---|---|---|---|
-| Q1 | O `sklearn_indicator_normalizer` (`fit()`) e chamado ANTES do split temporal ou DEPOIS? Se antes, leakage de normalizacao garantido. | `build_tft_dataset_use_case.py`: buscar `normalizer.fit` / `sklearn_indicator_normalizer` | |
-| Q2 | Features com `warmup_count > 0` no `feature_registry`: o dataset exclui os primeiros N dias dessas features corretamente, ou os inclui com NaN? | `feature_registry.py`: verificar `warmup_count`; `build_tft_dataset_use_case.py`: verificar aplicacao | |
-| Q3 | Todas as features de retorno/preco estao em `time_varying_unknown_reals`, nao em `time_varying_known_reals`? Confirmar que o `known_real_cols` do trainer bate com o que foi definido aqui. | `build_tft_dataset_use_case.py:228-229` | |
-| Q4 | Se a Fase B exigir rebuild do dataset all-features, fundamentals e sentiment respeitam disponibilidade temporal real (as-of date, publication/collection timestamp e corte da sessao)? | feature registry + fontes processadas; ver tambem M7 | |
+| Q1 | O `sklearn_indicator_normalizer` (`fit()`) e chamado ANTES do split temporal ou DEPOIS? Se antes, leakage de normalizacao garantido. | `build_tft_dataset_use_case.py`: buscar `normalizer.fit` / `sklearn_indicator_normalizer` | GREEN |
+| Q2 | Features com `warmup_count > 0` no `feature_registry`: o dataset exclui os primeiros N dias dessas features corretamente, ou os inclui com NaN? | `feature_registry.py`: verificar `warmup_count`; `build_tft_dataset_use_case.py`: verificar aplicacao | YELLOW |
+| Q3 | Todas as features de retorno/preco estao em `time_varying_unknown_reals`, nao em `time_varying_known_reals`? Confirmar que o `known_real_cols` do trainer bate com o que foi definido aqui. | `build_tft_dataset_use_case.py:228-229` | GREEN |
+| Q4 | Se a Fase B exigir rebuild do dataset all-features, fundamentals e sentiment respeitam disponibilidade temporal real (as-of date, publication/collection timestamp e corte da sessao)? | feature registry + fontes processadas; ver tambem M7 | YELLOW |
 
-**Veredicto geral:** ___
+**Veredicto geral:** YELLOW
 
 **Achados:**
 
+- Q1: `BuildTFTDatasetUseCase` nao instancia nem chama
+  `SklearnTechnicalIndicatorNormalizer`; a busca por
+  `SklearnTechnicalIndicatorNormalizer`, `TechnicalIndicatorNormalizer`,
+  `normalizer.fit`, `normalizer.transform` e `sklearn_indicator_normalizer`
+  encontrou apenas a interface/adaptador legado e seus testes unitarios.
+- Q1: a normalizacao efetiva de features tecnicas ocorre depois do split em
+  `TrainTFTModelUseCase._apply_split_feature_normalization`: o `StandardScaler`
+  e ajustado apenas em `train_df` e aplicado depois em `train_df`, `val_df` e
+  `test_df`. Portanto nao ha evidencia de scaler fitado no dataset inteiro no
+  caminho atual.
+- Q2: o `feature_registry` declara `warmup_count` para features rolling e o
+  `DatasetQualityGate` recebe `FEATURE_WARMUP_BARS`, ignorando NaNs iniciais
+  dentro da janela de warmup ao avaliar razao de nulos. Os testes cobrem esse
+  comportamento (`test_quality_gate_ignores_nan_inside_feature_warmup_window`
+  e `test_quality_gate_still_rejects_nan_after_feature_warmup_window`).
+- Q2: o build do dataset nao remove fisicamente as primeiras linhas com warmup;
+  ele mantem os NaNs iniciais e delega a seguranca do split para o treino
+  (`warmup_policy` em `TrainTFTModelUseCase`). Isso e aceitavel se a Fase B
+  usar `strict_fail`/`drop_leading` com registro no pre-registro, mas nao
+  certifica o parquet final como pronto para qualquer consumidor arbitrario.
+- Q3: no caminho de treino, `known_real_cols` e fixado em
+  `["time_idx", "day_of_week", "month"]` quando essas colunas existem. O
+  trainer passa esse conjunto para `time_varying_known_reals` e passa
+  `feature_cols` para `time_varying_unknown_reals`. Nao foi encontrado override
+  de config que injete preco, retorno, tecnicos, sentiment ou fundamentals em
+  `known_real_cols`.
+- Q4: fundamentals possuem `reported_date` no schema e o build calcula
+  `effective_date` a partir de `reported_date` ou, quando ausente, usa fallback
+  `fiscal_date_end + 45 dias`; o merge diario e `pd.merge_asof(...,
+  direction="backward")`. No estado atual de AAPL, 17/81 reports possuem
+  `reported_date` nulo, o primeiro dia do dataset com fundamentals
+  (`2010-04-20`) coincide com o primeiro `effective_day`, e nao foi encontrado
+  uso de `revenue` antes de sua menor data efetiva observada.
+- Q4: sentiment preserva `published_at` no `scored_news` e a engenharia diaria
+  possui guard de causalidade por `trading_day_from_timestamp`. No estado atual
+  de AAPL, a contagem de `daily_sentiment.n_articles` bate com a contagem de
+  `scored_news` por dia util efetivo usando `close_hour=16:00` e
+  `weekends=false` para dias uteis; as 269 divergencias encontradas estao em
+  linhas de fim de semana do `daily_sentiment`, que nao entram no dataset TFT
+  diario de candles.
+- Q4: apesar disso, o dataset final nao preserva `effective_date` de
+  fundamentals nem timestamps/artigos de origem do sentiment. A disponibilidade
+  temporal real fica auditavel apenas cruzando com `fundamentals_AAPL.parquet`
+  e `scored_news_AAPL.parquet`, nao a partir de `dataset_tft_AAPL.parquet`
+  isoladamente. Por isso Q4 permanece YELLOW ate a lista all-features da Fase B
+  ser congelada e a auditoria source-level ser anexada ao pre-registro.
+- Validacao executada:
+  `tests/unit/use_cases/test_build_tft_dataset_use_case.py`,
+  `tests/unit/domain/services/test_dataset_quality_gate.py`,
+  `tests/unit/infrastructure/schemas/test_feature_validation_schema.py`,
+  `tests/unit/infrastructure/schemas/test_feature_registry.py` e
+  `tests/unit/test_main_dataset_tft.py` passaram (`25 passed`).
+
 **Acao (se YELLOW/RED):**
+
+- Para a Fase B, declarar no pre-registro a politica de warmup usada
+  (`strict_fail` ou `drop_leading`) e registrar `required_warmup_count`,
+  `warmup_features`, `effective_train_start` e `feature_list_ordered`.
+- Antes de congelar o candidato all-features, gerar um artefato curto de
+  auditoria source-level para AAPL confirmando:
+  `reported_date`/fallback usado em fundamentals, `effective_day` por report,
+  ausencia de uso antes da disponibilidade efetiva, e consistencia de
+  `daily_sentiment` contra `scored_news.published_at` com a politica
+  `open_hour=09:30`, `close_hour=16:00`, `weekends=false`.
+- Se a Fase B incluir outros ativos alem de AAPL, repetir a auditoria
+  source-level por ativo antes do pre-registro. O sistema pode ser multi-asset,
+  mas cada modelo/rodada confirmatoria deve ter dataset e disponibilidade
+  temporal auditados por ativo.
+- Preservar `effective_date` (renomeado para
+  `fundamentals_effective_date` para nao colidir com nomenclatura temporal
+  existente) como coluna do dataset final, removendo o `df.drop(...)` em
+  [build_tft_dataset_use_case.py:519](src/use_cases/build_tft_dataset_use_case.py#L519).
+  Mudanca de 1-2 linhas; rebuild do dataset (~segundos para AAPL, <1 min
+  multi-asset) deve ser bundled com as outras alteracoes resultantes da Fase A
+  (gate de degeneracao M2, baselines persistidos M7, eventuais fixes M1/M4/M5)
+  para evitar dois ciclos de rebuild + revalidacao. Beneficio: rastreabilidade
+  direta no dataset (sem cruzar com fontes processadas), citacao direta no TCC
+  e auditoria multi-asset por inspecao de coluna em vez de script ad-hoc.
+- Documentar no pre-registro a justificativa da escolha "+45 dias" como
+  fallback de `reported_date` quando ausente, incluindo: motivacao
+  (compromisso entre prazos SEC de 40 dias para 10-Q e 60 dias para 10-K),
+  cobertura de impacto (proporcao de reports com fallback aplicado vs
+  `reported_date` original; em AAPL = 17/81 = 21%) e analise de sensibilidade
+  caso a janela mude. A escolha hoje so aparece em
+  [build_tft_dataset_use_case.py:118](src/use_cases/build_tft_dataset_use_case.py#L118)
+  sem documentacao metodologica em nenhum doc canonico.
 
 ---
 
