@@ -332,6 +332,8 @@ mistura sweeps na mesma metrica.
 | Q1 | PICP e calculado sobre `quantile_p10_post_guardrail`/`quantile_p90_post_guardrail` ou sobre `quantile_p10`/`quantile_p90` raw? As duas colunas existem — qual e usada como primaria? | `refresh_analytics_store_use_case.py`: buscar `picp` / `in_interval` | |
 | Q2 | As tabelas gold `gold_prediction_metrics_by_config`, `gold_prediction_calibration` e `gold_prediction_robustness_by_horizon` recebem `parent_sweep_id` no output? Se nao, como filtrar escopo na analise final? | Confirmado: nenhuma das tres tem `parent_sweep_id`. Verificar se ha filtro pre-calculo ou so pos-calculo. | |
 | Q3 | O `ScopeSpec` com `scope_mode=cohort_decision` e passado corretamente em todos os paths de calculo que alimentam decisao estatistica (DM, MCS, win-rate)? Ou so no quality gate? | `refresh_analytics_store_use_case.py`: buscar `scope_spec` / `ScopeSpec` | |
+| Q4 | O check `gold_metrics_by_config_n_oos_contract` falhou com `mismatch_with_run_level=13800` no estado historico atual (smoke M7 evidenciou isso). Quais sao as causas (runs pre-ScopeSpec entrando em agregacao, recomputacao parcial, mudanca de regra entre versoes)? Esse check e global ou pode ser scoped via `ScopeSpec`? E corrigivel via re-refresh ou exige migracao de schema? | `gold_prediction_metrics_by_config.parquet` + `refresh_analytics_store_use_case.py` (busca pelo check de `n_oos_contract`) | |
+| Q5 | Filtro de metricas probabilisticas por `prediction_mode='quantile'` AND `is_quantile_genuine` (proposto em M2): runs `point` ou `quantile` degenerados antes do gate de M2 entrariam silenciosamente em PICP/MPIW/pinball/calibracao globais. O `refresh_analytics_store_use_case.py` filtra por modo? Se nao, runs historicos com `parent_sweep_id=NULL` (91% degenerados) podem ter contaminado metricas globais. | `refresh_analytics_store_use_case.py` + `fact_config.prediction_mode` | |
 
 **Veredicto geral:** ___
 
@@ -471,9 +473,9 @@ de forma reproduzivel, a Fase B nao deve comecar.
 | Q1 | O pipeline consegue executar 1 candidato explicito `all-features` com N seeds x K folds sem depender de selecao por feature set? | `main_train_tft`, sweeps | YELLOW |
 | Q2 | Baselines podem ser persistidos em `fact_oos_predictions` no mesmo grao do TFT, com `run_id`, `parent_sweep_id`, `split`, `horizon`, `target_timestamp` e quantis quando aplicavel? | schema/repositorios | RED |
 | Q3 | A poda minima all-features esta implementada ou pode ser congelada por lista pre-registrada sem usar OOS? | feature registry/pre-registro | YELLOW |
-| Q4 | `h=1` e `h=7` funcionam end-to-end com quantis nao degenerados apos o fix `f7901a4`? | smoke test multi-horizonte | YELLOW |
-| Q5 | Um smoke test reduzido consegue treinar, inferir, persistir e atualizar gold sem violar gates criticos? | execucao curta | RED |
-| Q6 | O smoke test multi-horizonte produz quantis nao degenerados em volume suficiente para validar o caminho H>1? Reportar `n_rows`, `% p10==p90`, `% p10==p50==p90` e exemplos por horizonte. Se `n_rows >= 1000`, aplicar `% p10==p90 < 5%` como gate. Se `n_rows < 1000`, tratar como diagnostico e exigir validacao com volume maior antes da liberacao da Fase B. | smoke test + `quantile_contract_analyzer` | RED |
+| Q4 | `h=1` e `h=7` funcionam end-to-end com quantis nao degenerados apos o fix `f7901a4`? | smoke test multi-horizonte | GREEN (com nota: validado com `n=402`, `max_epochs=1`; re-validar em rodada confirmatoria com volume e convergencia maiores) |
+| Q5 | Um smoke test reduzido consegue executar treino, persistencia OOS, refresh sob scope e quality gate produzindo diagnostico acionavel (sem travamentos, sem dados corrompidos, com falhas do gate vinculadas a causas identificaveis)? | execucao curta | YELLOW |
+| Q6 | O smoke test multi-horizonte produz quantis nao degenerados em volume suficiente para validar o caminho H>1? Reportar `n_rows`, `% p10==p90`, `% p10==p50==p90` e exemplos por horizonte. Se `n_rows >= 1000`, aplicar `% p10==p90 < 5%` como gate. Se `n_rows < 1000`, tratar como diagnostico e exigir validacao com volume maior antes da liberacao da Fase B. | smoke test + `quantile_contract_analyzer` | YELLOW |
 
 **Nota sobre volume do smoke test:** se for necessario aumentar `n_rows`, usar
 janela OOS maior ou multiplos ativos reais que satisfaçam os mesmos criterios de
@@ -488,6 +490,13 @@ construir o alvo). Se nao houver rebuild e as features ja estiverem congeladas,
 auditar pelo dataset/feature registry e registrar a decisao.
 
 **Veredicto geral:** RED
+
+Motivo do RED: o caminho TFT-only multi-horizonte funciona end-to-end (treino,
+persistencia, refresh, quality gate detectando problemas reais), mas a Fase B
+ainda nao esta operacionalmente pronta porque (a) Q2 baselines estatisticos
+nao foram implementados; (b) decisao raw vs post-guardrail como contrato
+primario do gate continua aberta; (c) `gold_metrics_by_config_n_oos_contract`
+falha com 13.800 mismatches historicos que precisam ser tratados em M5.
 
 **Achados:**
 
@@ -525,15 +534,87 @@ auditar pelo dataset/feature registry e registrar a decisao.
   `_persist_fact_oos_predictions`. Isso valida o contrato de persistencia em
   unidade, mas nao substitui smoke test end-to-end com treino real e
   `max_prediction_length >= 7`.
-- Q5/Q6: smoke test reduzido nao foi executado nesta primeira passagem do M7.
-  O veredicto RED aqui significa bloqueio por dependencia sequencial, nao falha
-  executada: pela ordem recomendada da Fase A, o smoke test completo deve
-  ocorrer depois de M2/M3 e depois da implementacao dos baselines estatisticos
-  de Q2. Executar smoke confirmatorio sem baseline persistido ainda nao valida
-  a capacidade completa da Fase B.
+- Q4: smoke test TFT-only multi-horizonte executado em 2026-05-01 com
+  `parent_sweep_id=phase_a_m7_smoke_20260501_tft_only`,
+  `max_prediction_length=7`, `evaluation_horizons=[1,7]`, `max_epochs=1`,
+  `seed=20260501`, features all-features via tokens de grupo e artefatos de
+  modelo em `/tmp/phase_a_m7_smoke_models`. O treino concluiu e persistiu uma
+  rodada `status=ok` com `run_id=9f9697b03a8fa3a538096064453a53acade18cf3ac4a19742cc845be32f52dee`,
+  `feature_set_name=BTSFDVRYQ`, 55 features em `bridge_run_features`, 2 linhas
+  em `fact_split_metrics`, 3 linhas em `fact_split_timestamps_ref` e 402 linhas
+  em `fact_oos_predictions`.
+- Q4: o smoke validou o caminho TFT de treino e persistencia para `h=1` e
+  `h=7`. Para `h=7`, `target_timestamp_utc - timestamp_utc = 6` dias em todas
+  as linhas, coerente com a convencao atual de decoder step
+  (`target_timestamp_utc = timestamp_utc + (horizon - 1)`), mas essa semantica
+  ainda deve ser explicitada no pre-registro se o texto usar linguagem "h+7".
+- Q6: o smoke produziu 402 linhas OOS, abaixo do limiar `n_rows >= 1000` para
+  gate rigido. Resultado diagnostico por split/horizonte:
+  `val,h=1`: 99 linhas, `% p10==p90=0%`, `% p10==p50==p90=0%`;
+  `val,h=7`: 99 linhas, `% p10==p90=0%`, `% p10==p50==p90=0%`;
+  `test,h=1`: 102 linhas, `% p10==p90=0%`, `% p10==p50==p90=0%`;
+  `test,h=7`: 102 linhas, `% p10==p90=0%`, `% p10==p50==p90=0%`.
+- Q6: os quantis brutos do smoke apresentaram cruzamento em 402/402 linhas
+  (`p10 > p50` ou `p50 > p90`), mas as colunas pos-guardrail
+  (`quantile_p10_post_guardrail`, `quantile_p50_post_guardrail`,
+  `quantile_p90_post_guardrail`) tiveram 0 violacoes de ordem e 0 linhas com
+  `quantile_p10_post_guardrail == quantile_p90_post_guardrail`. Isso confirma
+  que o guardrail funciona no caminho de persistencia, mas tambem reforca que
+  metricas probabilisticas e graficos devem usar explicitamente os quantis
+  pos-guardrail ou reprovar o run se raw crossing for tratado como bloqueante.
+- Q5: smoke TFT-only com refresh/quality gate executado em 2026-05-01 (cobriu
+  treino, persistencia OOS, refresh sob scope e quality gate; nao cobriu
+  baselines estatisticos nem inferencia rolling). O refresh com
+  `--fail-on-quality --skip-prediction-plots --block-a-scope-sweep-prefixes
+  phase_a_m7_smoke_20260501_tft_only --block-a-splits val,test
+  --block-a-horizons 1,7 --block-a-require-post-guardrail` rodou em ~6,5
+  minutos (18:20:22 -> 18:27:04) e produziu 24 tabelas gold. Quality gate
+  retornou `Exit code 1` com 2 falhas informativas, ambas com diagnostico util:
+  - `oos_quantile_block_a_acceptance` falhou com `crossing_bruto_rate=1.00 >
+    max=0.001` e `negative_interval_width_count=326 > max=0`, mas
+    `crossing_post_guardrail_rate=0.00`. **Falha compativel com hipotese de
+    modelo nao-convergido em smoke de 1 epoch**, mas ainda nao provada como
+    explicacao unica; requer revalidacao com `max_epochs >= 5` para
+    distinguir entre falta de convergencia e fenomeno estrutural (regressao
+    quantilica que nao aprende monotonia mesmo com convergencia). O gate
+    atual aplica raw como contrato primario. Empiricamente urgente: decisao
+    raw vs post-guardrail como contrato primario das metricas precisa entrar
+    no pre-registro como item P0.
+  - `gold_metrics_by_config_n_oos_contract` falhou com `mismatch_with_run_level=13800`.
+    O smoke adicionou apenas 402 linhas, entao a falha e historica/global
+    e nao causada pelo smoke. **Cabe a M5 investigar a causa raiz** (runs
+    pre-ScopeSpec entrando na agregacao, recomputacao parcial, mudanca de
+    regra entre versoes, ou similar). Esse achado e input direto para
+    questao adicional em M5.
+- Q5: o smoke confirma que `main_refresh_analytics_store` aceita os flags de
+  scope (`--block-a-scope-sweep-prefixes`, `--block-a-splits`,
+  `--block-a-horizons`, `--block-a-require-post-guardrail`) e produz output
+  scoped no detail dos checks (`scope_mode=cohort_decision`,
+  `scope_parent_sweep_prefixes=['phase_a_m7_smoke_20260501_tft_only']`). O
+  scope foi aplicado ao Block A; o check `gold_metrics_by_config_n_oos_contract`
+  parece ser global, o que tambem precisa ser verificado em M5.
+- Q5: tempo de refresh sob scope (~6,5 min para o estado atual com 9.874
+  arquivos Parquet) nao bloqueia, mas e baseline a considerar para iteracoes
+  da Fase B (ciclo smoke + refresh + inspecao ~10 min).
+- Q5 continua YELLOW (nao GREEN) porque (a) Q2 baselines persistidos ainda
+  nao foi resolvido e o smoke completo confirmatorio depende disso; (b)
+  decisao raw vs post-guardrail para o gate continua aberta; (c) a falha do
+  `gold_metrics_by_config_n_oos_contract` precisa ser tratada em M5 antes
+  da Fase B.
+- Q6: os exemplos do smoke confirmam que o crossing raw nao e ruido numerico:
+  magnitudes da ordem de `1e-3` a `5e-3` em retorno diario, com `y_true`
+  tipico da ordem de `1e-2`. Exemplos: `test/h=1` com
+  `p10=0.005561, p50=-0.003333, p90=0.001804` (p10 > p90, p10 > p50);
+  `val/h=1` com `p10=-0.000948, p50=-0.005937, p90=0.003714` (p10 > p50).
+  E fenomeno real do modelo nao-convergido (1 epoch), nao bug numerico ou
+  do parser.
 - Validacao executada nesta passagem: testes unitarios direcionados de
   multi-horizonte, guardrail, CLI de horizontes e sweep builder passaram
   (`6 passed`).
+- Validacao executada nesta passagem adicional: smoke TFT-only com dados reais
+  AAPL, `h=1,7`, all-features, `max_epochs=1`, persistindo no silver sob
+  `parent_sweep_id` descartavel + refresh scoped completo com 24 tabelas
+  gold geradas e quality gate executado.
 
 **Acao (se YELLOW/RED):**
 
@@ -554,16 +635,42 @@ auditar pelo dataset/feature registry e registrar a decisao.
   correlacao > 0,95 e redundancia derivada) e congelar a lista no
   pre-registro. Se a Fase B incluir multiplos ativos, preferir automatizar essa
   verificacao como quality gate de dataset antes do pre-registro.
-- Apos M2/M3, executar smoke test multi-horizonte real com
-  `max_prediction_length >= 7`, `evaluation_horizons=[1,7]`, escopo
-  descartavel e `parent_sweep_id` proprio. Reportar `n_rows`,
-  `% p10==p90`, `% p10==p50==p90` e exemplos por horizonte antes de liberar a
-  Fase B.
+- Antes da liberacao da Fase B, repetir o smoke multi-horizonte com volume
+  suficiente (`n_rows >= 1000`) ou justificar formalmente por que o volume menor
+  e apenas diagnostico. Reportar `n_rows`, `% p10==p90`,
+  `% p10==p50==p90`, crossing bruto, crossing pos-guardrail e exemplos por
+  horizonte.
+- Repetir o smoke multi-horizonte com `max_epochs >= 5` para verificar se o
+  crossing raw (`100%` em 1 epoch) diminui com convergencia ou se persiste
+  como fenomeno estrutural. Se persistir alto com convergencia, e sinal de
+  problema de regularizacao, learning rate ou regressao quantilica que precisa
+  ser tratado antes da Fase B.
+- **Item P0 do pre-registro (decisao em aberto, nao antecipar agora):**
+  contrato quantilico primario das metricas e graficos. O smoke evidenciou
+  que raw crossing pode ser 100% mesmo com post-guardrail 0%, mas ainda nao
+  ha evidencia de qual e a causa estrutural (1 epoch vs problema de
+  regressao quantilica). Antes de decidir, executar teste adicional com
+  `max_epochs >= 5` e verificar se raw crossing diminui. So depois desse
+  teste, o pre-registro deve fixar entre as opcoes: (a) raw como gate
+  rigido (exige convergencia forte), (b) post-guardrail como contrato
+  primario com raw como diagnostico (reviewer pode questionar calibracao
+  artificial; mitigado se pre-registrado), (c) hibrido com thresholds
+  distintos para raw e post-guardrail.
+- **Cross-link com M5:** falha de `gold_metrics_by_config_n_oos_contract` com
+  13.800 mismatches no estado historico precisa ser tratada em M5. O smoke
+  evidenciou que o check e global (nao scoped) e expoe inconsistencia
+  pre-existente entre `gold_prediction_metrics_by_config.n_oos` e a soma de
+  `n_samples` do nivel run.
 - Deixar `h=30` fora do smoke inicial por padrao; incluir apenas se o
   pre-registro decidir que o horizonte suplementar possui `N_effective`
   defensavel.
 - Tratar inferencia rolling multi-horizonte como dependencia de M4 e refresh do
   Analytics Store sob escopo Fase B como dependencia de M5.
+
+**Nota operacional:** refresh sob scope custa ~6,5 min no estado atual do
+Analytics Store (9.874 arquivos Parquet). Iteracoes da Fase B (smoke + refresh
++ inspecao) tem ciclo aproximado de 10 min. Nao bloqueia, mas e baseline a
+considerar para planejamento.
 
 ---
 
