@@ -54,9 +54,23 @@ antes da Fase B.
 4. **M7 — smoke test completo.**
    Rodar o teste end-to-end reduzido apenas depois dos riscos centrais de
    quantis e dataset terem sido avaliados.
-5. **M1, M4 e M5 — orquestracao, inferencia e refresh.**
-   Fechar os riscos de pipeline completo, consistencia treino/inferencia,
-   reproducibilidade, guardrails, metricas e escopo estatistico.
+5. **M4 — inferencia.**
+   Validar consistencia treino/inferencia, dropout, guardrail e rastreabilidade
+   do artefato.
+6. **M5 — refresh analytics.**
+   Resolver mismatch `gold_metrics_by_config_n_oos_contract`, filtro
+   `prediction_mode` e contrato raw vs post-guardrail.
+7. **M1 — orquestracao final.**
+   Consolidar riscos de orquestracao com contexto de M4/M5 fechado.
+
+## Implementacao apos auditoria
+
+8. PRs pequenos por contrato: gate de degeneracao (M2), baselines (M7-Q2),
+   `effective_date` (M3) e correcoes M5 quando aplicavel.
+9. Rebuild scoped + revalidacao depois do ultimo PR necessario.
+10. Smoke confirmatorio (`max_epochs >= 5`, `n_rows >= 1000`).
+11. Pre-registro com decisao raw vs post-guardrail fundamentada.
+12. Fase B.
 
 ---
 
@@ -306,16 +320,99 @@ comparacao treino vs inferencia.
 
 | # | Questao | Arquivo:linha | Veredicto |
 |---|---|---|---|
-| Q1 | O modelo e carregado com os mesmos `known_real_cols` e `feature_cols` usados no treino? Ou sao recalculados dinamicamente e podem divergir se a config mudar? | `run_tft_inference_use_case.py`: buscar `known_real_cols` / `feature_cols` no loader | |
-| Q2 | Seed de inferencia: o modelo e colocado em `eval()` mode (desliga dropout)? Ou ha dropout ativo produzindo quantis diferentes entre runs? | `pytorch_forecasting_tft_inference_engine.py`: buscar `.eval()` / `torch.no_grad()` | |
-| Q3 | O guardrail monotonico (`quantile_p*_post_guardrail`) e aplicado na inferencia da mesma forma que no treino? Ou so e aplicado no refresh do analytics store? | `run_tft_inference_use_case.py`: buscar `guardrail` / `post_guardrail` | |
-| Q4 | A seed de inferencia e registrada em `fact_config` ou `dim_run` para reproducibilidade? | `run_tft_inference_use_case.py` / `parquet_analytics_run_repository.py` | |
+| Q1 | O modelo e carregado com os mesmos `known_real_cols` e `feature_cols` usados no treino? Ou sao recalculados dinamicamente e podem divergir se a config mudar? | `run_tft_inference_use_case.py`: buscar `known_real_cols` / `feature_cols` no loader | GREEN |
+| Q2 | Seed de inferencia: o modelo e colocado em `eval()` mode (desliga dropout)? Ou ha dropout ativo produzindo quantis diferentes entre runs? | `pytorch_forecasting_tft_inference_engine.py`: buscar `.eval()` / `torch.no_grad()` | GREEN |
+| Q3 | O guardrail monotonico (`quantile_p*_post_guardrail`) e aplicado na inferencia da mesma forma que no treino? Ou so e aplicado no refresh do analytics store? | `run_tft_inference_use_case.py`: buscar `guardrail` / `post_guardrail` | GREEN |
+| Q4 | A seed de inferencia e registrada em `fact_config` ou `dim_run` para reproducibilidade? | `run_tft_inference_use_case.py` / `parquet_analytics_run_repository.py` | YELLOW |
 
-**Veredicto geral:** ___
+**Veredicto geral:** RED
+
+RED qualificado: bloqueia o uso de inferencia rolling multi-horizonte e
+exemplos locais `h=7`/`h=30` na Fase C, mas nao bloqueia sozinho a Fase B
+confirmatoria enquanto H1/H2 usarem `fact_oos_predictions`, que ja e
+multi-horizonte no caminho de treino/OOS.
 
 **Achados:**
 
+- Q1: a inferencia nao recalcula `feature_cols` por config dinamica. O loader
+  le `features.json` e retorna `feature_cols` do artefato treinado; o use case
+  valida que todas essas features existem no `dataset_tft` antes de chamar o
+  engine. Features extras no dataset apenas geram log informativo, nao entram
+  no modelo.
+- Q1: `known_real_cols` nao aparece como lista explicita no loader, mas a
+  reconstrucao do dataset de inferencia usa `dataset_parameters.pkl` via
+  `TimeSeriesDataSet.from_parameters(..., predict=False,
+  stop_randomization=True)`. Esse e o caminho correto para preservar a
+  especificacao do `TimeSeriesDataSet` do treino, incluindo known/unknown
+  reals, normalizadores internos e estrutura temporal.
+- Q1: o use case tambem aplica `scalers.pkl` carregado do artefato e protege
+  colunas estruturais (`time_idx`, `timestamp`, `asset_id`,
+  `target_return`) contra transformacao. Isso alinha inferencia com a
+  normalizacao split-aware do treino.
+- Q2: o loader chama `model.eval()` apos carregar o checkpoint. O engine usa
+  dataloader com `train=False`, `stop_randomization=True` e, no fallback de
+  forward manual, chama `model.eval()` e `torch.no_grad()`. Nao ha evidencia de
+  dropout ativo no caminho de inferencia.
+- Q3: a persistencia de inferencia aplica o mesmo
+  `QuantileGuardrailService.enforce_monotonic_triplet` usado no treino e grava
+  `quantile_p10_post_guardrail`, `quantile_p50_post_guardrail`,
+  `quantile_p90_post_guardrail` e `quantile_guardrail_applied` em
+  `fact_inference_predictions`. Teste unitario confirma a presenca dessas
+  colunas na persistencia.
+- Q4: nao ha `seed` em `fact_inference_runs` nem em
+  `fact_inference_predictions`, e inferencia nao cria `dim_run`/`fact_config`.
+  A semente de treino fica indiretamente no `config.json`/`training_config` do
+  artefato e no `model_version`, mas nao e materializada no Analytics Store de
+  inferencia. Como o caminho esta em `eval()` e deve ser deterministico, isso
+  nao e bloqueio imediato; para rastreabilidade da Fase C, a seed/config do
+  modelo deveria ser persistida ou referenciada explicitamente.
+- Achado fora das quatro perguntas, mas critico para o direcionamento atual:
+  `PytorchForecastingTFTInferenceEngine.infer(...)` recebe
+  `max_prediction_length`, mas registra sempre `horizon=1` e usa apenas o
+  primeiro decoder step (`arr[:, 0]` / `decoder_time_idx[:, 0]`). Portanto, a
+  inferencia rolling atual nao entrega `h=7`/`h=30`, mesmo quando o modelo foi
+  treinado com `max_prediction_length >= 7`. Isso conflita com o contrato P2
+  de multiplos horizontes e deve ser corrigido antes de usar inferencia rolling
+  como evidencia operacional ou exemplo local multi-horizonte no TCC. Esse
+  achado nao invalida `fact_oos_predictions` para metricas confirmatorias.
+- Achado relacionado a explicabilidade local: `fact_feature_contrib_local`
+  usa metodo `local_magnitude_signed_v1`, baseado em magnitude da feature no
+  `inference_slice`, nao VSN/permutation/ablation. Esse metodo pode ser util
+  como placeholder operacional, mas nao deve ser usado como evidencia
+  academica principal de contribuicao na Fase C. Conforme
+  `docs/04_evaluation/EXPLAINABILITY.md`, a evidencia primaria deve vir de VSN
+  weights agregados, permutation importance por familia e ablation explicativa.
+- Validacao executada nesta passagem:
+  `tests/unit/use_cases/test_run_tft_inference_use_case.py`,
+  `tests/unit/adapters/test_pytorch_forecasting_tft_inference_engine.py`,
+  `tests/unit/adapters/test_local_tft_inference_model_loader.py` e
+  `tests/unit/infrastructure/schemas/test_analytics_store_schema.py`
+  passaram (`50 passed`).
+
 **Acao (se YELLOW/RED):**
+
+- Se a Fase B/C exigir casos ilustrativos via inferencia rolling para
+  `h=7`/`h=30`, implementar persistencia multi-horizonte real no engine de
+  inferencia: uma linha por (`inference_run_id`, `decision_timestamp_utc`,
+  `target_timestamp_utc`, `horizon`) para os horizontes habilitados ou
+  pre-registrados. Caso contrario, registrar como future work e manter a Fase B
+  confirmatoria em `fact_oos_predictions`.
+- Se a persistencia multi-horizonte de inferencia rolling for implementada,
+  adicionar testes unitarios cobrindo `max_prediction_length=7` e validando que
+  o engine persiste `horizon=1` e `horizon=7`, com `target_timestamp_utc`
+  coerente com a semantica decidida no pre-registro.
+- Nao criar coluna nova de rastreabilidade sem necessidade. No minimo,
+  documentar em contrato/ADR que `model_version + model_path + config.json` e a
+  fonte canonica de seed/config para inferencia; se isso for insuficiente para
+  auditoria query-only, materializar `model_run_id`/`training_run_id` ou
+  `training_seed` no Analytics Store de inferencia.
+- Antes da Fase C, marcar `local_magnitude_signed_v1` como diagnostico
+  operacional ilustrativo, nao evidencia academica primaria. A evidencia de
+  contribuicao para o TCC deve vir de: VSN weights agregados (global por
+  horizonte e por regime), permutation importance por familia com bootstrap
+  IC95 e ablation explicativa. Considerar adicionar `evidence_tier`
+  (`primary`/`illustrative`) ou criar tabela separada para evidencia academica
+  primaria.
 
 ---
 
