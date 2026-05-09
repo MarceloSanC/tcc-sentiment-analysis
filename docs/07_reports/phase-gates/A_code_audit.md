@@ -88,16 +88,87 @@ O maior arquivo do projeto (1.442 linhas).
 
 | # | Questao | Arquivo:linha | Veredicto |
 |---|---|---|---|
-| Q1 | `known_real_cols` so contem features genuinamente futuro-conhecidas (calendario)? Nao ha override via config que injete features de preco/retorno? | `train_tft_model_use_case.py:1187` | |
-| Q2 | O scaler interno do pytorch-forecasting (`TimeSeriesDataSet`) e fit apenas em `train_df`? O `from_dataset(training, val_df)` usa os parametros do training sem re-fit? | `pytorch_forecasting_tft_trainer.py:221-236` | |
-| Q3 | A warmup policy remove corretamente os primeiros N dias antes de calcular splits, garantindo que features com `warmup_count > 0` nao produzam NaN no inicio do treino? | `train_tft_model_use_case.py:_apply_warmup_policy_to_split` | |
-| Q4 | Ha algum caminho de codigo onde `test_df` e usado como criterio de HPO (mesmo indiretamente, como via `mean_test_rmse` sendo o objetivo padrao)? | `run_tft_optuna_search_use_case.py:49,176-184` | |
+| Q1 | `known_real_cols` so contem features genuinamente futuro-conhecidas (calendario)? Nao ha override via config que injete features de preco/retorno? | `train_tft_model_use_case.py:1187` | GREEN |
+| Q2 | O scaler interno do pytorch-forecasting (`TimeSeriesDataSet`) e fit apenas em `train_df`? O `from_dataset(training, val_df)` usa os parametros do training sem re-fit? | `pytorch_forecasting_tft_trainer.py:221-236` | GREEN |
+| Q3 | A warmup policy remove corretamente os primeiros N dias antes de calcular splits, garantindo que features com `warmup_count > 0` nao produzam NaN no inicio do treino? | `train_tft_model_use_case.py:_apply_warmup_policy_to_split` | GREEN |
+| Q4 | Ha algum caminho de codigo onde `test_df` e usado como criterio de HPO (mesmo indiretamente, como via `mean_test_rmse` sendo o objetivo padrao)? | `run_tft_optuna_search_use_case.py:49,176-184` | RED |
 
-**Veredicto geral:** ___
+**Veredicto geral:** RED
 
 **Achados:**
 
+- Q1: `known_real_cols` e fixado em
+  `["time_idx", "day_of_week", "month"]` quando essas colunas existem no
+  dataset. Nao ha leitura de `training_config` para sobrescrever
+  `known_real_cols`, nem caminho observado que injete preco, retorno,
+  sentimento, fundamentos ou indicadores tecnicos como future-known. Esse
+  contrato tambem bate com M3-Q3.
+- Q1: `feature_cols` e resolvido por `_resolve_features(...)` a partir dos
+  grupos/colunas explicitamente solicitados, mas sempre e passado ao trainer
+  como `time_varying_unknown_reals`; a lista de known reals permanece separada
+  e hardcoded no use case de treino.
+- Q2: a normalizacao externa de features tecnicas em
+  `_apply_split_feature_normalization(...)` e fitada apenas com `train_df`
+  (`StandardScaler.fit(...)` sobre serie de treino) e depois aplicada em
+  `train_df`, `val_df` e `test_df`. Nao ha fit em `val_df` ou `test_df`.
+- Q2: o scaler interno do `pytorch-forecasting` e fitado no
+  `TimeSeriesDataSet(train_df, ...)`; validacao e teste sao criados via
+  `TimeSeriesDataSet.from_dataset(training, val_df/test_df, predict=False,
+  stop_randomization=True)`. Esse e o caminho correto para reaproveitar os
+  parametros do dataset de treino sem refit em OOS.
+- Q3: a warmup policy roda antes do split temporal: `execute(...)` resolve
+  `feature_cols`, executa `_run_pretrain_quality_gate(...)`, calcula
+  `known_real_cols`, aplica `_apply_warmup_policy_to_split(...)` e so depois
+  chama `_apply_time_split(...)`. Portanto, quando `warmup_policy=drop_leading`,
+  o `train_start` efetivo e ajustado antes de construir `train_df`/`val_df`/
+  `test_df`.
+- Q3: `warmup_policy=strict_fail` aborta quando ha leading null warmup no
+  periodo de treino solicitado; `drop_leading` ajusta `train_start` para a
+  primeira data valida sugerida por `FeatureWarmupInspector` e registra
+  `effective_train_start`, `required_warmup_count`, `warmup_features` e
+  `warmup_applied` no metadata. Testes unitarios cobrem strict fail,
+  drop-leading e revalidacao de amostra minima apos o ajuste.
+- Q4: o caminho padrao de Optuna usa `objective_metric="robust_score"`; quando
+  `robust_score` nao esta disponivel, o fallback usa `mean_val_rmse` e
+  `std_val_rmse`. O default, portanto, nao usa test set como objetivo.
+- Q4: apesar do default seguro, `RunTFTOptunaSearchUseCase` aceita
+  `objective_metric="mean_test_rmse"` e `"joint_val_test_rmse"`; a CLI
+  `main_tft_optuna_sweep.py` tambem expõe essas opcoes em
+  `--objective-metric`. Nesses modos, `_objective_from_summary(...)` usa
+  `mean_test_rmse` diretamente ou mistura `mean_val_rmse` com
+  `mean_test_rmse`. Isso e leakage metodologico para HPO/model selection se
+  usado em qualquer rodada exploratoria que alimente decisao confirmatoria.
+- Q4: `RunTFTModelAnalysisUseCase` tambem ordena rankings por
+  `robust_score`, `mean_val_rmse`, `mean_test_rmse`, `mean_val_mae` e
+  `mean_test_mae`. Isso e aceitavel para relatorio diagnostico, mas o ranking
+  usado para escolha de hiperparametros confirmatorios precisa excluir metricas
+  de test.
+- Validacao executada nesta passagem:
+  - inspecao de codigo com `rg`/`sed` em `train_tft_model_use_case.py`,
+    `pytorch_forecasting_tft_trainer.py`, `run_tft_optuna_search_use_case.py`,
+    `run_tft_model_analysis_use_case.py` e `main_tft_optuna_sweep.py`;
+  - inspecao de testes unitarios de warmup em
+    `tests/unit/use_cases/test_train_tft_model_use_case.py`.
+  - suite dirigida passou:
+    `tests/unit/use_cases/test_train_tft_model_use_case.py`,
+    `tests/unit/adapters/test_pytorch_forecasting_tft_trainer.py`,
+    `tests/unit/domain/services/test_explicit_config_sweep_analysis_service.py`
+    e `tests/unit/domain/services/test_tft_sweep_experiment_builder.py`
+    (`41 passed`).
+
 **Acao (se YELLOW/RED):**
+
+- Antes da Fase B, remover ou bloquear `mean_test_rmse` e
+  `joint_val_test_rmse` como `objective_metric` em Optuna/HPO. O contrato
+  aceitavel para HPO deve permitir apenas objetivo baseado em validacao
+  (`robust_score`/`mean_val_rmse`) ou outro criterio pre-registrado que nao use
+  test set.
+- Atualizar `main_tft_optuna_sweep.py` e `RunTFTOptunaSearchUseCase` para
+  rejeitar objetivos baseados em test set quando `scope_mode`/rodada estiver
+  marcada como exploratoria para suporte a Fase B ou confirmatoria. Alternativa
+  mais simples: remover essas duas opcoes da CLI e da lista suportada.
+- Garantir no pre-registro que qualquer hiperparametro herdado de Round 0 foi
+  escolhido por criterio de validacao/robustez, nao por `mean_test_rmse`.
 
 ---
 
@@ -426,17 +497,168 @@ mistura sweeps na mesma metrica.
 
 | # | Questao | Arquivo:linha | Veredicto |
 |---|---|---|---|
-| Q1 | PICP e calculado sobre `quantile_p10_post_guardrail`/`quantile_p90_post_guardrail` ou sobre `quantile_p10`/`quantile_p90` raw? As duas colunas existem — qual e usada como primaria? | `refresh_analytics_store_use_case.py`: buscar `picp` / `in_interval` | |
-| Q2 | As tabelas gold `gold_prediction_metrics_by_config`, `gold_prediction_calibration` e `gold_prediction_robustness_by_horizon` recebem `parent_sweep_id` no output? Se nao, como filtrar escopo na analise final? | Confirmado: nenhuma das tres tem `parent_sweep_id`. Verificar se ha filtro pre-calculo ou so pos-calculo. | |
-| Q3 | O `ScopeSpec` com `scope_mode=cohort_decision` e passado corretamente em todos os paths de calculo que alimentam decisao estatistica (DM, MCS, win-rate)? Ou so no quality gate? | `refresh_analytics_store_use_case.py`: buscar `scope_spec` / `ScopeSpec` | |
-| Q4 | O check `gold_metrics_by_config_n_oos_contract` falhou com `mismatch_with_run_level=13800` no estado historico atual (smoke M7 evidenciou isso). Quais sao as causas (runs pre-ScopeSpec entrando em agregacao, recomputacao parcial, mudanca de regra entre versoes)? Esse check e global ou pode ser scoped via `ScopeSpec`? E corrigivel via re-refresh ou exige migracao de schema? | `gold_prediction_metrics_by_config.parquet` + `refresh_analytics_store_use_case.py` (busca pelo check de `n_oos_contract`) | |
-| Q5 | Filtro de metricas probabilisticas por `prediction_mode='quantile'` AND `is_quantile_genuine` (proposto em M2): runs `point` ou `quantile` degenerados antes do gate de M2 entrariam silenciosamente em PICP/MPIW/pinball/calibracao globais. O `refresh_analytics_store_use_case.py` filtra por modo? Se nao, runs historicos com `parent_sweep_id=NULL` (91% degenerados) podem ter contaminado metricas globais. | `refresh_analytics_store_use_case.py` + `fact_config.prediction_mode` | |
+| Q1 | PICP e calculado sobre `quantile_p10_post_guardrail`/`quantile_p90_post_guardrail` ou sobre `quantile_p10`/`quantile_p90` raw? As duas colunas existem — qual e usada como primaria? | `refresh_analytics_store_use_case.py`: buscar `picp` / `in_interval` | RED |
+| Q2 | As tabelas gold `gold_prediction_metrics_by_config`, `gold_prediction_calibration` e `gold_prediction_robustness_by_horizon` recebem `parent_sweep_id` no output? Se nao, como filtrar escopo na analise final? | Confirmado: nenhuma das tres tem `parent_sweep_id`. Verificar se ha filtro pre-calculo ou so pos-calculo. | RED |
+| Q3 | O `ScopeSpec` com `scope_mode=cohort_decision` e passado corretamente em todos os paths de calculo que alimentam decisao estatistica (DM, MCS, win-rate)? Ou so no quality gate? | `refresh_analytics_store_use_case.py`: buscar `scope_spec` / `ScopeSpec` | YELLOW |
+| Q4 | O check `gold_metrics_by_config_n_oos_contract` falhou com `mismatch_with_run_level=13800` no estado historico atual (smoke M7 evidenciou isso). Quais sao as causas (runs pre-ScopeSpec entrando em agregacao, recomputacao parcial, mudanca de regra entre versoes)? Esse check e global ou pode ser scoped via `ScopeSpec`? E corrigivel via re-refresh ou exige migracao de schema? | `gold_prediction_metrics_by_config.parquet` + `refresh_analytics_store_use_case.py` (busca pelo check de `n_oos_contract`) | RED |
+| Q5 | Filtro de metricas probabilisticas por `prediction_mode='quantile'` AND `is_quantile_genuine` (proposto em M2): runs `point` ou `quantile` degenerados antes do gate de M2 entrariam silenciosamente em PICP/MPIW/pinball/calibracao globais. O `refresh_analytics_store_use_case.py` filtra por modo? Se nao, runs historicos com `parent_sweep_id=NULL` (91% degenerados) podem ter contaminado metricas globais. | `refresh_analytics_store_use_case.py` + `fact_config.prediction_mode` | RED |
+| Q6 | Invariante estrutural vigente desde `9f0ccec` (2026-03-10): `config_signature` herda escopo porque `compute_config_signature(...)` hashia o `training_config` canonico, e `_build_trainer_config(...)` preserva `parent_sweep_id`, `fold`, `trial_number` e `seed` (via `TFT_TRAINING_DEFAULTS`). Existe teste de regressao garantindo que configs iguais com esses campos diferentes geram assinaturas diferentes? | `analytics_store_schema.py:37`, `train_tft_model_use_case.py:1437`, `model_artifact_schema.py:13-24` | YELLOW |
 
-**Veredicto geral:** ___
+**Veredicto geral:** RED
 
 **Achados:**
 
+- Q1: as metricas oficiais de `gold_prediction_metrics_by_run_split_horizon`
+  usam quantis raw por default. A funcao
+  `_build_gold_prediction_metrics_by_run_split_horizon(...)` recebe
+  `quantile_columns=("quantile_p10", "quantile_p50", "quantile_p90")` e calcula
+  `picp`, `mpiw`, `pred_interval_width`, `pinball_q*` e `mean_pinball` sobre
+  essas colunas. O refresh tambem calcula `gold_quantile_guardrail_audit`
+  comparando raw vs post-guardrail, mas esse audit nao substitui a tabela
+  oficial de metricas.
+- Q1: no estado atual, `gold_quantile_guardrail_audit` contem 4 linhas do smoke
+  M7 e mostra diferencas materiais entre raw e post-guardrail: `picp`,
+  `mpiw`, `mean_pinball`, `coverage_error` e `confidence_calibrated` mudaram em
+  4/4 linhas; `crossing_before_count=402`, `crossing_after_count=0`,
+  `negative_width_before_count=326` e `negative_width_after_count=0`. Portanto,
+  a decisao raw vs post-guardrail nao e cosmetica; muda metricas do paper.
+- Q1: `gold_prediction_metrics_by_run_split_horizon` possui 4 linhas com
+  `mpiw < 0`, todas compatíveis com o smoke M7 raw crossing. Isso confirma que
+  as metricas oficiais atuais ainda podem carregar intervalos raw invalidos.
+- Q2: `gold_prediction_metrics_by_config` (14.189 linhas),
+  `gold_prediction_calibration` (14.189 linhas) e
+  `gold_prediction_robustness_by_horizon` (96.628 linhas) nao possuem
+  `parent_sweep_id` no output. As tres sao derivadas de
+  `gold_prediction_metrics_by_run_split_horizon`, que preserva
+  `parent_sweep_id` (1.354 linhas nao-nulas; 13 coortes), mas
+  perdem o campo ao agregar/selecionar colunas.
+- Q2: como `RefreshAnalyticsStoreUseCase` nao recebe `ScopeSpec`, essas tabelas
+  sao geradas globalmente. Sem `parent_sweep_id`, nao ha filtro pos-calculo
+  inequivoco para separar coorte confirmatoria de historico pre-ScopeSpec ou
+  smoke. Elas podem ser usadas como diagnostico global, mas nao como fonte
+  direta para claims confirmatorios.
+- Q3: os artefatos estatisticos pareados preservam `parent_sweep_id`:
+  `gold_dm_pairwise_results`, `gold_mcs_results`,
+  `gold_win_rate_pairwise_results`, `gold_paired_oos_intersection_by_horizon`,
+  `gold_quality_statistics_report` e `gold_model_decision_final`. Isso reduz o
+  risco para DM/MCS/win-rate, desde que a analise filtre explicitamente a
+  coorte. Porem, o refresh em si nao aplica `ScopeSpec`; o escopo existe no
+  quality gate (`ValidateAnalyticsQualityUseCase`) e nos campos persistidos,
+  nao como contrato de geracao scoped das gold tables.
+- Q3: decisao arquitetural pendente: manter refresh global e exigir
+  `parent_sweep_id` nas tabelas agregadas, ou implementar refresh scoped que
+  gera artefatos gold isolados por coorte. Para a Fase B inicial, o caminho
+  mais barato e suficiente tende a ser refresh global + tabelas agregadas
+  cohort-aware. Refresh scoped completo pode ficar como future work se o custo
+  de cache/invalidation nao se justificar agora.
+- Q4: o check `gold_metrics_by_config_n_oos_contract` passa em modo
+  `global_health`: `non_positive_n_oos=0`, `mismatch_with_run_level=0`.
+  Portanto, o mismatch de 13.800 nao e causado por corrupcao global de
+  `n_oos`, recomputacao parcial ou mudanca de regra entre versoes.
+- Q4: o mesmo check falha em `cohort_decision` para o smoke M7:
+  `mismatch_with_run_level=13800`. Causa-raiz: assimetria de chave de filtro.
+  O quality gate filtra `gold_prediction_metrics_by_run_split_horizon` por
+  `parent_sweep_id`, `split` e `horizon`; em
+  `gold_prediction_metrics_by_config`, como `parent_sweep_id` nao esta no
+  output, o gate filtra apenas por `split`/`horizon`. O escopo `val,test` +
+  `h=1,7` deixa 13.804 grupos em `gold_prediction_metrics_by_config`; apenas
+  4 pertencem ao smoke M7, e os outros 13.800 viram mismatch. A informacao de
+  coorte continua recuperavel por `config_signature` para runs gerados pelo
+  contrato atual com `parent_sweep_id` nao nulo (ver Q6), mas o gate nao faz
+  esse join.
+- Q4: o problema e corrigivel por contrato/codigo, nao por purge ou re-refresh
+  isolado. As opcoes corretas sao tornar o output agregado explicitamente
+  cohort-aware com `parent_sweep_id`, ou manter o schema atual e obrigar
+  consumidores/gates a derivarem as `config_signature` da coorte via
+  `dim_run`/`fact_config`.
+- Q5: `fact_config.prediction_mode` existe e, no estado atual lido, todos os
+  6.900 registros estao como `quantile`. O refresh nao filtra por
+  `prediction_mode` nem por `is_quantile_genuine` antes de calcular PICP/MPIW/
+  pinball/calibracao. Tambem nao ha coluna `is_quantile_genuine` persistida no
+  contrato atual.
+- Q5: isso significa que runs historicos configurados como `quantile`, mas com
+  outputs degenerados, entram nas metricas probabilisticas globais se nao forem
+  removidos por escopo. O M6 ja mostrou que `parent_sweep_id=NULL` concentra
+  91,25% de linhas raw degeneradas; logo, metricas probabilisticas globais
+  pre-ScopeSpec nao devem ser usadas como evidencia.
+- Q6: a invariante estrutural foi confirmada no codigo para o contrato atual e
+  tem data de inicio conhecida. `compute_config_signature(...)` remove apenas
+  chaves temporais explicitas (`created_at`, `started_at`, `ended_at`,
+  `timestamp`) e hashia o JSON canonico restante. Desde `9f0ccec`
+  (2026-03-10), `_build_trainer_config(...)` preserva `parent_sweep_id`,
+  `fold`, `trial_number` e `seed` (via `TFT_TRAINING_DEFAULTS`). Portanto, em
+  runs gerados por esse caminho com `parent_sweep_id` nao nulo, dois sweeps com
+  `parent_sweep_id` distinto geram `config_signature` distinto mesmo se os
+  hiperparametros forem iguais.
+- Q6: escopo da invariante: vale plenamente para Round `0_2_3_*` e para a
+  Fase B futura, assumindo `parent_sweep_id` populado. Nao deve ser usada para
+  reinterpretar o historico pre-ScopeSpec com `parent_sweep_id=NULL`: esse
+  bloco atravessa a mudanca de `9f0ccec` e segue tratado como diagnostico
+  global, nao evidencia confirmatoria.
+- Q6: essa invariante explica o overlap zero observado em M6 quando o grao
+  inclui `config_signature` em runs pos-contrato com coorte populada. Risco
+  residual: mudancas futuras em `_build_trainer_config` ou
+  `compute_config_signature` podem quebrar essa propriedade sem aviso. Falta
+  teste de regressao explicito.
+- Validacao executada nesta passagem:
+  - inspecao de codigo com `rg`/`sed` em `refresh_analytics_store_use_case.py`
+    e `validate_analytics_quality_use_case.py`;
+  - leitura read-only de Parquets em `data/analytics/gold` e `data/analytics/silver`;
+  - execucao read-only de `ValidateAnalyticsQualityUseCase` em `global_health`
+    e em `cohort_decision` para o prefixo
+    `phase_a_m7_smoke_20260501_tft_only`.
+
 **Acao (se YELLOW/RED):**
+
+- Antes da Fase B, decidir no pre-registro e implementar no refresh qual e o
+  contrato primario das metricas probabilisticas: raw, post-guardrail ou ambos
+  com colunas separadas e nomenclatura explicita. Enquanto essa decisao nao
+  estiver fechada, PICP/MPIW/pinball das gold tables agregadas nao devem
+  sustentar claims confirmatorios.
+- Tornar as tabelas gold usadas para ranking/calibracao/robustez
+  cohort-aware. Opcao preferida para a Fase B: incluir `parent_sweep_id` no
+  output de `gold_prediction_metrics_by_config`,
+  `gold_prediction_calibration`, `gold_prediction_robustness_by_horizon` e
+  tabelas agregadas correlatas. Para runs pos-`9f0ccec` com
+  `parent_sweep_id` populado, isso nao deve mudar a cardinalidade de runs
+  gerados pelo caminho oficial, porque `config_signature` ja inclui
+  `parent_sweep_id`; o beneficio e permitir filtro direto e reduzir bugs de
+  consumidores. Historico `parent_sweep_id=NULL` continua fora de claims
+  confirmatorios.
+- Alternativa aceitavel: manter o schema agregado atual e fazer todos os
+  consumidores/gates recuperarem escopo por `config_signature` derivada de
+  `dim_run`/`fact_config`. Essa opcao evita mudanca de schema, mas e mais
+  fragil porque cada consumidor precisa lembrar do join.
+- Ajustar `gold_metrics_by_config_n_oos_contract` para operar sobre a mesma
+  semantica de escopo dos dois lados da comparacao. Se as gold agregadas
+  receberem `parent_sweep_id`, filtrar diretamente por esse campo nos dois
+  lados. Se o schema atual for mantido, filtrar
+  `gold_prediction_metrics_by_config` por
+  `config_signature.isin(scoped_config_signatures)`, onde
+  `scoped_config_signatures` vem de `dim_run`/`fact_config` filtradas pela
+  coorte.
+- Implementar ou materializar `is_quantile_genuine` apos o gate de degeneracao
+  de M2, e fazer o refresh filtrar metricas probabilisticas por
+  `prediction_mode='quantile'` e `is_quantile_genuine=True` quando calcular
+  PICP/MPIW/pinball/calibracao. Runs `point` ou `quantile` degenerados devem
+  continuar podendo alimentar metricas pontuais, mas nao metricas
+  probabilisticas.
+- Alternativa aceitavel para a primeira implementacao: calcular
+  `is_quantile_genuine` dinamicamente no refresh a partir de
+  `prediction_mode='quantile'` e `quantile_p10 != quantile_p90`, em vez de
+  persistir uma nova coluna imediatamente. Persistir o campo so deve ser
+  necessario se multiplos consumidores precisarem da mesma regra materializada.
+- Adicionar teste de regressao para a invariante estrutural de
+  `config_signature`: duas configs iguais devem gerar assinaturas diferentes
+  quando `parent_sweep_id`, `fold`, `trial_number` ou `seed` forem diferentes.
+  Esse teste deve documentar que a invariante foi introduzida em `9f0ccec`
+  (2026-03-10) e protege a semantica de escopo usada pelas tabelas gold
+  agregadas.
+- Para os resultados ja persistidos, tratar `gold_prediction_metrics_by_config`,
+  `gold_prediction_calibration` e `gold_prediction_robustness_by_horizon` como
+  diagnostico historico/global, nao como evidencia confirmatoria. Para qualquer
+  analise antes do fix, usar `gold_prediction_metrics_by_run_split_horizon`
+  filtrado por coorte ou recalcular metricas em artefato scoped.
 
 ---
 
@@ -490,6 +712,15 @@ escopos diferentes, as conclusoes ficam invalidas mesmo com codigo correto.
   grao remove `config_signature`: 24 grupos em
   `asset + feature_set_name + split + horizon` combinam mais de um grupo de
   `parent_sweep_id`.
+- Q3/Q6: nota sobre o overlap zero entre coortes quando `config_signature` esta
+  no grao: para runs pos-`9f0ccec` (2026-03-10) com `parent_sweep_id` nao nulo,
+  isso e consequencia do contrato atual, nao coincidencia empirica.
+  `config_signature` hashia o `training_config` canonico, e o caminho oficial
+  preserva `parent_sweep_id`, `fold`, `trial_number` e `seed` na configuracao
+  hashada (ver M5-Q6). Runs com `parent_sweep_id` distintos devem ter
+  `config_signature` distintos enquanto essa invariante for preservada. O
+  bloco pre-ScopeSpec com `parent_sweep_id=NULL` continua sendo tratado como
+  diagnostico global.
 - Q4: os runs pre-ScopeSpec sao filtraveis por `parent_sweep_id=NULL` e
   concentram a degeneracao raw atual: 7.034.257/7.709.077 linhas
   (`91,25%`) com `quantile_p10 == quantile_p90`, todas no grupo
@@ -536,18 +767,19 @@ escopos diferentes, as conclusoes ficam invalidas mesmo com codigo correto.
 
 **Acao (se YELLOW/RED):**
 
-- Antes da Fase B, nao usar tabelas gold agregadas sem `parent_sweep_id` para
-  claims confirmatorios. Usar tabelas run-level/cohort-aware ou regenerar gold
-  com `ScopeSpec`/filtro de coorte explicito.
+- Antes da Fase B, nao usar tabelas gold agregadas sem mecanismo cohort-aware
+  para claims confirmatorios. Usar tabelas run-level, tabelas agregadas com
+  `parent_sweep_id` direto, ou filtro por `config_signature` derivada da coorte
+  em `dim_run`/`fact_config`.
 - Tratar `parent_sweep_id=NULL` como historico global-health/pre-ScopeSpec:
   pode apoiar diagnostico historico, mas nao claims probabilisticos ou decisao
   estatistica confirmatoria.
 - Para qualquer analise de Fase B, declarar no pre-registro o filtro de coorte
   reproduzivel (`parent_sweep_id`/escopo da rodada) e validar que os outputs
   usados preservam esse escopo ate a tabela final.
-- Avaliar em M5 se as tabelas gold agregadas devem receber `parent_sweep_id`
-  no output ou se devem ser substituidas por artefatos scoped-only para a
-  rodada confirmatoria.
+- M5 concluiu que as tabelas gold agregadas precisam se tornar cohort-aware
+  antes de claims confirmatorios, seja por `parent_sweep_id` direto no output,
+  seja por join/filtro obrigatorio via `config_signature` da coorte.
 - Validar em M7, com smoke test multi-horizonte real, que `h=7` produz
   `target_timestamp_utc` coerente com o alvo previsto e que os quantis nao
   degeneram. O store historico atual nao e suficiente para fechar esse ponto.
@@ -793,7 +1025,7 @@ Criterio para abrir a Fase B:
 
 | Modulo | Questao principal | Status |
 |---|---|---|
-| `run_tft_optuna_search_use_case.py` | Desabilitar ou remover `mean_test_rmse` como `objective_metric` para evitar uso acidental de test no HPO. | pendente |
+| `run_tft_optuna_search_use_case.py` | Desabilitar ou remover `mean_test_rmse` como `objective_metric` para evitar uso acidental de test no HPO. | promovido para M1-Q4 (P0) |
 | `feature_registry.py` | Todas as features all-features tem `anti_leakage_tag` e `warmup_count` corretos? Alguma feature nova sem tag? | pendente |
 | `validate_analytics_quality_use_case.py` | O Block A (degeneracao) esta configurado como bloqueante (nao apenas warning) para MPIW=0 > 5%? | pendente |
 | `sklearn_indicator_normalizer.py` | Confirmar que nunca e instanciado com dados alem do treino. | pendente |
