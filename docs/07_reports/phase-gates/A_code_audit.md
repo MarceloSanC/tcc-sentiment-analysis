@@ -67,10 +67,86 @@ antes da Fase B.
 
 8. PRs pequenos por contrato: gate de degeneracao (M2), baselines (M7-Q2),
    `effective_date` (M3) e correcoes M5 quando aplicavel.
-9. Rebuild scoped + revalidacao depois do ultimo PR necessario.
-10. Smoke confirmatorio (`max_epochs >= 5`, `n_rows >= 1000`).
-11. Pre-registro com decisao raw vs post-guardrail fundamentada.
-12. Fase B.
+9. Decisao Caminho B vs Caminho C (ver "Leis do Analytics Store" abaixo) antes
+   do reset de silver/gold para Phase B. Afeta sequenciamento dos PRs.
+10. Reset silver/gold (arquivar `data/analytics/{silver,gold}` em
+    `data/analytics_archive_pre_phase_b/`) + revalidacao depois do ultimo PR
+    necessario.
+11. Smoke confirmatorio (`max_epochs >= 5`, `n_rows >= 1000`).
+12. Pre-registro com contrato quantilico primario fundamentado (raw e
+    post-guardrail persistidos em paralelo como colunas separadas; pre-registro
+    fixa qual eh primario para o claim).
+13. Fase B.
+
+---
+
+## Leis do Analytics Store
+
+Tres principios duraveis que regem silver/gold neste projeto. Foram a intencao
+original mas se perderam durante o desenvolvimento. Substituem o paradigma
+"refresh global" pelo paradigma "write-time per-run/per-sweep com overwrite
+explicito".
+
+**Lei 1 — Write-time, nao refresh global.**
+- Apos cada run terminar, gravar silver daquele run.
+- Se eh sweep que precisa de multiplos runs para fechar fatos (DM, MCS,
+  win-rate, metricas pareadas), esperar o sweep fechar e entao gravar
+  silver/gold daquele sweep.
+- Gold eh calculado a partir de silver no mesmo momento da escrita (per-run
+  para tabelas per-run; per-sweep no fechamento do sweep para tabelas
+  pareadas).
+- `refresh_analytics_store_use_case.py` eh divida arquitetural: nasceu como
+  conveniencia para fixar bugs e virou caminho padrao. No estado-alvo,
+  refresh some ou vira utilitario de rebuild scoped (emergencia, nao
+  operacao normal).
+
+**Lei 2 — Overwrite so com mesma config + flag explicita. Para TODAS as
+tabelas e fluxos, sem excecao.**
+- Re-rodar com mesmo `run_id`/mesma config sem flag = erro, nao append
+  silencioso, nao overwrite silencioso.
+- Hoje, [parquet_analytics_run_repository.py](src/adapters/parquet_analytics_run_repository.py)
+  viola isso: so `upsert_dim_run`
+  ([linhas 124-138](src/adapters/parquet_analytics_run_repository.py#L124-L138))
+  honra a lei. Os 12 outros `append_*` usam `_append_to_parquet`
+  ([linhas 94-100](src/adapters/parquet_analytics_run_repository.py#L94-L100))
+  que faz `pd.concat` cego — re-rodar o mesmo `run_id` duplica linhas em
+  silver silenciosamente. Eh pre-condicao para qualquer reset confiavel:
+  arquivar silver e re-treinar com mesmo `run_id` duplica a menos que isso
+  mude.
+
+**Lei 3 — Toda linha rastreavel por PK/FK em todas as tabelas.**
+- Silver tem isso em geral (`run_id`, `parent_sweep_id`, `config_signature`).
+- Gold tem gaps: ~10 tabelas nao carregam `parent_sweep_id` no output. A
+  invariante `9f0ccec` (M5-Q6) mascara isso para 5 delas (`config_signature`
+  no groupby ja segrega coortes pos-`9f0ccec`), mas continua sendo
+  rastreabilidade implicita, nao explicita.
+- Inferencia tem gap explicito: `fact_inference_predictions`
+  ([run_tft_inference_use_case.py:120](src/use_cases/run_tft_inference_use_case.py#L120))
+  e `fact_feature_contrib_local`
+  ([run_tft_inference_use_case.py:206](src/use_cases/run_tft_inference_use_case.py#L206))
+  gravam `"run_id": None` literal — nao ha FK para o run de treino que
+  produziu o modelo, so `model_version` (string). Qualquer rastreabilidade
+  baseada so em `run_id` falha nessas tabelas.
+
+### Caminho-alvo: write-time + refresh deprecado (Caminho C)
+
+- **Caminho A** (so adicionar `parent_sweep_id` no output das gold
+  agregadas, sem mexer em groupby nem em refresh): estado intermediario
+  fragil; resolve so metade do problema (5 das 10 tabelas que omitem
+  `parent_sweep_id`). Nao recomendado isolado.
+- **Caminho B** (refresh scoped + cohort-aware gold em groupby + output):
+  aceitavel como passo intermediario se Caminho C estiver fora de escopo.
+  Reduz risco de mistura cross-coorte mas mantem dois paradigmas
+  conflitantes (write-time silver vs read-time gold). Estimativa:
+  600-1.000 LOC, 4-6 dias-pessoa.
+- **Caminho C** (write-time + refresh deprecado): estado-alvo. Custo maior
+  (~2.000-3.000 LOC, 8-15 dias-pessoa, considerando atomicidade
+  multi-tabela, idempotencia per-run/per-sweep e orquestracao do hook
+  de sweep close — ver detalhes em "Itens dependentes do Caminho
+  escolhido" no M5) mas alinha com as tres leis. Preserva refresh
+  apenas como utilitario de rebuild scoped para emergencia.
+
+Decisao B vs C deve ser tomada antes do reset; afeta sequenciamento dos PRs.
 
 ---
 
@@ -446,6 +522,20 @@ multi-horizonte no caminho de treino/OOS.
   de multiplos horizontes e deve ser corrigido antes de usar inferencia rolling
   como evidencia operacional ou exemplo local multi-horizonte no TCC. Esse
   achado nao invalida `fact_oos_predictions` para metricas confirmatorias.
+- Achado adicional, violacao explicita da Lei 3 (rastreabilidade PK/FK):
+  `fact_inference_runs`
+  ([run_tft_inference_use_case.py:76](src/use_cases/run_tft_inference_use_case.py#L76)),
+  `fact_inference_predictions`
+  ([run_tft_inference_use_case.py:120](src/use_cases/run_tft_inference_use_case.py#L120))
+  e `fact_feature_contrib_local`
+  ([run_tft_inference_use_case.py:206](src/use_cases/run_tft_inference_use_case.py#L206))
+  gravam `"run_id": None` literal nas tres tabelas de silver de inferencia.
+  Nao ha FK para o run de treino que produziu o modelo, so
+  `model_version` (string). Consumidores que usam `run_id` como chave de
+  join silver inference -> dim_run/silver treino retornam vazio;
+  rastreabilidade so funciona via `model_version`, que nao eh PK em
+  `dim_run`. Bloqueio para qualquer agregado gold que tente cruzar
+  inferencia com treino por chave referencial.
 - Achado relacionado a explicabilidade local: `fact_feature_contrib_local`
   usa metodo `local_magnitude_signed_v1`, baseado em magnitude da feature no
   `inference_slice`, nao VSN/permutation/ablation. Esse metodo pode ser util
@@ -502,7 +592,9 @@ mistura sweeps na mesma metrica.
 | Q3 | O `ScopeSpec` com `scope_mode=cohort_decision` e passado corretamente em todos os paths de calculo que alimentam decisao estatistica (DM, MCS, win-rate)? Ou so no quality gate? | `refresh_analytics_store_use_case.py`: buscar `scope_spec` / `ScopeSpec` | YELLOW |
 | Q4 | O check `gold_metrics_by_config_n_oos_contract` falhou com `mismatch_with_run_level=13800` no estado historico atual (smoke M7 evidenciou isso). Quais sao as causas (runs pre-ScopeSpec entrando em agregacao, recomputacao parcial, mudanca de regra entre versoes)? Esse check e global ou pode ser scoped via `ScopeSpec`? E corrigivel via re-refresh ou exige migracao de schema? | `gold_prediction_metrics_by_config.parquet` + `refresh_analytics_store_use_case.py` (busca pelo check de `n_oos_contract`) | RED |
 | Q5 | Filtro de metricas probabilisticas por `prediction_mode='quantile'` AND `is_quantile_genuine` (proposto em M2): runs `point` ou `quantile` degenerados antes do gate de M2 entrariam silenciosamente em PICP/MPIW/pinball/calibracao globais. O `refresh_analytics_store_use_case.py` filtra por modo? Se nao, runs historicos com `parent_sweep_id=NULL` (91% degenerados) podem ter contaminado metricas globais. | `refresh_analytics_store_use_case.py` + `fact_config.prediction_mode` | RED |
-| Q6 | Invariante estrutural vigente desde `9f0ccec` (2026-03-10): `config_signature` herda escopo porque `compute_config_signature(...)` hashia o `training_config` canonico, e `_build_trainer_config(...)` preserva `parent_sweep_id`, `fold`, `trial_number` e `seed` (via `TFT_TRAINING_DEFAULTS`). Existe teste de regressao garantindo que configs iguais com esses campos diferentes geram assinaturas diferentes? | `analytics_store_schema.py:37`, `train_tft_model_use_case.py:1437`, `model_artifact_schema.py:13-24` | YELLOW |
+| Q6 | Invariante estrutural vigente desde `9f0ccec` (2026-03-10): `config_signature` herda escopo porque `compute_config_signature(...)` hashia o `training_config` canonico, e `_build_trainer_config(...)` preserva `parent_sweep_id`, `fold`, `trial_number` e `seed` (via `TFT_TRAINING_DEFAULTS`). Existe teste de regressao garantindo que configs iguais com esses campos diferentes geram assinaturas diferentes? | `src/infrastructure/schemas/analytics_store_schema.py:37-41`, `src/use_cases/train_tft_model_use_case.py:1435-1442`, `src/infrastructure/schemas/model_artifact_schema.py:13-40` | YELLOW |
+| Q7 | `gold_model_decision_final` (a tabela usada para escolher o modelo vencedor do paper) calcula `rank_rmse`/`rank_mae`/`rank_da` por `groupby(["asset", "horizon"])` SEM `parent_sweep_id`, mesmo com a coluna ja presente no output. Configs de sweeps diferentes ranqueiam na mesma competicao. | `refresh_analytics_store_use_case.py:1564-1566` | RED |
+| Q8 | `_append_to_parquet` ([parquet_analytics_run_repository.py:94-100](src/adapters/parquet_analytics_run_repository.py#L94-L100)) faz `pd.concat` cego em todos os 12 `append_*` (so `upsert_dim_run` filtra por chave). Re-rodar o mesmo `run_id` duplica linhas em silver silenciosamente — viola Lei 2 e bloqueia reset confiavel para Phase B. | `parquet_analytics_run_repository.py:94-100, 144-267` | RED |
 
 **Veredicto geral:** RED
 
@@ -532,6 +624,37 @@ mistura sweeps na mesma metrica.
   `gold_prediction_metrics_by_run_split_horizon`, que preserva
   `parent_sweep_id` (1.354 linhas nao-nulas; 13 coortes), mas
   perdem o campo ao agregar/selecionar colunas.
+- Q2: as 10 tabelas que omitem `parent_sweep_id` no output dividem-se em
+  dois subgrupos com tratamento diferente:
+  - **5 com `config_signature` no groupby** (`gold_ranking_by_config`
+    [linha 142](src/use_cases/refresh_analytics_store_use_case.py#L142),
+    `gold_ic95_by_config_metric` [227](src/use_cases/refresh_analytics_store_use_case.py#L227),
+    `gold_prediction_metrics_by_config` [519](src/use_cases/refresh_analytics_store_use_case.py#L519),
+    `gold_prediction_generalization_gap` [627-630](src/use_cases/refresh_analytics_store_use_case.py#L627-L630),
+    `gold_prediction_robustness_by_horizon` [673](src/use_cases/refresh_analytics_store_use_case.py#L673)):
+    linhas individuais nao misturam coortes por causa da invariante
+    `9f0ccec` (M5-Q6) — runs de sweeps diferentes ja tem
+    `config_signature` distintos, entao o groupby ja segrega coortes
+    em cada agregacao. **Mas ha risco residual**: alguns rankings/sortings
+    pos-agregacao podem competir cross-coorte. Ex.:
+    `gold_ranking_by_config` ranqueia por `groupby(["asset", "feature_set_name"])`
+    em [156-163](src/use_cases/refresh_analytics_store_use_case.py#L156-L163),
+    misturando configs de sweeps diferentes na mesma competicao de rank
+    (mesmo padrao do Q7 em `gold_model_decision_final`). Acao corretiva:
+    adicionar `parent_sweep_id` ao output **e** ao groupby de rankings
+    pos-agregacao quando relevantes (~5-10 LOC cada).
+  - **5 sem `config_signature` no groupby** (`gold_feature_set_impact`
+    [259](src/use_cases/refresh_analytics_store_use_case.py#L259),
+    `gold_prediction_metrics_by_horizon` [556](src/use_cases/refresh_analytics_store_use_case.py#L556),
+    `gold_feature_impact_by_horizon` [760](src/use_cases/refresh_analytics_store_use_case.py#L760),
+    `gold_feature_contrib_local_summary` [1820](src/use_cases/refresh_analytics_store_use_case.py#L1820),
+    `gold_consistency_topk` rank-keys [175](src/use_cases/refresh_analytics_store_use_case.py#L175)):
+    misturam coortes silenciosamente hoje. Acao corretiva: adicionar
+    `parent_sweep_id` ao **groupby** (e ao output como consequencia),
+    nao so ao output. Mudanca de contrato semantico, ~10-15 LOC cada +
+    update de testes.
+  Sem essa distincao, "M5 Acao 2" (adicionar `parent_sweep_id` ao output)
+  parece resolver o problema mas resolve so metade.
 - Q2: como `RefreshAnalyticsStoreUseCase` nao recebe `ScopeSpec`, essas tabelas
   sao geradas globalmente. Sem `parent_sweep_id`, nao ha filtro pos-calculo
   inequivoco para separar coorte confirmatoria de historico pre-ScopeSpec ou
@@ -599,7 +722,29 @@ mistura sweeps na mesma metrica.
   inclui `config_signature` em runs pos-contrato com coorte populada. Risco
   residual: mudancas futuras em `_build_trainer_config` ou
   `compute_config_signature` podem quebrar essa propriedade sem aviso. Falta
-  teste de regressao explicito.
+  teste de regressao explicito — toda a hipotese de "coexistencia por
+  coluna" repousa nessa invariante. Sem teste, qualquer refactor futuro a
+  quebra silenciosamente. **Promovido para gate: Phase B nao deve abrir
+  sem esse teste de regressao no merge.**
+- Q7 (cross-cohort ranking em `gold_model_decision_final`):
+  [linhas 1564-1566](src/use_cases/refresh_analytics_store_use_case.py#L1564-L1566)
+  calculam `out["rank_rmse"] = out.groupby(["asset", "horizon"])['mean_rmse'].rank(...)`,
+  com analogos para `mae` e `da`. O groupby omite `parent_sweep_id` mesmo
+  com a coluna ja merged em [1508-1518](src/use_cases/refresh_analytics_store_use_case.py#L1508-L1518).
+  Severidade: maior que Q2. As 5 tabelas de Q2 contaminam metricas
+  auxiliares; `gold_model_decision_final` eh **a** tabela final de decisao
+  do paper. Configs de sweeps diferentes ranqueiam na mesma competicao,
+  podendo eleger "vencedor" de uma coorte historica sobre o sweep
+  confirmatorio atual. Correcao: adicionar `parent_sweep_id` ao groupby do
+  rank.
+- Q8 (`_append_to_parquet` violando Lei 2): todos os `append_*` exceto
+  `upsert_dim_run` fazem `pd.concat` cego sobre o arquivo da particao
+  ([parquet_analytics_run_repository.py:94-100](src/adapters/parquet_analytics_run_repository.py#L94-L100)).
+  Re-rodar o mesmo `run_id` duplica linhas (`fact_oos_predictions`,
+  `fact_split_metrics`, `fact_config`, etc.) sem aviso. Cenario operacional
+  afetado: arquivar silver pre-Phase B, re-treinar para Phase B, depois
+  consolidar — qualquer colisao de `run_id` cria ambiguidade. Pre-condicao
+  para reset confiavel.
 - Validacao executada nesta passagem:
   - inspecao de codigo com `rg`/`sed` em `refresh_analytics_store_use_case.py`
     e `validate_analytics_quality_use_case.py`;
@@ -610,25 +755,105 @@ mistura sweeps na mesma metrica.
 
 **Acao (se YELLOW/RED):**
 
-- Antes da Fase B, decidir no pre-registro e implementar no refresh qual e o
-  contrato primario das metricas probabilisticas: raw, post-guardrail ou ambos
-  com colunas separadas e nomenclatura explicita. Enquanto essa decisao nao
-  estiver fechada, PICP/MPIW/pinball das gold tables agregadas nao devem
-  sustentar claims confirmatorios.
-- Tornar as tabelas gold usadas para ranking/calibracao/robustez
-  cohort-aware. Opcao preferida para a Fase B: incluir `parent_sweep_id` no
-  output de `gold_prediction_metrics_by_config`,
-  `gold_prediction_calibration`, `gold_prediction_robustness_by_horizon` e
-  tabelas agregadas correlatas. Para runs pos-`9f0ccec` com
-  `parent_sweep_id` populado, isso nao deve mudar a cardinalidade de runs
-  gerados pelo caminho oficial, porque `config_signature` ja inclui
-  `parent_sweep_id`; o beneficio e permitir filtro direto e reduzir bugs de
-  consumidores. Historico `parent_sweep_id=NULL` continua fora de claims
-  confirmatorios.
-- Alternativa aceitavel: manter o schema agregado atual e fazer todos os
-  consumidores/gates recuperarem escopo por `config_signature` derivada de
-  `dim_run`/`fact_config`. Essa opcao evita mudanca de schema, mas e mais
-  fragil porque cada consumidor precisa lembrar do join.
+A Acao foi reorganizada em torno das tres Leis do Analytics Store (ver secao
+homonima acima). Caminho-alvo eh Caminho C (write-time + refresh deprecado);
+Caminho B eh aceitavel como passo intermediario.
+
+**Itens P0 (bloqueantes, independentes do Caminho B vs C escolhido):**
+
+- **Q1 — raw vs post-guardrail (DECISAO DOCUMENTAL, IMPLEMENTACAO PENDENTE):**
+  persistir ambos em paralelo como colunas separadas (`picp_raw`,
+  `picp_post_guardrail`, `mpiw_raw`, `mpiw_post_guardrail`, etc.).
+  Pre-registro fixa qual eh primario para o claim. Custo baixo, elimina
+  ambiguidade. Codigo atual ainda usa `(quantile_p10, quantile_p50,
+  quantile_p90)` raw por default em
+  [refresh_analytics_store_use_case.py:313](src/use_cases/refresh_analytics_store_use_case.py#L313)
+  e [424-429](src/use_cases/refresh_analytics_store_use_case.py#L424-L429);
+  a implementacao precisa duplicar o calculo para `_post_guardrail` e
+  emitir ambos no output. Aplica-se a
+  `gold_prediction_metrics_by_run_split_horizon`,
+  `gold_prediction_metrics_by_config`, `gold_prediction_calibration`,
+  `gold_prediction_robustness_by_horizon` e qualquer downstream.
+- **Q7 — cross-cohort ranking em `gold_model_decision_final`:** adicionar
+  `parent_sweep_id` ao groupby em [1564-1566](src/use_cases/refresh_analytics_store_use_case.py#L1564-L1566).
+  Mudanca de ~5 LOC. Severidade RED — eh a tabela de decisao final do paper.
+- **Q8 — `_append_to_parquet` violando Lei 2:** trocar `_append_to_parquet`
+  por `_write_with_overwrite_policy` (ou equivalente) que aceita flag
+  explicita; sem flag, colisao de chave eh erro, nao append silencioso.
+  Aplicar nos 12 `append_*`. Pre-condicao para reset confiavel. **Nota
+  sobre severidade:** Q8 nao eh bug deterministico em toda execucao —
+  manifesta-se quando ha colisao de `run_id` (re-run, re-treino, restore
+  de backup). Em store limpo + run_ids unicos, comportamento atual nao
+  diverge. Marcado RED porque eh pre-condicao operacional para reset
+  seguro de Phase B; em outro contexto seria YELLOW.
+- **Q6 — teste de regressao da invariante `9f0ccec`:** adicionar teste que
+  garante que `compute_config_signature` produz hashes diferentes quando
+  `parent_sweep_id`, `fold`, `trial_number` ou `seed` mudam. Sem isso,
+  qualquer refactor futuro em `_build_trainer_config` quebra a hipotese de
+  coexistencia por coluna sem aviso.
+- **Q5 — filtro de metricas probabilisticas:** filtrar PICP/MPIW/pinball/
+  calibracao por `prediction_mode='quantile'` AND `is_quantile_genuine`
+  (calculado dinamicamente: `quantile_p10 != quantile_p90`). Runs `point` ou
+  quantis degenerados nao devem alimentar metricas probabilisticas, mas
+  podem alimentar metricas pontuais.
+
+**Itens dependentes do Caminho escolhido:**
+
+- **Caminho B (refresh scoped + cohort-aware gold):**
+  - Q2 subgrupo "5 com `config_signature`": adicionar `parent_sweep_id` ao
+    output (cosmetico, protegido pela invariante `9f0ccec`).
+  - Q2 subgrupo "5 sem `config_signature`": adicionar `parent_sweep_id` ao
+    **groupby** (mudanca de contrato).
+  - Adicionar `scope_spec: ScopeSpec | None = None` em
+    `RefreshAnalyticsStoreUseCase.__init__` e propagar pelo `_load_partitioned_table`.
+  - CLI `main_refresh_analytics_store` aceita flags de scope.
+  - Estimativa total: 600-1.000 LOC, 4-6 dias-pessoa.
+- **Caminho C (write-time + refresh deprecado):**
+  - Extrair `_build_gold_*` per-run para um builder chamado em
+    `train_tft_model_use_case` apos as escritas de silver
+    ([train_tft_model_use_case.py:876-1029](src/use_cases/train_tft_model_use_case.py#L876)).
+  - Criar hook de "sweep fechado" (nao existe hoje em
+    `main_tft_param_sweep` nem em `RunTFTOptunaSearchUseCase`) e mover
+    gold pareado/agregado para la.
+  - `gold_feature_contrib_local_summary` migra para hook de fim de
+    inferencia (caminho separado).
+  - Refresh use case eh deprecado; preservado apenas como utilitario de
+    rebuild scoped para emergencia (bug em calculo de gold descoberto
+    pos-fato).
+  - **Riscos arquiteturais nao resolvidos no codigo atual** (que inflam
+    custo do Caminho C):
+    - **Atomicidade multi-tabela:** gold de uma coorte envolve ~12
+      tabelas Parquet escritas em sequencia. Falha no meio deixa gold
+      parcial sem rollback. Hoje, refresh global mascarou isso porque
+      sempre rescrevia tudo. Write-time precisa de mecanismo
+      transacional (escrita em diretorio temporario + rename atomico,
+      ou tabela de manifesto, ou idempotencia por chave + retry).
+    - **Idempotencia per-run/per-sweep:** se um run grava gold per-run
+      e depois eh re-executado (com mesmo `run_id` e flag de
+      overwrite), o gold associado precisa ser sobrescrito, nao
+      duplicado. Idem para sweep close em re-run de sweep. Isso
+      multiplica complexidade da Lei 2.
+    - **Orquestracao do hook de sweep close:** decisao de quem dispara
+      (orquestrador externo? CLI explicita? watcher de filesystem?
+      barrier-counter de runs esperados?) nao trivial. Implementacao
+      naive (CLI explicita disparada manualmente) eh fragil; correta
+      eh barrier-counter persistido em silver.
+    - **Migracao de consumidores:** plot generators
+      ([generate_prediction_analysis_plots_use_case](src/use_cases/generate_prediction_analysis_plots_use_case.py)),
+      validate quality, e qualquer consumer downstream que espera
+      gold globalmente consistente precisa ser revisitado.
+  - Estimativa total revisada considerando esses riscos:
+    **2.000-3.000 LOC, 8-15 dias-pessoa.** A estimativa anterior
+    (1.500-2.000 LOC, 5-10 dp) subestimava custo de
+    atomicidade/idempotencia/orquestracao.
+
+**Caveat sobre baselines (cross-link com M7-Q2):** `_pairwise_group_cols`
+([refresh_analytics_store_use_case.py:67-71](src/use_cases/refresh_analytics_store_use_case.py#L67-L71))
+inclui `parent_sweep_id`. DM, MCS, win-rate so comparam configs **dentro do
+mesmo `parent_sweep_id`**. Implicacao para Phase B: baselines estatisticos
+devem ser gravados no mesmo `parent_sweep_id` dos candidatos TFT (zero
+codigo) ou a chave de pareamento deve mudar para `cohort_id` logico (mudanca
+de contrato). Decisao registrada em pre-registro.
 - Ajustar `gold_metrics_by_config_n_oos_contract` para operar sobre a mesma
   semantica de escopo dos dois lados da comparacao. Se as gold agregadas
   receberem `parent_sweep_id`, filtrar diretamente por esse campo nos dois
@@ -1010,11 +1235,33 @@ Criterio para abrir a Fase B:
 - [ ] M1 GREEN ou YELLOW com acao concluida
 - [ ] M2 GREEN ou YELLOW com acao concluida
 - [ ] M3 GREEN ou YELLOW com acao concluida
-- [ ] M4 GREEN ou YELLOW com acao concluida
+- [ ] M4 GREEN ou YELLOW com acao concluida (incluindo decisao sobre
+      `run_id=None` em silver de inferencia)
 - [ ] M5 GREEN ou YELLOW com acao concluida
 - [ ] M6 GREEN ou YELLOW com acao concluida
 - [ ] M7 GREEN ou YELLOW com acao concluida
 - [ ] Nenhum modulo com veredicto RED em aberto
+
+**Itens P0 transversais (independentes de modulo, decorrentes das tres Leis):**
+
+- [ ] Caminho B vs Caminho C decidido e registrado (afeta sequenciamento de
+      PRs em "Implementacao apos auditoria")
+- [ ] Q8 resolvido: `_append_to_parquet` substituido por
+      `_write_with_overwrite_policy` (ou equivalente) com flag explicita.
+      Pre-condicao para reset confiavel
+- [ ] Q7 resolvido: `gold_model_decision_final` ranqueia por
+      `groupby(["asset", "parent_sweep_id", "horizon"])`
+- [ ] Q6 resolvido: teste de regressao da invariante `9f0ccec` em
+      `compute_config_signature` mergeado
+- [ ] Q1 implementado: raw e post-guardrail persistidos em paralelo como
+      colunas separadas; pre-registro fixa qual eh primario
+- [ ] Lei 3 aplicada: `run_id=None` removido de `fact_inference_predictions`
+      e `fact_feature_contrib_local`, ou substituido por FK explicita para
+      `dim_run`/`fact_model_artifacts`
+
+**Nota sob Caminho C:** se Caminho C for escolhido, M5 deixa de existir como
+modulo (refresh deprecado) e os itens dele migram para validacao do
+write-time builder. Os itens P0 transversais acima continuam validos.
 
 **Data de abertura da Fase B:** ___
 **Responsavel:** Marcelo
