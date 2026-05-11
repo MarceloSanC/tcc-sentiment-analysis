@@ -8,8 +8,14 @@ from typing import Any
 
 import pandas as pd
 
-from src.infrastructure.schemas.analytics_store_schema import validate_table_payload
-from src.interfaces.analytics_run_repository import AnalyticsRunRepository
+from src.infrastructure.schemas.analytics_store_schema import (
+    ANALYTICS_TABLE_SCHEMAS,
+    validate_table_payload,
+)
+from src.interfaces.analytics_run_repository import (
+    AnalyticsRunRepository,
+    DuplicateKeyError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -91,12 +97,45 @@ class ParquetAnalyticsRunRepository(AnalyticsRunRepository):
         return self.output_dir / "fact_feature_contrib_local" / f"asset={asset}" / f"model_version={model_version}" / f"year={year}" / "fact_feature_contrib_local.parquet"
 
     @staticmethod
-    def _append_to_parquet(path: Path, incoming: pd.DataFrame) -> None:
-        if path.exists():
-            current = pd.read_parquet(path)
-            merged = pd.concat([current, incoming], ignore_index=True)
-        else:
-            merged = incoming
+    def _pk_tuples(df: pd.DataFrame, pk_cols: tuple[str, ...]) -> set[tuple[Any, ...]]:
+        return set(df.loc[:, list(pk_cols)].itertuples(index=False, name=None))
+
+    def _write_with_overwrite_policy(
+        self,
+        *,
+        table_name: str,
+        path: Path,
+        incoming: pd.DataFrame,
+        overwrite: bool = False,
+    ) -> None:
+        schema = ANALYTICS_TABLE_SCHEMAS[table_name]
+        pk_cols = schema.logical_pk
+
+        if not path.exists():
+            incoming.to_parquet(path, index=False)
+            return
+
+        current = pd.read_parquet(path)
+        current_keys = self._pk_tuples(current, pk_cols)
+        incoming_keys = self._pk_tuples(incoming, pk_cols)
+        collisions = current_keys.intersection(incoming_keys)
+
+        if collisions and not overwrite:
+            sample = sorted(collisions, key=str)[:5]
+            raise DuplicateKeyError(
+                f"Duplicate logical PK collision in {table_name}: "
+                f"pk_columns={pk_cols} collisions={sample} path={path}"
+            )
+
+        if collisions:
+            current_pk = pd.MultiIndex.from_frame(current.loc[:, list(pk_cols)])
+            collision_index = pd.MultiIndex.from_tuples(
+                list(collisions),
+                names=list(pk_cols),
+            )
+            current = current.loc[~current_pk.isin(collision_index)]
+
+        merged = pd.concat([current, incoming], ignore_index=True)
         merged.to_parquet(path, index=False)
 
     def _append_rows_partitioned(

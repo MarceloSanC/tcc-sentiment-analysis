@@ -4,6 +4,10 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 
+class DuplicateKeyError(ValueError):
+    """Raised when an append collides with an existing logical primary key."""
+
+
 class AnalyticsRunRepository(ABC):
     @abstractmethod
     def upsert_dim_run(self, row: dict[str, Any]) -> None:
