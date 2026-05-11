@@ -140,8 +140,10 @@ class ParquetAnalyticsRunRepository(AnalyticsRunRepository):
 
     def _append_rows_partitioned(
         self,
+        table_name: str,
         rows: list[dict[str, Any]],
         path_resolver: Any,
+        overwrite: bool = False,
     ) -> None:
         """
         Append rows in batch per partition file path to avoid row-by-row
@@ -158,7 +160,12 @@ class ParquetAnalyticsRunRepository(AnalyticsRunRepository):
         for path, bucket_rows in buckets.items():
             path.parent.mkdir(parents=True, exist_ok=True)
             incoming = pd.DataFrame(bucket_rows)
-            self._append_to_parquet(path, incoming)
+            self._write_with_overwrite_policy(
+                table_name=table_name,
+                path=path,
+                incoming=incoming,
+                overwrite=overwrite,
+            )
 
     def upsert_dim_run(self, row: dict[str, Any]) -> None:
         validate_table_payload("dim_run", [row])
@@ -180,126 +187,234 @@ class ParquetAnalyticsRunRepository(AnalyticsRunRepository):
             extra={"path": str(path.resolve()), "run_id": row.get("run_id")},
         )
 
-    def append_fact_run_snapshot(self, row: dict[str, Any]) -> None:
+    def append_fact_run_snapshot(
+        self,
+        row: dict[str, Any],
+        overwrite: bool = False,
+    ) -> None:
         validate_table_payload("fact_run_snapshot", [row])
         path = self._fact_run_snapshot_path(row)
         path.parent.mkdir(parents=True, exist_ok=True)
         incoming = pd.DataFrame([row])
-        self._append_to_parquet(path, incoming)
+        self._write_with_overwrite_policy(
+            table_name="fact_run_snapshot",
+            path=path,
+            incoming=incoming,
+            overwrite=overwrite,
+        )
         logger.info(
             "analytics fact_run_snapshot appended",
             extra={"path": str(path.resolve()), "run_id": row.get("run_id")},
         )
 
-    def append_fact_config(self, row: dict[str, Any]) -> None:
+    def append_fact_config(
+        self,
+        row: dict[str, Any],
+        overwrite: bool = False,
+    ) -> None:
         validate_table_payload("fact_config", [row])
         path = self._fact_config_path(row)
         path.parent.mkdir(parents=True, exist_ok=True)
         incoming = pd.DataFrame([row])
-        self._append_to_parquet(path, incoming)
+        self._write_with_overwrite_policy(
+            table_name="fact_config",
+            path=path,
+            incoming=incoming,
+            overwrite=overwrite,
+        )
         logger.info(
             "analytics fact_config appended",
             extra={"path": str(path.resolve()), "run_id": row.get("run_id")},
         )
 
-    def append_fact_split_metrics(self, rows: list[dict[str, Any]]) -> None:
+    def append_fact_split_metrics(
+        self,
+        rows: list[dict[str, Any]],
+        overwrite: bool = False,
+    ) -> None:
         validate_table_payload("fact_split_metrics", rows)
         if not rows:
             return
-        self._append_rows_partitioned(rows, self._fact_split_metrics_path)
+        self._append_rows_partitioned(
+            "fact_split_metrics",
+            rows,
+            self._fact_split_metrics_path,
+            overwrite=overwrite,
+        )
         logger.info(
             "analytics fact_split_metrics appended",
             extra={"run_id": rows[0].get("run_id"), "rows": len(rows)},
         )
 
-    def append_fact_split_timestamps_ref(self, rows: list[dict[str, Any]]) -> None:
+    def append_fact_split_timestamps_ref(
+        self,
+        rows: list[dict[str, Any]],
+        overwrite: bool = False,
+    ) -> None:
         validate_table_payload("fact_split_timestamps_ref", rows)
         if not rows:
             return
-        self._append_rows_partitioned(rows, self._fact_split_timestamps_ref_path)
+        self._append_rows_partitioned(
+            "fact_split_timestamps_ref",
+            rows,
+            self._fact_split_timestamps_ref_path,
+            overwrite=overwrite,
+        )
         logger.info(
             "analytics fact_split_timestamps_ref appended",
             extra={"run_id": rows[0].get("run_id"), "rows": len(rows)},
         )
 
-    def append_fact_epoch_metrics(self, rows: list[dict[str, Any]]) -> None:
+    def append_fact_epoch_metrics(
+        self,
+        rows: list[dict[str, Any]],
+        overwrite: bool = False,
+    ) -> None:
         validate_table_payload("fact_epoch_metrics", rows)
         if not rows:
             return
-        self._append_rows_partitioned(rows, self._fact_epoch_metrics_path)
+        self._append_rows_partitioned(
+            "fact_epoch_metrics",
+            rows,
+            self._fact_epoch_metrics_path,
+            overwrite=overwrite,
+        )
         logger.info(
             "analytics fact_epoch_metrics appended",
             extra={"run_id": rows[0].get("run_id"), "rows": len(rows)},
         )
 
-    def append_fact_oos_predictions(self, rows: list[dict[str, Any]]) -> None:
+    def append_fact_oos_predictions(
+        self,
+        rows: list[dict[str, Any]],
+        overwrite: bool = False,
+    ) -> None:
         validate_table_payload("fact_oos_predictions", rows)
         if not rows:
             return
-        self._append_rows_partitioned(rows, self._fact_oos_predictions_path)
+        self._append_rows_partitioned(
+            "fact_oos_predictions",
+            rows,
+            self._fact_oos_predictions_path,
+            overwrite=overwrite,
+        )
         logger.info(
             "analytics fact_oos_predictions appended",
             extra={"run_id": rows[0].get("run_id"), "rows": len(rows)},
         )
 
-    def append_fact_model_artifacts(self, row: dict[str, Any]) -> None:
+    def append_fact_model_artifacts(
+        self,
+        row: dict[str, Any],
+        overwrite: bool = False,
+    ) -> None:
         validate_table_payload("fact_model_artifacts", [row])
         path = self._fact_model_artifacts_path(row)
         path.parent.mkdir(parents=True, exist_ok=True)
         incoming = pd.DataFrame([row])
-        self._append_to_parquet(path, incoming)
+        self._write_with_overwrite_policy(
+            table_name="fact_model_artifacts",
+            path=path,
+            incoming=incoming,
+            overwrite=overwrite,
+        )
         logger.info(
             "analytics fact_model_artifacts appended",
             extra={"path": str(path.resolve()), "run_id": row.get("run_id")},
         )
 
-    def append_bridge_run_features(self, rows: list[dict[str, Any]]) -> None:
+    def append_bridge_run_features(
+        self,
+        rows: list[dict[str, Any]],
+        overwrite: bool = False,
+    ) -> None:
         validate_table_payload("bridge_run_features", rows)
         if not rows:
             return
-        self._append_rows_partitioned(rows, self._bridge_run_features_path)
+        self._append_rows_partitioned(
+            "bridge_run_features",
+            rows,
+            self._bridge_run_features_path,
+            overwrite=overwrite,
+        )
         logger.info(
             "analytics bridge_run_features appended",
             extra={"run_id": rows[0].get("run_id"), "rows": len(rows)},
         )
 
-    def append_fact_inference_runs(self, row: dict[str, Any]) -> None:
+    def append_fact_inference_runs(
+        self,
+        row: dict[str, Any],
+        overwrite: bool = False,
+    ) -> None:
         validate_table_payload("fact_inference_runs", [row])
         path = self._fact_inference_runs_path(row)
         path.parent.mkdir(parents=True, exist_ok=True)
         incoming = pd.DataFrame([row])
-        self._append_to_parquet(path, incoming)
+        self._write_with_overwrite_policy(
+            table_name="fact_inference_runs",
+            path=path,
+            incoming=incoming,
+            overwrite=overwrite,
+        )
         logger.info(
             "analytics fact_inference_runs appended",
             extra={"path": str(path.resolve()), "inference_run_id": row.get("inference_run_id")},
         )
 
-    def append_fact_inference_predictions(self, rows: list[dict[str, Any]]) -> None:
+    def append_fact_inference_predictions(
+        self,
+        rows: list[dict[str, Any]],
+        overwrite: bool = False,
+    ) -> None:
         validate_table_payload("fact_inference_predictions", rows)
         if not rows:
             return
-        self._append_rows_partitioned(rows, self._fact_inference_predictions_path)
+        self._append_rows_partitioned(
+            "fact_inference_predictions",
+            rows,
+            self._fact_inference_predictions_path,
+            overwrite=overwrite,
+        )
         logger.info(
             "analytics fact_inference_predictions appended",
             extra={"inference_run_id": rows[0].get("inference_run_id"), "rows": len(rows)},
         )
 
-    def append_fact_feature_contrib_local(self, rows: list[dict[str, Any]]) -> None:
+    def append_fact_feature_contrib_local(
+        self,
+        rows: list[dict[str, Any]],
+        overwrite: bool = False,
+    ) -> None:
         validate_table_payload("fact_feature_contrib_local", rows)
         if not rows:
             return
-        self._append_rows_partitioned(rows, self._fact_feature_contrib_local_path)
+        self._append_rows_partitioned(
+            "fact_feature_contrib_local",
+            rows,
+            self._fact_feature_contrib_local_path,
+            overwrite=overwrite,
+        )
         logger.info(
             "analytics fact_feature_contrib_local appended",
             extra={"inference_run_id": rows[0].get("inference_run_id"), "rows": len(rows)},
         )
 
-    def append_fact_failures(self, row: dict[str, Any]) -> None:
+    def append_fact_failures(
+        self,
+        row: dict[str, Any],
+        overwrite: bool = False,
+    ) -> None:
         validate_table_payload("fact_failures", [row])
         path = self._fact_failures_path(row)
         path.parent.mkdir(parents=True, exist_ok=True)
         incoming = pd.DataFrame([row])
-        self._append_to_parquet(path, incoming)
+        self._write_with_overwrite_policy(
+            table_name="fact_failures",
+            path=path,
+            incoming=incoming,
+            overwrite=overwrite,
+        )
         logger.info(
             "analytics fact_failures appended",
             extra={"path": str(path.resolve()), "run_id": row.get("run_id")},
