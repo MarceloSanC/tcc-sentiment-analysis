@@ -1,11 +1,12 @@
 ---
 title: Phase B Implementation Checklist (Pre-Experiment Engineering)
-scope: Passo a passo tecnico de implementacao das alteracoes de codigo exigidas pelo gate de Phase A (docs/07_reports/phase-gates/A_code_audit.md). Cada Stage = 1 PR; cada task dentro do Stage = 1 commit. Caminho B obrigatorio; Caminho C opcional. Para definicoes canonicas, ver 01_architecture/ANALYTICS_STORE_ARCHITECTURE.md e o proprio A_code_audit.md.
+scope: Passo a passo tecnico de implementacao das alteracoes de codigo exigidas pelo gate de Phase A (docs/07_reports/phase-gates/A_code_audit.md). Cada Stage = 1 PR; cada task dentro do Stage = 1 commit. Caminho C eh estado-alvo; Caminho B eh intermediario aceitavel. Para definicoes canonicas, ver 01_architecture/ANALYTICS_STORE_ARCHITECTURE.md e o proprio A_code_audit.md.
 update_when:
   - status (checkbox) de uma task for atualizado
   - novo achado da auditoria for promovido para implementacao
   - decisao Caminho B vs C mudar
   - Stage for fechado (PR mergeado) ou reaberto
+  - convencao de branch/commit/PR do governance doc mudar
 canonical_for: [phase_b_implementation_checklist, phase_b_pre_experiment_engineering, audit_to_code_traceability]
 ---
 
@@ -31,12 +32,32 @@ isoladamente.
 
 ## Decisao Caminho B vs C
 
-- [ ] Decisao Caminho B vs Caminho C registrada antes de iniciar Stage 4.
+Caminho C eh o **estado-alvo arquitetural** (alinhamento total com as tres
+Leis do Analytics Store: write-time, overwrite explicito, rastreabilidade
+PK/FK). Caminho B eh um **passo intermediario aceitavel** quando o custo
+de C nao se justifica no curto prazo. A decisao operacional abaixo registra
+qual caminho sera entregue ate a abertura da Phase B.
+
+- [ ] Decisao operacional Caminho B vs Caminho C registrada antes de
+      iniciar Stage 15. Stages 1-14 sao `(B+C)` (obrigatorios em ambos os
+      caminhos), entao podem comecar sem a decisao fechada.
   - Caminho B (refresh scoped + cohort-aware gold): ~600-1.000 LOC, 4-6 d.p.
-    Stages 1-13 obrigatorios; Stages 14-18 nao se aplicam.
+    Stages 1-14 obrigatorios; Stages 15-19 nao se aplicam.
   - Caminho C (write-time + refresh deprecado): ~2.000-3.000 LOC, 8-15 d.p.
-    Stages 1-13 obrigatorios + Stages 14-18.
+    Stages 1-14 obrigatorios + Stages 15-19.
   - Decisao registrada em: ___________________________________________
+
+## Convencao de branch, commit e PR
+
+Esta checklist segue o fluxo canonico definido em
+[`docs/08_governance/GOVERNANCE_AND_VERSIONING.md`](../08_governance/GOVERNANCE_AND_VERSIONING.md):
+- branch naming `<tipo>/<area>-<objetivo>`
+- commit format `<tipo>(<escopo>): <resumo no imperativo>`
+- PR template com Summary/Changes/Validation/Notes
+- merge readiness checklist (CI verde, testes locais, sem conflitos)
+
+Cada Stage abaixo eh um PR no padrao do governance doc; cada task numerada
+eh um commit no padrao do governance doc.
 
 ---
 
@@ -62,8 +83,9 @@ de Phase B; sem isso, re-rodar o mesmo `run_id` duplica linhas em silver.
       colisao de chave logica, append. Se existe e ha colisao e
       `overwrite=False`, levanta `DuplicateKeyError`. Se `overwrite=True`,
       remove linhas colidentes e regrava.
-      **Aceite:** novo metodo cobre os 13 casos de chave logica documentados
-      em `ANALYTICS_STORE_ARCHITECTURE.md`.
+      **Aceite:** novo metodo cobre os contratos de PK logica definidos em
+      `src/infrastructure/schemas/analytics_store_schema.py` e validados em
+      `tests/unit/infrastructure/schemas/test_analytics_store_schema.py`.
 
 - [ ] **1.3** Migrar os 12 `append_*` para usar
       `_write_with_overwrite_policy`. Manter `upsert_dim_run` como esta
@@ -136,6 +158,15 @@ de coexistencia por coluna sem aviso.
       **Aceite:** doc canonico atualizado e linkado em
       `A_code_audit.md` §M6.
 
+- [ ] **3.4** Proteger archive como rollback: aplicar permissoes
+      read-only em `data/analytics_archive_pre_phase_b/` (`chmod -R a-w`)
+      e documentar em `docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md`
+      que o archive nao deve ser modificado ate o fechamento do
+      pre-registro da Phase B. Em caso de necessidade de rollback de
+      Stages 4+, restaurar do archive eh o caminho oficial.
+      **Aceite:** tentativa de escrita em `data/analytics_archive_pre_phase_b/`
+      falha com permission denied.
+
 ---
 
 ## Stage 4 — Cohort-aware ranking em gold de decisao (B+C)
@@ -203,6 +234,15 @@ omitem `config_signature` e hoje misturam coortes silenciosamente.
       antigo dessas 5 tabelas.
       **Aceite:** suite passa com novos shapes.
 
+- [ ] **5.7** Atualizar consumidores que leem as 5 tabelas alteradas
+      para acomodar o novo shape (coluna `parent_sweep_id` adicional e
+      grao mais fino):
+      - [generate_prediction_analysis_plots_use_case.py](../../src/use_cases/generate_prediction_analysis_plots_use_case.py)
+      - [validate_analytics_quality_use_case.py](../../src/use_cases/validate_analytics_quality_use_case.py)
+      Buscar tambem callsites em `tests/` e demais use cases.
+      **Aceite:** smoke run end-to-end (refresh + quality + plots) nao
+      regride por shape mismatch.
+
 ---
 
 ## Stage 6 — Adicionar parent_sweep_id ao output das 5 tabelas protegidas (B+C)
@@ -242,6 +282,15 @@ no output para rastreabilidade direta (Lei 3).
       historico documentado em M5-Q4).
       **Aceite:** check passa em `cohort_decision` para sweep limpo.
 
+- [ ] **6.7** Atualizar consumidores que leem as 5 tabelas com nova
+      coluna `parent_sweep_id` no output:
+      - [generate_prediction_analysis_plots_use_case.py](../../src/use_cases/generate_prediction_analysis_plots_use_case.py)
+      - [validate_analytics_quality_use_case.py](../../src/use_cases/validate_analytics_quality_use_case.py)
+      Como a coluna eh apenas adicionada (groupby nao mudou), o impacto
+      eh menor que no Stage 5, mas testes/fixtures que assumem schema
+      exato precisam aceitar a nova coluna.
+      **Aceite:** smoke run end-to-end nao regride.
+
 ---
 
 ## Stage 7 — Refresh scoped via ScopeSpec (B+C)
@@ -259,8 +308,13 @@ coorte declarada em vez de ler o silver inteiro.
 
 - [ ] **7.2** Modificar `_load_partitioned_table`
       ([refresh_analytics_store_use_case.py:28-38](../../src/use_cases/refresh_analytics_store_use_case.py#L28-L38))
-      para aplicar `filter_dataframe_by_scope` quando `scope_spec` nao for None.
-      **Aceite:** com scope, leitura de silver retorna apenas linhas da coorte.
+      para suportar scoping semantico por tabela (nao filtro cego global):
+      - construir `scoped_run_ids` a partir de `dim_run` filtrado por scope;
+      - aplicar filtro por `run_id` nas tabelas run-level;
+      - aplicar filtro por `parent_sweep_id`/`split`/`horizon` apenas onde
+        essas colunas existem e sao semanticamente parte do grao.
+      **Aceite:** com scope, leitura retorna coorte correta sem esvaziar
+      tabelas que nao possuem todas as colunas de escopo.
 
 - [ ] **7.3** Adicionar flags de scope em
       [main_refresh_analytics_store.py](../../src/main_refresh_analytics_store.py):
@@ -302,7 +356,7 @@ paralelas; pre-registro fixa qual eh primaria para o claim.
 
 - [ ] **8.3** Atualizar `gold_model_decision_final` para selecionar a
       variante primaria via flag de configuracao (default: `post_guardrail`,
-      sobrepuijavel via `--primary-quantile-contract`).
+      sobrepujavel via `--primary-quantile-contract`).
       **Aceite:** decisao explicita; flag persistida em log do refresh.
 
 - [ ] **8.4** Atualizar plot generators
@@ -357,19 +411,33 @@ de inferencia por FK explicita para o run de treino.
       **Aceite:** schema versao bumped; documentado em
       `ANALYTICS_STORE_ARCHITECTURE.md`.
 
-- [ ] **10.2** Em
-      [run_tft_inference_use_case.py:76](../../src/use_cases/run_tft_inference_use_case.py#L76),
-      [:120](../../src/use_cases/run_tft_inference_use_case.py#L120) e
-      [:206](../../src/use_cases/run_tft_inference_use_case.py#L206):
-      derivar `training_run_id` de `dim_run` ou `fact_model_artifacts`
-      via `model_version` antes da escrita.
-      **Aceite:** `run_id` deixa de ser `None`; aponta para o run que
-      treinou o modelo.
+- [ ] **10.2** Eliminar dependencia ambigua de `model_version` isolado.
+      Tres call sites coordenados:
+      - **Treino — persistir `training_run_id` no metadata do artefato:**
+        em [train_tft_model_use_case.py:1031-1091](../../src/use_cases/train_tft_model_use_case.py#L1031-L1091)
+        (`_persist_fact_model_artifacts`), incluir `training_run_id`
+        (=`run_id` do run corrente) no `metadata.json` escrito em
+        [linha 1052](../../src/use_cases/train_tft_model_use_case.py#L1052)
+        e no row de `fact_model_artifacts` ([:1091](../../src/use_cases/train_tft_model_use_case.py#L1091)).
+        Atualizar `src/infrastructure/schemas/model_artifact_schema.py`
+        para incluir o campo.
+      - **Inferencia — carregar e propagar:** no inference loader
+        (`local_tft_inference_model_loader` ou equivalente), ler
+        `training_run_id` do metadata do artefato. Propagar para os 3
+        callsites em
+        [run_tft_inference_use_case.py:76](../../src/use_cases/run_tft_inference_use_case.py#L76),
+        [:120](../../src/use_cases/run_tft_inference_use_case.py#L120) e
+        [:206](../../src/use_cases/run_tft_inference_use_case.py#L206),
+        substituindo `"run_id": None` por `"run_id": training_run_id`.
+      **Aceite:** `run_id` deixa de ser `None` em `fact_inference_runs`,
+      `fact_inference_predictions` e `fact_feature_contrib_local`; a FK
+      eh deterministica, sem lookup heuristico por `model_version`.
 
 - [ ] **10.3** Migrar dados existentes (se nao foi feito reset no Stage 3,
       ou se inferencia rodou em sweep limpo): script de backfill que
-      preenche `training_run_id` retroativamente via lookup por
-      `model_version`.
+      preenche `training_run_id` retroativamente usando chaves compostas
+      (ex.: `model_path` + `asset` + hash de config) e valida unicidade;
+      se ambiguo, marcar como pendencia manual e nao preencher silenciosamente.
       **Aceite:** zero linhas com `training_run_id` nulo em
       `fact_inference_*`.
 
@@ -408,7 +476,43 @@ declarado em `prediction_mode`.
 
 ---
 
-## Stage 12 — Bloquear test set como objective_metric do HPO (M1) (B+C)
+## Stage 12 — Baselines estatisticos no mesmo grao/scope (M7-Q2) (B+C)
+
+**Objetivo:** fechar RED de readiness operacional: persistir/avaliar baselines
+no mesmo contrato de grao do TFT para comparacao pareada valida.
+
+**Cross-link:** A_code_audit.md §M7-Q2 e caveat de `_pairwise_group_cols`.
+
+### Tasks
+
+- [ ] **12.1** Implementar runner de baselines persistindo em
+      `fact_oos_predictions` no mesmo grao:
+      `(run_id, parent_sweep_id, split, horizon, target_timestamp_utc, y_true, y_pred)`
+      e quantis quando aplicavel. Lista canonica conforme `A_code_audit.md`
+      §M7-Q2:
+      - `zero_return` (ponto + quantis triviais)
+      - random walk
+      - media historica
+      - AR(1)
+      - EWMA-vol (quantis historicos derivados de volatilidade EWMA)
+      - quantis historicos (empirical p10/p50/p90)
+      Subset minimo a entregar deve ser fixado no pre-registro.
+      **Aceite:** baselines aparecem em silver com `status=ok` e entram
+      nas tabelas pareadas DM/MCS/win-rate.
+
+- [ ] **12.2** Garantir que baselines da rodada confirmatoria compartilham
+      o mesmo `parent_sweep_id` dos candidatos TFT.
+      **Aceite:** check automatizado falha quando baseline/candidato caem
+      em sweep ids diferentes.
+
+- [ ] **12.3** Cobrir em testes/fixture de refresh e quality gate:
+      candidato + baseline no mesmo sweep geram comparacoes pareadas
+      nao vazias em `gold_dm_pairwise_results` e `gold_mcs_results`.
+      **Aceite:** suite alvo passa.
+
+---
+
+## Stage 13 — Bloquear test set como objective_metric do HPO (M1) (B+C)
 
 **Objetivo:** remover leakage metodologico em Optuna/HPO.
 
@@ -416,22 +520,22 @@ declarado em `prediction_mode`.
 
 ### Tasks
 
-- [ ] **12.1** Em
+- [ ] **13.1** Em
       [run_tft_optuna_search_use_case.py:49,176-184](../../src/use_cases/run_tft_optuna_search_use_case.py#L49):
       remover `mean_test_rmse` e `joint_val_test_rmse` da lista de
       `objective_metric` aceitos.
       **Aceite:** instanciar com essas opcoes levanta `ValueError`.
 
-- [ ] **12.2** Atualizar CLI [main_tft_optuna_sweep.py](../../src/main_tft_optuna_sweep.py)
+- [ ] **13.2** Atualizar CLI [main_tft_optuna_sweep.py](../../src/main_tft_optuna_sweep.py)
       para nao expor essas opcoes em `--objective-metric`.
       **Aceite:** help da CLI nao lista as opcoes invalidas.
 
-- [ ] **12.3** Atualizar testes que cobrem essas opcoes.
+- [ ] **13.3** Atualizar testes que cobrem essas opcoes.
       **Aceite:** suite passa.
 
 ---
 
-## Stage 13 — Preservar effective_date no dataset (M3) (B+C)
+## Stage 14 — Preservar effective_date no dataset (M3) (B+C)
 
 **Objetivo:** rastreabilidade direta de fundamentals no dataset final
 sem cruzar com fontes processadas.
@@ -440,20 +544,20 @@ sem cruzar com fontes processadas.
 
 ### Tasks
 
-- [ ] **13.1** Renomear `effective_date` para
+- [ ] **14.1** Renomear `effective_date` para
       `fundamentals_effective_date` durante o merge em
       `build_tft_dataset_use_case.py` e remover o `df.drop(...)` em
       [linha 519](../../src/use_cases/build_tft_dataset_use_case.py#L519).
       **Aceite:** dataset_tft_AAPL.parquet contem coluna nao-nula
       apos primeiro report disponivel.
 
-- [ ] **13.2** Documentar a justificativa do fallback "+45 dias" para
+- [ ] **14.2** Documentar a justificativa do fallback "+45 dias" para
       `reported_date` ausente em `02_data/DATA_CONTRACTS.md` ou
       `02_data/DATA_SOURCES.md` (motivacao SEC 10-Q/10-K, cobertura,
       sensibilidade).
       **Aceite:** doc canonico atualizado.
 
-- [ ] **13.3** Rebuild do dataset AAPL bundled com o PR (~segundos).
+- [ ] **14.3** Rebuild do dataset AAPL bundled com o PR (~segundos).
       **Aceite:** `data/processed/dataset_tft_AAPL.parquet` regenerado;
       smoke teste basico passa.
 
@@ -467,7 +571,7 @@ sao future work.
 
 ---
 
-## Stage 14 — Extrair builders per-run para write-time (opt)
+## Stage 15 — Extrair builders per-run para write-time (opt)
 
 **Objetivo:** mover calculo de gold per-run para o fim de cada
 `TrainTFTModelUseCase.execute(...)`, eliminando dependencia de refresh
@@ -477,7 +581,7 @@ para essas tabelas.
 
 ### Tasks
 
-- [ ] **14.1 (opt)** Criar `RunLevelGoldBuilder` em
+- [ ] **15.1 (opt)** Criar `RunLevelGoldBuilder` em
       `src/use_cases/run_level_gold_builder.py` encapsulando os 8 builders
       per-run: `_build_gold_runs_long`, `_build_gold_oos_consolidated`,
       `_build_gold_prediction_metrics_by_run_split_horizon`,
@@ -487,38 +591,38 @@ para essas tabelas.
       **Aceite:** builder eh testavel isoladamente (recebe DataFrames,
       retorna outputs).
 
-- [ ] **14.2 (opt)** Invocar `RunLevelGoldBuilder` em
+- [ ] **15.2 (opt)** Invocar `RunLevelGoldBuilder` em
       [train_tft_model_use_case.py:876-1029](../../src/use_cases/train_tft_model_use_case.py#L876)
       apos as escritas de silver, com flag `--skip-write-time-gold` para
       desligar (debug).
       **Aceite:** smoke test gera gold per-run sem chamar refresh.
 
-- [ ] **14.3 (opt)** Manter as funcoes em
+- [ ] **15.3 (opt)** Manter as funcoes em
       `refresh_analytics_store_use_case.py` por enquanto (rebuild scoped
-      ainda usa). So remove no Stage 18.
+      ainda usa). So remove no Stage 19.
       **Aceite:** sem regressao em refresh existente.
 
 ---
 
-## Stage 15 — Hook de "sweep fechado" (opt)
+## Stage 16 — Hook de "sweep fechado" (opt)
 
 **Objetivo:** ponto de invocacao para gold pareado/agregado (DM, MCS,
 win-rate) que precisa de multiplos runs do mesmo sweep.
 
 ### Tasks
 
-- [ ] **15.1 (opt)** Definir contrato de "sweep fechado": barrier-counter
+- [ ] **16.1 (opt)** Definir contrato de "sweep fechado": barrier-counter
       persistido em silver (ex.: nova tabela `dim_sweep_lifecycle` com
       `parent_sweep_id`, `expected_runs`, `completed_runs`,
       `closed_at_utc`).
       **Aceite:** schema documentado em `ANALYTICS_STORE_ARCHITECTURE.md`.
 
-- [ ] **15.2 (opt)** Implementar `SweepLifecycleService` que: (a) registra
+- [ ] **16.2 (opt)** Implementar `SweepLifecycleService` que: (a) registra
       sweep ao iniciar; (b) incrementa `completed_runs` apos cada run;
       (c) dispara `SweepLevelGoldBuilder` quando `completed_runs == expected_runs`.
       **Aceite:** testes unitarios cobrem race conditions basicas.
 
-- [ ] **15.3 (opt)** Criar `SweepLevelGoldBuilder` encapsulando os ~12
+- [ ] **16.3 (opt)** Criar `SweepLevelGoldBuilder` encapsulando os ~12
       builders pareados/agregados: `_build_gold_dm_pairwise_results`,
       `_build_gold_mcs_results`, `_build_gold_win_rate_pairwise_results`,
       `_build_gold_paired_oos_intersection_by_horizon`,
@@ -529,79 +633,79 @@ win-rate) que precisa de multiplos runs do mesmo sweep.
       `_build_gold_prediction_metrics_by_config` e variantes by_horizon.
       **Aceite:** builder testavel isoladamente.
 
-- [ ] **15.4 (opt)** Wire-up em `main_tft_param_sweep.py` e
+- [ ] **16.4 (opt)** Wire-up em `main_tft_param_sweep.py` e
       `RunTFTOptunaSearchUseCase` para registrar o lifecycle.
       **Aceite:** sweep completo dispara `SweepLevelGoldBuilder`
       automaticamente.
 
 ---
 
-## Stage 16 — Atomicidade multi-tabela (opt)
+## Stage 17 — Atomicidade multi-tabela (opt)
 
 **Objetivo:** garantir que falha no meio da escrita de gold per-run
 ou per-sweep nao deixe estado parcial.
 
 ### Tasks
 
-- [ ] **16.1 (opt)** Implementar padrao "write to temp + atomic rename":
+- [ ] **17.1 (opt)** Implementar padrao "write to temp + atomic rename":
       cada builder escreve em diretorio temporario; ao concluir todas as
       tabelas, faz rename atomico de todos os paths.
       **Aceite:** falha simulada no meio da escrita deixa estado
       consistente (ou tudo antigo, ou tudo novo).
 
-- [ ] **16.2 (opt)** Adicionar tabela `dim_gold_manifest` que registra
+- [ ] **17.2 (opt)** Adicionar tabela `dim_gold_manifest` que registra
       `(parent_sweep_id, gold_set_version, written_at, status)` para
       rastrear escrita parcial vs completa.
       **Aceite:** consumidor pode filtrar por `status='complete'`.
 
-- [ ] **16.3 (opt)** Testes de integracao com falha injetada.
+- [ ] **17.3 (opt)** Testes de integracao com falha injetada.
       **Aceite:** zero estado corrompido apos falha.
 
 ---
 
-## Stage 17 — Migrar consumidores (opt)
+## Stage 18 — Migrar consumidores (opt)
 
 **Objetivo:** atualizar plot generators, validate quality e qualquer
 downstream para esperar gold cohort-aware nativo (sem refresh global).
 
 ### Tasks
 
-- [ ] **17.1 (opt)** Atualizar
+- [ ] **18.1 (opt)** Atualizar
       [generate_prediction_analysis_plots_use_case.py](../../src/use_cases/generate_prediction_analysis_plots_use_case.py)
       para ler gold filtrado por `parent_sweep_id` direto, sem assumir
       conjunto global.
       **Aceite:** plots geram para uma coorte sem necessidade de refresh.
 
-- [ ] **17.2 (opt)** Atualizar
+- [ ] **18.2 (opt)** Atualizar
       [validate_analytics_quality_use_case.py](../../src/use_cases/validate_analytics_quality_use_case.py)
       para considerar a presenca de `dim_gold_manifest` ao avaliar
       completude.
       **Aceite:** quality gate distingue "gold em construcao" de
       "gold completo".
 
-- [ ] **17.3 (opt)** Atualizar `main_refresh_analytics_store.py` para
+- [ ] **18.3 (opt)** Atualizar `main_refresh_analytics_store.py` para
       modo "rebuild scoped" apenas (ja nao eh fluxo padrao).
       **Aceite:** CLI exige `--scope-sweep-prefixes` obrigatorio.
 
 ---
 
-## Stage 18 — Deprecar refresh global (opt)
+## Stage 19 — Deprecar refresh global (opt)
 
 **Objetivo:** marcar `RefreshAnalyticsStoreUseCase` como deprecated e
 documentar caminho oficial.
 
 ### Tasks
 
-- [ ] **18.1 (opt)** Adicionar `DeprecationWarning` em
+- [ ] **19.1 (opt)** Adicionar `DeprecationWarning` em
       `RefreshAnalyticsStoreUseCase.__init__` quando `scope_spec is None`.
       **Aceite:** chamadas globais geram warning claro com link para
       `PHASE_B_IMPLEMENTATION_CHECKLIST.md`.
 
-- [ ] **18.2 (opt)** Atualizar `ANALYTICS_STORE_ARCHITECTURE.md` declarando
+- [ ] **19.2 (opt)** Atualizar `ANALYTICS_STORE_ARCHITECTURE.md` declarando
       write-time como caminho oficial e refresh global como deprecated.
       **Aceite:** doc canonico reflete novo paradigma.
 
-- [ ] **18.3 (opt)** Eventualmente (post-Phase B): remover
+- [ ] **19.3 (opt)** Eventualmente (post-Phase B): remover
       `RefreshAnalyticsStoreUseCase` se rebuild scoped via
       `SweepLevelGoldBuilder.rebuild(parent_sweep_id)` cobrir o use case
       de emergencia.
@@ -615,8 +719,14 @@ documentar caminho oficial.
 ### Tasks
 
 - [ ] **F.1** Smoke confirmatorio com `max_epochs >= 5`, `n_rows >= 1000`.
-      **Aceite:** % p10==p90 < 5% (gate do Stage 11), zero violacoes
-      probabilisticas, gold cohort-aware gerado corretamente.
+      **Aceite:**
+      - `% p10==p90 < 5%` (gate do Stage 11);
+      - zero violacoes probabilisticas;
+      - gold cohort-aware gerado corretamente;
+      - **suite completa de testes do projeto passa** (`pytest tests/`);
+      - **CI verde** em todos os PRs dos Stages anteriores ja mergeados;
+      - refresh + quality gate executados sem erro no smoke (output do
+        `main_refresh_analytics_store` sob scope da coorte do smoke).
 
 - [ ] **F.2** Pre-registro com contrato quantilico primario fundamentado
       (raw vs post-guardrail) e politica de baselines (mesmo
@@ -646,7 +756,8 @@ documentar caminho oficial.
 | 9 | M5-Q5 (filtro probabilistico) | RED |
 | 10 | M4 achado adicional (Lei 3 inferencia) | YELLOW |
 | 11 | M2-Q4 (gate degeneracao) + M2-Q3 (teste H>1) | RED + YELLOW |
-| 12 | M1-Q4 (HPO objective) | RED |
-| 13 | M3-Q4 (effective_date) | YELLOW |
-| 14-18 | Lei 1 (write-time, refresh deprecado) | future direction |
+| 12 | M7-Q2 (baselines estatisticos) | RED |
+| 13 | M1-Q4 (HPO objective) | RED |
+| 14 | M3-Q4 (effective_date) | YELLOW |
+| 15-19 | Lei 1 (write-time, refresh deprecado) | future direction |
 | Final | Gate de saida da Fase A | — |
