@@ -71,13 +71,13 @@ de Phase B; sem isso, re-rodar o mesmo `run_id` duplica linhas em silver.
 
 ### Tasks
 
-- [ ] **1.1** Definir interface `AnalyticsRunRepository` com novo contrato
+- [~] **1.1** Definir interface `AnalyticsRunRepository` com novo contrato
       `overwrite: bool = False` em todos os `append_*`/`upsert_*`.
       Atualizar `src/interfaces/analytics_run_repository.py`.
       **Aceite:** type checker passa; nenhuma chamada existente quebrada
       (default `overwrite=False` preserva semantica atual exceto pelo bug).
 
-- [ ] **1.2** Implementar `_write_with_overwrite_policy` em
+- [~] **1.2** Implementar `_write_with_overwrite_policy` em
       [parquet_analytics_run_repository.py:94-100](../../src/adapters/parquet_analytics_run_repository.py#L94-L100).
       Comportamento: se path nao existe, escreve. Se existe e nao ha
       colisao de chave logica, append. Se existe e ha colisao e
@@ -87,19 +87,19 @@ de Phase B; sem isso, re-rodar o mesmo `run_id` duplica linhas em silver.
       `src/infrastructure/schemas/analytics_store_schema.py` e validados em
       `tests/unit/infrastructure/schemas/test_analytics_store_schema.py`.
 
-- [ ] **1.3** Migrar os 12 `append_*` para usar
+- [~] **1.3** Migrar os 12 `append_*` para usar
       `_write_with_overwrite_policy`. Manter `upsert_dim_run` como esta
       (ja honra a lei).
       **Aceite:** todos os metodos em
       [parquet_analytics_run_repository.py:144-267](../../src/adapters/parquet_analytics_run_repository.py#L144-L267)
       delegam ao novo metodo.
 
-- [ ] **1.4** Testes unitarios cobrindo: (a) primeira escrita; (b) append
+- [~] **1.4** Testes unitarios cobrindo: (a) primeira escrita; (b) append
       sem colisao; (c) colisao sem flag = erro; (d) colisao com flag =
       sobrescrita correta; (e) particoes diferentes nao se afetam.
       **Aceite:** `pytest tests/unit/adapters/test_parquet_analytics_run_repository.py` passa.
 
-- [ ] **1.5** Atualizar call sites em
+- [~] **1.5** Atualizar call sites em
       `src/use_cases/train_tft_model_use_case.py` e
       `src/use_cases/run_tft_inference_use_case.py` para passar
       `overwrite=True` apenas quando o usuario explicitamente solicitar
