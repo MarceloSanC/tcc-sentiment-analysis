@@ -613,6 +613,7 @@ class TrainTFTModelUseCase:
         test_df: pd.DataFrame,
         split_signature: str,
         store_split_timestamps_ref: bool,
+        overwrite: bool = False,
     ) -> None:
         if self.analytics_run_repository is None:
             return
@@ -655,7 +656,7 @@ class TrainTFTModelUseCase:
             "dataset_fingerprint": fingerprint,
             "split_fingerprint": split_signature,
         }
-        self.analytics_run_repository.append_fact_run_snapshot(row)
+        self.analytics_run_repository.append_fact_run_snapshot(row, overwrite=overwrite)
 
         if store_split_timestamps_ref:
             split_rows = []
@@ -672,7 +673,10 @@ class TrainTFTModelUseCase:
                         "timestamps_compact_json": compact_json,
                     }
                 )
-            self.analytics_run_repository.append_fact_split_timestamps_ref(split_rows)
+            self.analytics_run_repository.append_fact_split_timestamps_ref(
+                split_rows,
+                overwrite=overwrite,
+            )
 
     @staticmethod
     def _safe_json_dumps(value: object) -> str:
@@ -745,6 +749,7 @@ class TrainTFTModelUseCase:
         seed: int | None,
         split_frames: dict[str, pd.DataFrame],
         split_predictions: dict[str, dict[str, list[float]]],
+        overwrite: bool = False,
     ) -> None:
         if self.analytics_run_repository is None:
             return
@@ -873,7 +878,10 @@ class TrainTFTModelUseCase:
                 )
 
         if rows:
-            self.analytics_run_repository.append_fact_oos_predictions(rows)
+            self.analytics_run_repository.append_fact_oos_predictions(
+                rows,
+                overwrite=overwrite,
+            )
 
     def _persist_fact_epoch_metrics(
         self,
@@ -883,6 +891,7 @@ class TrainTFTModelUseCase:
         parent_sweep_id: str | None,
         fold_name: str | None,
         history: list[dict[str, float]],
+        overwrite: bool = False,
     ) -> None:
         if self.analytics_run_repository is None:
             return
@@ -918,7 +927,10 @@ class TrainTFTModelUseCase:
             rows.append(row)
 
         if rows:
-            self.analytics_run_repository.append_fact_epoch_metrics(rows)
+            self.analytics_run_repository.append_fact_epoch_metrics(
+                rows,
+                overwrite=overwrite,
+            )
 
     def _persist_fact_split_metrics(
         self,
@@ -928,6 +940,7 @@ class TrainTFTModelUseCase:
         parent_sweep_id: str | None,
         split_metrics: dict[str, dict[str, float]],
         split_counts: dict[str, int],
+        overwrite: bool = False,
     ) -> None:
         if self.analytics_run_repository is None:
             return
@@ -958,13 +971,17 @@ class TrainTFTModelUseCase:
             )
 
         if rows:
-            self.analytics_run_repository.append_fact_split_metrics(rows)
+            self.analytics_run_repository.append_fact_split_metrics(
+                rows,
+                overwrite=overwrite,
+            )
 
     def _persist_bridge_run_features(
         self,
         *,
         run_id: str,
         feature_cols: list[str],
+        overwrite: bool = False,
     ) -> None:
         if self.analytics_run_repository is None:
             return
@@ -979,7 +996,7 @@ class TrainTFTModelUseCase:
             }
             for idx, name in enumerate(feature_cols)
         ]
-        self.analytics_run_repository.append_bridge_run_features(rows)
+        self.analytics_run_repository.append_bridge_run_features(rows, overwrite=overwrite)
 
     def _persist_fact_config(
         self,
@@ -990,6 +1007,7 @@ class TrainTFTModelUseCase:
         trainer_config: dict,
         training_result: TrainingResult,
         dataset_parameters: dict | None,
+        overwrite: bool = False,
     ) -> None:
         if self.analytics_run_repository is None:
             return
@@ -1026,7 +1044,7 @@ class TrainTFTModelUseCase:
             'objective_name': str(trainer_config.get('objective_metric', trainer_config.get('objective_name', 'val_loss'))),
             'objective_direction': str(trainer_config.get('objective_direction', 'minimize')),
         }
-        self.analytics_run_repository.append_fact_config(row)
+        self.analytics_run_repository.append_fact_config(row, overwrite=overwrite)
 
     def _persist_fact_model_artifacts(
         self,
@@ -1036,6 +1054,7 @@ class TrainTFTModelUseCase:
         version: str,
         artifacts_dir: str,
         training_result: TrainingResult,
+        overwrite: bool = False,
     ) -> None:
         if self.analytics_run_repository is None:
             return
@@ -1088,7 +1107,7 @@ class TrainTFTModelUseCase:
             "attention_summary_json": self._safe_json_dumps(attention_summary),
             "logs_ref_json": self._safe_json_dumps(logs_refs),
         }
-        self.analytics_run_repository.append_fact_model_artifacts(row)
+        self.analytics_run_repository.append_fact_model_artifacts(row, overwrite=overwrite)
 
     def _append_fact_failure(
         self,
@@ -1098,6 +1117,7 @@ class TrainTFTModelUseCase:
         trainer_config: dict,
         stage: str,
         exc: Exception,
+        overwrite: bool = False,
     ) -> None:
         if self.analytics_run_repository is None:
             return
@@ -1121,7 +1141,7 @@ class TrainTFTModelUseCase:
             "stdout_truncated": str(trainer_config.get("stdout_truncated", ""))[:2000],
             "stderr_truncated": str(trainer_config.get("stderr_truncated", tb_excerpt))[:2000],
         }
-        self.analytics_run_repository.append_fact_failures(row)
+        self.analytics_run_repository.append_fact_failures(row, overwrite=overwrite)
 
     def execute(
         self,
@@ -1131,6 +1151,7 @@ class TrainTFTModelUseCase:
         training_config: dict | None = None,
         split_config: dict | None = None,
         run_ablation: bool = False,
+        overwrite_on_collision: bool = False,
     ) -> TrainTFTModelResult:
         run_started_at = datetime.now(UTC)
 
@@ -1337,6 +1358,7 @@ class TrainTFTModelUseCase:
                         store_split_timestamps_ref=bool(
                             metadata_config.get("store_split_timestamps_ref", False)
                         ),
+                        overwrite=overwrite_on_collision,
                     )
                     self._persist_fact_epoch_metrics(
                         run_id=persisted_run_id,
@@ -1344,6 +1366,7 @@ class TrainTFTModelUseCase:
                         parent_sweep_id=metadata_config.get("parent_sweep_id"),
                         fold_name=metadata_config.get("fold"),
                         history=training_result.history,
+                        overwrite=overwrite_on_collision,
                     )
                     self._persist_fact_split_metrics(
                         run_id=persisted_run_id,
@@ -1355,6 +1378,7 @@ class TrainTFTModelUseCase:
                             "val": int(len(val_df)),
                             "test": int(len(test_df)),
                         },
+                        overwrite=overwrite_on_collision,
                     )
                     self._persist_fact_oos_predictions(
                         run_id=persisted_run_id,
@@ -1366,6 +1390,7 @@ class TrainTFTModelUseCase:
                         seed=metadata_config.get("seed") if isinstance(metadata_config.get("seed"), int) else None,
                         split_frames={"train": train_df, "val": val_df, "test": test_df},
                         split_predictions=training_result.split_predictions,
+                        overwrite=overwrite_on_collision,
                     )
                     self._persist_fact_config(
                         run_id=persisted_run_id,
@@ -1374,6 +1399,7 @@ class TrainTFTModelUseCase:
                         trainer_config=metadata_config,
                         training_result=training_result,
                         dataset_parameters=dataset_parameters_payload,
+                        overwrite=overwrite_on_collision,
                     )
                     self._persist_fact_model_artifacts(
                         run_id=persisted_run_id,
@@ -1381,10 +1407,12 @@ class TrainTFTModelUseCase:
                         version=version,
                         artifacts_dir=artifacts_dir,
                         training_result=training_result,
+                        overwrite=overwrite_on_collision,
                     )
                     self._persist_bridge_run_features(
                         run_id=persisted_run_id,
                         feature_cols=feature_cols,
+                        overwrite=overwrite_on_collision,
                     )
                 except Exception as persist_exc:
                     if persisted_dim_row is not None:
@@ -1397,6 +1425,7 @@ class TrainTFTModelUseCase:
                         trainer_config=metadata_config,
                         stage="analytics_persist",
                         exc=persist_exc,
+                        overwrite=overwrite_on_collision,
                     )
                     logger.exception("analytics persistence failed after successful training")
 
@@ -1428,6 +1457,7 @@ class TrainTFTModelUseCase:
                     trainer_config=metadata_config,
                     stage="train_execute",
                     exc=exc,
+                    overwrite=overwrite_on_collision,
                 )
             raise
 

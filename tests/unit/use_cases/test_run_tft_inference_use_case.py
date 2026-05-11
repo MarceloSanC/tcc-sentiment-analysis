@@ -142,13 +142,21 @@ class _FakeAnalyticsRunRepo:
         self.inference_prediction_rows: list[dict] = []
         self.feature_contrib_rows: list[dict] = []
 
-    def append_fact_inference_runs(self, row: dict) -> None:
-        self.inference_rows.append(row)
+    def append_fact_inference_runs(self, row: dict, overwrite: bool = False) -> None:
+        self.inference_rows.append({**row, "_overwrite": overwrite})
 
-    def append_fact_inference_predictions(self, rows: list[dict]) -> None:
+    def append_fact_inference_predictions(
+        self,
+        rows: list[dict],
+        overwrite: bool = False,
+    ) -> None:
         self.inference_prediction_rows.extend(rows)
 
-    def append_fact_feature_contrib_local(self, rows: list[dict]) -> None:
+    def append_fact_feature_contrib_local(
+        self,
+        rows: list[dict],
+        overwrite: bool = False,
+    ) -> None:
         self.feature_contrib_rows.extend(rows)
 
 

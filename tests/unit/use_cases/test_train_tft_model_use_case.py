@@ -84,55 +84,59 @@ class FakeAnalyticsRunRepo:
             self.rows = []
         self.rows.append(row)
 
-    def append_fact_run_snapshot(self, row: dict) -> None:
+    def append_fact_run_snapshot(self, row: dict, overwrite: bool = False) -> None:
         if self.snapshots is None:
             self.snapshots = []
-        self.snapshots.append(row)
+        self.snapshots.append({**row, "_overwrite": overwrite})
 
-    def append_fact_split_timestamps_ref(self, rows: list[dict]) -> None:
+    def append_fact_split_timestamps_ref(
+        self,
+        rows: list[dict],
+        overwrite: bool = False,
+    ) -> None:
         if self.split_refs is None:
             self.split_refs = []
         self.split_refs.extend(rows)
 
-    def append_fact_config(self, row: dict) -> None:
+    def append_fact_config(self, row: dict, overwrite: bool = False) -> None:
         if self.fact_configs is None:
             self.fact_configs = []
-        self.fact_configs.append(row)
+        self.fact_configs.append({**row, "_overwrite": overwrite})
 
-    def append_fact_split_metrics(self, rows: list[dict]) -> None:
+    def append_fact_split_metrics(self, rows: list[dict], overwrite: bool = False) -> None:
         if self.split_metric_rows is None:
             self.split_metric_rows = []
         self.split_metric_rows.extend(rows)
 
-    def append_fact_epoch_metrics(self, rows: list[dict]) -> None:
+    def append_fact_epoch_metrics(self, rows: list[dict], overwrite: bool = False) -> None:
         if self.epoch_rows is None:
             self.epoch_rows = []
         self.epoch_rows.extend(rows)
 
-    def append_fact_oos_predictions(self, rows: list[dict]) -> None:
+    def append_fact_oos_predictions(self, rows: list[dict], overwrite: bool = False) -> None:
         if self.oos_rows is None:
             self.oos_rows = []
         self.oos_rows.extend(rows)
 
-    def append_fact_model_artifacts(self, row: dict) -> None:
+    def append_fact_model_artifacts(self, row: dict, overwrite: bool = False) -> None:
         if self.model_artifacts_rows is None:
             self.model_artifacts_rows = []
-        self.model_artifacts_rows.append(row)
+        self.model_artifacts_rows.append({**row, "_overwrite": overwrite})
 
-    def append_bridge_run_features(self, rows: list[dict]) -> None:
+    def append_bridge_run_features(self, rows: list[dict], overwrite: bool = False) -> None:
         if self.bridge_feature_rows is None:
             self.bridge_feature_rows = []
         self.bridge_feature_rows.extend(rows)
 
-    def append_fact_inference_runs(self, row: dict) -> None:
+    def append_fact_inference_runs(self, row: dict, overwrite: bool = False) -> None:
         if self.inference_rows is None:
             self.inference_rows = []
-        self.inference_rows.append(row)
+        self.inference_rows.append({**row, "_overwrite": overwrite})
 
-    def append_fact_failures(self, row: dict) -> None:
+    def append_fact_failures(self, row: dict, overwrite: bool = False) -> None:
         if self.failures is None:
             self.failures = []
-        self.failures.append(row)
+        self.failures.append({**row, "_overwrite": overwrite})
 
 
 
