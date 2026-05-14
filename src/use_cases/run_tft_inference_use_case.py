@@ -376,7 +376,7 @@ class RunTFTInferenceUseCase:
                 "Invalid inference_mode. Expected one of: rolling, last_point. "
                 f"Received: {inference_mode}"
             )
-        silver_overwrite = bool(overwrite_on_collision) or bool(overwrite)
+        silver_overwrite = bool(overwrite_on_collision)
 
         model_bundle = self.model_loader.load(model_path)
         model_asset = self._normalize_asset(model_bundle.asset_id)

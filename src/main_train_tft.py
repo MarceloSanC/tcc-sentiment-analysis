@@ -487,7 +487,7 @@ def main() -> None:
 
     run_ablation = bool(file_config.get("run_ablation", False)) or args.run_ablation
     overwrite_on_collision = bool(file_config.get("overwrite_on_collision", False)) or bool(
-        args.overwrite_on_collision
+        getattr(args, "overwrite_on_collision", False)
     )
 
     result = use_case.execute(

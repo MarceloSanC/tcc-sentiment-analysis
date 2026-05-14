@@ -150,14 +150,14 @@ class _FakeAnalyticsRunRepo:
         rows: list[dict],
         overwrite: bool = False,
     ) -> None:
-        self.inference_prediction_rows.extend(rows)
+        self.inference_prediction_rows.extend({**row, "_overwrite": overwrite} for row in rows)
 
     def append_fact_feature_contrib_local(
         self,
         rows: list[dict],
         overwrite: bool = False,
     ) -> None:
-        self.feature_contrib_rows.extend(rows)
+        self.feature_contrib_rows.extend({**row, "_overwrite": overwrite} for row in rows)
 
 
 class _FakeScaler:
@@ -391,6 +391,62 @@ def test_persists_fact_inference_runs_when_analytics_repo_is_configured() -> Non
     assert len(analytics_repo.feature_contrib_rows) > 0
     assert all(r["method"] == "local_magnitude_signed_v1" for r in analytics_repo.feature_contrib_rows)
     assert all(r["feature_rank"] >= 1 for r in analytics_repo.feature_contrib_rows)
+
+
+def test_overwrite_does_not_enable_analytics_silver_overwrite() -> None:
+    start = datetime(2025, 1, 1, tzinfo=UTC)
+    dataset_repo = _FakeDatasetRepo(_dataset(start))
+    inference_repo = _FakeInferenceRepo()
+    loader = _FakeModelLoader(asset_id="AAPL")
+    engine = _FakeEngine()
+    analytics_repo = _FakeAnalyticsRunRepo()
+    use_case = RunTFTInferenceUseCase(
+        dataset_repository=dataset_repo,
+        inference_repository=inference_repo,
+        model_loader=loader,
+        inference_engine=engine,
+        analytics_run_repository=analytics_repo,
+    )
+
+    use_case.execute(
+        asset_id="AAPL",
+        model_path="/tmp/model",
+        start_date=start + timedelta(days=5),
+        end_date=start + timedelta(days=7),
+        overwrite=True,
+    )
+
+    assert analytics_repo.inference_rows[0]["_overwrite"] is False
+    assert all(row["_overwrite"] is False for row in analytics_repo.inference_prediction_rows)
+    assert all(row["_overwrite"] is False for row in analytics_repo.feature_contrib_rows)
+
+
+def test_overwrite_on_collision_enables_analytics_silver_overwrite() -> None:
+    start = datetime(2025, 1, 1, tzinfo=UTC)
+    dataset_repo = _FakeDatasetRepo(_dataset(start))
+    inference_repo = _FakeInferenceRepo()
+    loader = _FakeModelLoader(asset_id="AAPL")
+    engine = _FakeEngine()
+    analytics_repo = _FakeAnalyticsRunRepo()
+    use_case = RunTFTInferenceUseCase(
+        dataset_repository=dataset_repo,
+        inference_repository=inference_repo,
+        model_loader=loader,
+        inference_engine=engine,
+        analytics_run_repository=analytics_repo,
+    )
+
+    use_case.execute(
+        asset_id="AAPL",
+        model_path="/tmp/model",
+        start_date=start + timedelta(days=5),
+        end_date=start + timedelta(days=7),
+        overwrite_on_collision=True,
+    )
+
+    assert analytics_repo.inference_rows[0]["_overwrite"] is True
+    assert all(row["_overwrite"] is True for row in analytics_repo.inference_prediction_rows)
+    assert all(row["_overwrite"] is True for row in analytics_repo.feature_contrib_rows)
 
 
 def test_apply_scalers_keeps_time_idx_unscaled() -> None:

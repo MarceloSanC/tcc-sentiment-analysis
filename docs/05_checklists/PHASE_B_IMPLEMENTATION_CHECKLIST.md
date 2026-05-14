@@ -71,6 +71,7 @@ de Phase B; sem isso, re-rodar o mesmo `run_id` duplica linhas em silver.
 
 ### Tasks
 
+
 - [~] **1.1** Definir interface `AnalyticsRunRepository` com novo contrato
       `overwrite: bool = False` em todos os `append_*`/`upsert_*`.
       Atualizar `src/interfaces/analytics_run_repository.py`.
@@ -106,6 +107,14 @@ de Phase B; sem isso, re-rodar o mesmo `run_id` duplica linhas em silver.
       (nova flag `--overwrite-on-collision` em `main_train_tft.py`).
       **Aceite:** smoke test re-executavel produz erro claro quando
       `run_id` colide; com flag, sobrescreve corretamente.
+
+### Notas de revisao:
+
+-  `--overwrite` e `--overwrite-on-collision` devem
+permanecer contratos separados. `--overwrite` controla apenas sobrescrita
+operacional da inferencia; overwrite no silver analytics exige
+`--overwrite-on-collision` explicito.
+
 
 ---
 

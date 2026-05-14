@@ -289,8 +289,7 @@ def main() -> None:
     overwrite = bool(file_config.get("overwrite", False)) or bool(args.overwrite)
     overwrite_on_collision = (
         bool(file_config.get("overwrite_on_collision", False))
-        or bool(args.overwrite_on_collision)
-        or overwrite
+        or bool(getattr(args, "overwrite_on_collision", False))
     )
     auto_refresh = bool(file_config.get("auto_refresh", False)) or bool(args.auto_refresh)
     strict_quantiles = bool(file_config.get("strict_quantiles", True)) and not bool(
