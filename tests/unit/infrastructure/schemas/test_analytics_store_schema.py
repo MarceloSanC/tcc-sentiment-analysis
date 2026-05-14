@@ -38,6 +38,56 @@ def test_config_signature_ignores_volatile_keys() -> None:
     assert c1 == c2
 
 
+def _base_training_config() -> dict[str, object]:
+    return {
+        "asset": "AAPL",
+        "feature_set_name": "all_features",
+        "parent_sweep_id": "phase_b_confirmatory_20260514",
+        "fold": "wf_1",
+        "trial_number": 7,
+        "seed": 20260514,
+        "learning_rate": 0.001,
+        "hidden_size": 64,
+    }
+
+
+def test_config_signature_changes_when_parent_sweep_id_changes() -> None:
+    base = _base_training_config()
+    base_signature = compute_config_signature(base)
+
+    with_other_parent = {**base, "parent_sweep_id": "phase_b_confirmatory_other"}
+    with_other_fold = {**base, "fold": "wf_2"}
+    with_other_trial = {**base, "trial_number": 8}
+    with_other_seed = {**base, "seed": 20260515}
+
+    assert compute_config_signature(with_other_parent) != base_signature
+    assert compute_config_signature(with_other_fold) != base_signature
+    assert compute_config_signature(with_other_trial) != base_signature
+    assert compute_config_signature(with_other_seed) != base_signature
+
+
+def test_config_signature_stable_across_volatile_keys() -> None:
+    base = _base_training_config()
+    with_volatile_timestamps = {
+        **base,
+        "created_at": "2026-05-14T10:00:00+00:00",
+        "started_at": "2026-05-14T10:01:00+00:00",
+        "ended_at": "2026-05-14T10:30:00+00:00",
+        "timestamp": "2026-05-14T10:31:00+00:00",
+    }
+    with_other_volatile_timestamps = {
+        **base,
+        "created_at": "2026-05-15T10:00:00+00:00",
+        "started_at": "2026-05-15T10:01:00+00:00",
+        "ended_at": "2026-05-15T10:30:00+00:00",
+        "timestamp": "2026-05-15T10:31:00+00:00",
+    }
+
+    assert compute_config_signature(with_volatile_timestamps) == compute_config_signature(
+        with_other_volatile_timestamps
+    )
+
+
 def test_split_fingerprint_is_order_invariant_inside_each_split() -> None:
     s1 = compute_split_fingerprint(
         train_timestamps=["2024-01-02", "2024-01-01"],
