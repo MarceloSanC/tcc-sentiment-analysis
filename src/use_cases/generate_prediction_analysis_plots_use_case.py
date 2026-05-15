@@ -210,6 +210,7 @@ class GeneratePredictionAnalysisPlotsUseCase:
         labels: set[str] = set()
         run_ids: set[str] = set()
         model_versions: set[str] = set()
+        parent_sweep_ids: set[str] = set()
         if {"feature_set_name", "config_signature"}.issubset(selected.columns):
             for fs, cs in selected[["feature_set_name", "config_signature"]].dropna().itertuples(index=False, name=None):
                 fs_s, cs_s = str(fs), str(cs)
@@ -219,12 +220,18 @@ class GeneratePredictionAnalysisPlotsUseCase:
             run_ids = set(selected["run_id"].dropna().astype(str).tolist())
         if "model_version" in selected.columns:
             model_versions = set(selected["model_version"].dropna().astype(str).tolist())
+        if "parent_sweep_id" in selected.columns:
+            parent_sweep_ids = {
+                str(v)
+                for v in selected["parent_sweep_id"].map(self._normalize_sweep_id).dropna().tolist()
+            }
 
         return {
             "pairs": pairs,
             "labels": labels,
             "run_ids": run_ids,
             "model_versions": model_versions,
+            "parent_sweep_ids": parent_sweep_ids,
         }
 
     @staticmethod
@@ -240,6 +247,13 @@ class GeneratePredictionAnalysisPlotsUseCase:
         labels = scope.get("labels", set())
         run_ids = scope.get("run_ids", set())
         model_versions = scope.get("model_versions", set())
+        parent_sweep_ids = scope.get("parent_sweep_ids", set())
+
+        if "parent_sweep_id" in out.columns and parent_sweep_ids:
+            sweep_ids = out["parent_sweep_id"].map(GeneratePredictionAnalysisPlotsUseCase._normalize_sweep_id)
+            out = out[sweep_ids.isin(parent_sweep_ids)].copy()
+            if out.empty:
+                return out
 
         if {"left_config", "right_config"}.issubset(out.columns) and labels:
             left = out["left_config"].astype(str)

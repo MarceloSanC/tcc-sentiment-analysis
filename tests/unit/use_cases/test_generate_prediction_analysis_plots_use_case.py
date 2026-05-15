@@ -162,6 +162,7 @@ def test_generate_prediction_analysis_plots_use_case_generates_all_outputs(tmp_p
         [
             {
                 "asset": "AAPL",
+                "parent_sweep_id": "sw1",
                 "split": "test",
                 "horizon": 1,
                 "feature_name": "close",
@@ -362,6 +363,7 @@ def test_generate_prediction_analysis_plots_use_case_scope_csv_filters_candidate
         [
             {
                 "asset": "AAPL",
+                "parent_sweep_id": "0_2_2_explicit",
                 "split": "test",
                 "horizon": 1,
                 "feature_name": "close",
@@ -420,6 +422,41 @@ def test_generate_prediction_analysis_plots_use_case_scope_csv_filters_candidate
     assert payload["scope_csv_path"] == str(scope_csv)
     assert payload["scope_selected_labels"] == ["BT|cfg_keep"]
     assert "fig_heatmap_metrics_by_horizon" in result.outputs
+
+
+def test_filter_scope_preserves_parent_sweep_grain_for_stage5_gold_tables() -> None:
+    df = pd.DataFrame(
+        [
+            {
+                "asset": "AAPL",
+                "parent_sweep_id": "sw_keep",
+                "split": "test",
+                "horizon": 1,
+                "feature_name": "close",
+                "mean_delta_rmse": 0.02,
+            },
+            {
+                "asset": "AAPL",
+                "parent_sweep_id": "sw_drop",
+                "split": "test",
+                "horizon": 1,
+                "feature_name": "close",
+                "mean_delta_rmse": 0.50,
+            },
+        ]
+    )
+    scope = {
+        "pairs": set(),
+        "labels": set(),
+        "run_ids": set(),
+        "model_versions": set(),
+        "parent_sweep_ids": {"sw_keep"},
+    }
+
+    out = GeneratePredictionAnalysisPlotsUseCase._filter_df_by_scope(df, scope)
+
+    assert out["parent_sweep_id"].tolist() == ["sw_keep"]
+    assert out["mean_delta_rmse"].tolist() == [0.02]
 
 
 def test_generate_prediction_analysis_plots_use_case_scope_prefix_uses_checkpoint_path_fallback(tmp_path: Path) -> None:
