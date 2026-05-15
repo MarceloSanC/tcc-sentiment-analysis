@@ -547,3 +547,156 @@ def test_build_gold_prediction_metrics_by_config_n_oos_is_idempotent_on_row_orde
     out_a = out_a.sort_values(sort_cols).reset_index(drop=True)
     out_b = out_b.sort_values(sort_cols).reset_index(drop=True)
     pd.testing.assert_frame_equal(out_a, out_b, check_like=True)
+
+
+def test_gold_ranking_by_config_is_cohort_aware() -> None:
+    base = pd.DataFrame(
+        [
+            {
+                "run_id": "sw1_cfg_shared",
+                "asset": "AAPL",
+                "feature_set_name": "BT",
+                "parent_sweep_id": "sw1",
+                "config_signature": "cfg_shared",
+                "split": "test",
+                "rmse": 0.10,
+                "mae": 0.10,
+                "directional_accuracy": 0.60,
+            },
+            {
+                "run_id": "sw1_cfg_other",
+                "asset": "AAPL",
+                "feature_set_name": "BT",
+                "parent_sweep_id": "sw1",
+                "config_signature": "cfg_other",
+                "split": "test",
+                "rmse": 0.80,
+                "mae": 0.80,
+                "directional_accuracy": 0.40,
+            },
+            {
+                "run_id": "sw2_cfg_shared",
+                "asset": "AAPL",
+                "feature_set_name": "BT",
+                "parent_sweep_id": "sw2",
+                "config_signature": "cfg_shared",
+                "split": "test",
+                "rmse": 0.90,
+                "mae": 0.90,
+                "directional_accuracy": 0.30,
+            },
+            {
+                "run_id": "sw2_cfg_other",
+                "asset": "AAPL",
+                "feature_set_name": "BT",
+                "parent_sweep_id": "sw2",
+                "config_signature": "cfg_other",
+                "split": "test",
+                "rmse": 0.20,
+                "mae": 0.20,
+                "directional_accuracy": 0.70,
+            },
+        ]
+    )
+
+    out = RefreshAnalyticsStoreUseCase._build_gold_ranking_by_config(base)
+
+    assert "parent_sweep_id" in out.columns
+    assert len(out) == 4
+    sw1 = out[out["parent_sweep_id"] == "sw1"].sort_values("rank_test_rmse")
+    sw2 = out[out["parent_sweep_id"] == "sw2"].sort_values("rank_test_rmse")
+    assert sw1["rank_test_rmse"].tolist() == [1.0, 2.0]
+    assert sw2["rank_test_rmse"].tolist() == [1.0, 2.0]
+    assert sw1.iloc[0]["config_signature"] == "cfg_shared"
+    assert sw2.iloc[0]["config_signature"] == "cfg_other"
+
+
+def test_gold_model_decision_final_is_cohort_aware() -> None:
+    metrics_by_config = pd.DataFrame(
+        [
+            {
+                "asset": "AAPL",
+                "feature_set_name": "BT",
+                "config_signature": "cfg_sw1_a",
+                "split": "test",
+                "horizon": 1,
+                "n_runs": 1,
+                "mean_rmse": 0.10,
+                "mean_mae": 0.10,
+                "mean_directional_accuracy": 0.60,
+            },
+            {
+                "asset": "AAPL",
+                "feature_set_name": "BT",
+                "config_signature": "cfg_sw1_b",
+                "split": "test",
+                "horizon": 1,
+                "n_runs": 1,
+                "mean_rmse": 0.80,
+                "mean_mae": 0.80,
+                "mean_directional_accuracy": 0.40,
+            },
+            {
+                "asset": "AAPL",
+                "feature_set_name": "BT",
+                "config_signature": "cfg_sw2_a",
+                "split": "test",
+                "horizon": 1,
+                "n_runs": 1,
+                "mean_rmse": 0.90,
+                "mean_mae": 0.90,
+                "mean_directional_accuracy": 0.30,
+            },
+            {
+                "asset": "AAPL",
+                "feature_set_name": "BT",
+                "config_signature": "cfg_sw2_b",
+                "split": "test",
+                "horizon": 1,
+                "n_runs": 1,
+                "mean_rmse": 0.20,
+                "mean_mae": 0.20,
+                "mean_directional_accuracy": 0.70,
+            },
+        ]
+    )
+    mcs_results = pd.DataFrame(
+        [
+            {
+                "asset": "AAPL",
+                "parent_sweep_id": sweep,
+                "split": "test",
+                "horizon": 1,
+                "config_label": f"BT|{config}",
+                "selected_in_mcs_alpha_0_05": True,
+            }
+            for sweep, config in [
+                ("sw1", "cfg_sw1_a"),
+                ("sw1", "cfg_sw1_b"),
+                ("sw2", "cfg_sw2_a"),
+                ("sw2", "cfg_sw2_b"),
+            ]
+        ]
+    )
+
+    out = RefreshAnalyticsStoreUseCase._build_gold_model_decision_final(
+        metrics_by_config=metrics_by_config,
+        robustness_by_horizon=pd.DataFrame(),
+        generalization_gap=pd.DataFrame(),
+        dm_results=pd.DataFrame(),
+        mcs_results=mcs_results,
+        win_rate_results=pd.DataFrame(),
+        paired_intersection=pd.DataFrame(),
+    )
+
+    assert "parent_sweep_id" in out.columns
+    sw1 = out[out["parent_sweep_id"] == "sw1"].sort_values("rank_rmse")
+    sw2 = out[out["parent_sweep_id"] == "sw2"].sort_values("rank_rmse")
+    assert sw1["rank_rmse"].tolist() == [1.0, 2.0]
+    assert sw2["rank_rmse"].tolist() == [1.0, 2.0]
+    assert sw1["rank_mae"].tolist() == [1.0, 2.0]
+    assert sw2["rank_mae"].tolist() == [1.0, 2.0]
+    assert sw1.sort_values("rank_da")["rank_da"].tolist() == [1.0, 2.0]
+    assert sw2.sort_values("rank_da")["rank_da"].tolist() == [1.0, 2.0]
+    assert sw1.iloc[0]["config_signature"] == "cfg_sw1_a"
+    assert sw2.iloc[0]["config_signature"] == "cfg_sw2_b"
