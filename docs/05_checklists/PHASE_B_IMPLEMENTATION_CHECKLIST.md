@@ -129,16 +129,21 @@ de coexistencia por coluna sem aviso.
 
 ### Notas de revisao:
 
+- 2026-05-14: adicionados testes de regressao para garantir que
+  `compute_config_signature` muda com `parent_sweep_id`, `fold`,
+  `trial_number` e `seed`, e permanece estavel quando variam apenas chaves
+  temporais volateis (`created_at`, `started_at`, `ended_at`, `timestamp`).
+
 ### Tasks
 
-- [ ] **2.1** Adicionar teste
+- [~] **2.1** Adicionar teste
       `test_config_signature_changes_when_parent_sweep_id_changes` em
       [tests/unit/infrastructure/schemas/test_analytics_store_schema.py](../../tests/unit/infrastructure/schemas/test_analytics_store_schema.py).
       Cobrir: dois `training_config` iguais com `parent_sweep_id` diferente
       = hashes diferentes. Idem para `fold`, `trial_number`, `seed`.
       **Aceite:** 4 asserts independentes, todos passando.
 
-- [ ] **2.2** Adicionar teste
+- [~] **2.2** Adicionar teste
       `test_config_signature_stable_across_volatile_keys` que garante que
       `created_at`/`started_at`/`ended_at`/`timestamp` continuam sendo
       ignorados (regressao do comportamento atual).
