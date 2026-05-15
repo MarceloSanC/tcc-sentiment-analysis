@@ -78,6 +78,11 @@ def parse_args() -> argparse.Namespace:
         help="Overwrite inference rows in requested period (by timestamp/model_version).",
     )
     parser.add_argument(
+        "--overwrite-on-collision",
+        action="store_true",
+        help="Overwrite colliding analytics silver rows instead of failing on logical PK collision.",
+    )
+    parser.add_argument(
         "--batch-size",
         type=int,
         help="Inference batch size for dataloader.",
@@ -282,6 +287,10 @@ def main() -> None:
     start = _parse_yyyymmdd(args.start or file_config.get("start"))
     end = _parse_yyyymmdd(args.end or file_config.get("end"))
     overwrite = bool(file_config.get("overwrite", False)) or bool(args.overwrite)
+    overwrite_on_collision = (
+        bool(file_config.get("overwrite_on_collision", False))
+        or bool(getattr(args, "overwrite_on_collision", False))
+    )
     auto_refresh = bool(file_config.get("auto_refresh", False)) or bool(args.auto_refresh)
     strict_quantiles = bool(file_config.get("strict_quantiles", True)) and not bool(
         args.allow_missing_quantiles
@@ -328,6 +337,7 @@ def main() -> None:
         default_end_date=ensure_utc(datetime.now()),
         strict_quantiles=strict_quantiles,
         inference_mode=inference_mode,
+        overwrite_on_collision=overwrite_on_collision,
     )
 
     logger.info(

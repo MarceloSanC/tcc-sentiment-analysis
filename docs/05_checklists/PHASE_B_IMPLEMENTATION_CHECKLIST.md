@@ -71,13 +71,14 @@ de Phase B; sem isso, re-rodar o mesmo `run_id` duplica linhas em silver.
 
 ### Tasks
 
-- [ ] **1.1** Definir interface `AnalyticsRunRepository` com novo contrato
+
+- [~] **1.1** Definir interface `AnalyticsRunRepository` com novo contrato
       `overwrite: bool = False` em todos os `append_*`/`upsert_*`.
       Atualizar `src/interfaces/analytics_run_repository.py`.
       **Aceite:** type checker passa; nenhuma chamada existente quebrada
       (default `overwrite=False` preserva semantica atual exceto pelo bug).
 
-- [ ] **1.2** Implementar `_write_with_overwrite_policy` em
+- [~] **1.2** Implementar `_write_with_overwrite_policy` em
       [parquet_analytics_run_repository.py:94-100](../../src/adapters/parquet_analytics_run_repository.py#L94-L100).
       Comportamento: se path nao existe, escreve. Se existe e nao ha
       colisao de chave logica, append. Se existe e ha colisao e
@@ -87,25 +88,33 @@ de Phase B; sem isso, re-rodar o mesmo `run_id` duplica linhas em silver.
       `src/infrastructure/schemas/analytics_store_schema.py` e validados em
       `tests/unit/infrastructure/schemas/test_analytics_store_schema.py`.
 
-- [ ] **1.3** Migrar os 12 `append_*` para usar
+- [~] **1.3** Migrar os 12 `append_*` para usar
       `_write_with_overwrite_policy`. Manter `upsert_dim_run` como esta
       (ja honra a lei).
       **Aceite:** todos os metodos em
       [parquet_analytics_run_repository.py:144-267](../../src/adapters/parquet_analytics_run_repository.py#L144-L267)
       delegam ao novo metodo.
 
-- [ ] **1.4** Testes unitarios cobrindo: (a) primeira escrita; (b) append
+- [~] **1.4** Testes unitarios cobrindo: (a) primeira escrita; (b) append
       sem colisao; (c) colisao sem flag = erro; (d) colisao com flag =
       sobrescrita correta; (e) particoes diferentes nao se afetam.
       **Aceite:** `pytest tests/unit/adapters/test_parquet_analytics_run_repository.py` passa.
 
-- [ ] **1.5** Atualizar call sites em
+- [~] **1.5** Atualizar call sites em
       `src/use_cases/train_tft_model_use_case.py` e
       `src/use_cases/run_tft_inference_use_case.py` para passar
       `overwrite=True` apenas quando o usuario explicitamente solicitar
       (nova flag `--overwrite-on-collision` em `main_train_tft.py`).
       **Aceite:** smoke test re-executavel produz erro claro quando
       `run_id` colide; com flag, sobrescreve corretamente.
+
+### Notas de revisao:
+
+-  `--overwrite` e `--overwrite-on-collision` devem
+permanecer contratos separados. `--overwrite` controla apenas sobrescrita
+operacional da inferencia; overwrite no silver analytics exige
+`--overwrite-on-collision` explicito.
+
 
 ---
 
@@ -117,6 +126,8 @@ coortes automaticamente. Sem esse teste, qualquer refactor futuro em
 de coexistencia por coluna sem aviso.
 
 **Cross-link:** A_code_audit.md §M5-Q6.
+
+### Notas de revisao:
 
 ### Tasks
 
@@ -139,6 +150,8 @@ de coexistencia por coluna sem aviso.
 
 **Objetivo:** arquivar dados historicos como evidencia exploratoria
 (nao confirmatoria). So executar apos Stages 1 e 2 mergeados.
+
+### Notas de revisao:
 
 ### Tasks
 
@@ -177,6 +190,8 @@ porque `gold_model_decision_final` eh a tabela final de decisao do paper.
 
 **Cross-link:** A_code_audit.md §M5-Q7.
 
+### Notas de revisao:
+
 ### Tasks
 
 - [ ] **4.1** Adicionar `parent_sweep_id` ao groupby em
@@ -205,6 +220,8 @@ porque `gold_model_decision_final` eh a tabela final de decisao do paper.
 omitem `config_signature` e hoje misturam coortes silenciosamente.
 
 **Cross-link:** A_code_audit.md §M5-Q2 subgrupo "5 sem config_signature".
+
+### Notas de revisao:
 
 ### Tasks
 
@@ -253,6 +270,8 @@ no output para rastreabilidade direta (Lei 3).
 
 **Cross-link:** A_code_audit.md §M5-Q2 subgrupo "5 com config_signature".
 
+### Notas de revisao:
+
 ### Tasks
 
 - [ ] **6.1** `gold_ic95_by_config_metric`
@@ -300,6 +319,8 @@ coorte declarada em vez de ler o silver inteiro.
 
 **Cross-link:** A_code_audit.md §M5-Q3.
 
+### Notas de revisao:
+
 ### Tasks
 
 - [ ] **7.1** Adicionar `scope_spec: ScopeSpec | None = None` em
@@ -334,6 +355,8 @@ coorte declarada em vez de ler o silver inteiro.
 paralelas; pre-registro fixa qual eh primaria para o claim.
 
 **Cross-link:** A_code_audit.md §M5-Q1.
+
+### Notas de revisao:
 
 ### Tasks
 
@@ -373,6 +396,8 @@ genuinamente quantilicos e nao-degenerados.
 
 **Cross-link:** A_code_audit.md §M5-Q5.
 
+### Notas de revisao:
+
 ### Tasks
 
 - [ ] **9.1** Em `_build_gold_prediction_metrics_by_run_split_horizon`,
@@ -401,6 +426,8 @@ genuinamente quantilicos e nao-degenerados.
 de inferencia por FK explicita para o run de treino.
 
 **Cross-link:** A_code_audit.md §M4 achado adicional (Lei 3).
+
+### Notas de revisao:
 
 ### Tasks
 
@@ -453,6 +480,8 @@ declarado em `prediction_mode`.
 
 **Cross-link:** A_code_audit.md §M2-Q4.
 
+### Notas de revisao:
+
 ### Tasks
 
 - [ ] **11.1** Adicionar `block_quantile_degeneracy_gate` em
@@ -482,6 +511,8 @@ declarado em `prediction_mode`.
 no mesmo contrato de grao do TFT para comparacao pareada valida.
 
 **Cross-link:** A_code_audit.md §M7-Q2 e caveat de `_pairwise_group_cols`.
+
+### Notas de revisao:
 
 ### Tasks
 
@@ -518,6 +549,8 @@ no mesmo contrato de grao do TFT para comparacao pareada valida.
 
 **Cross-link:** A_code_audit.md §M1-Q4.
 
+### Notas de revisao:
+
 ### Tasks
 
 - [ ] **13.1** Em
@@ -541,6 +574,8 @@ no mesmo contrato de grao do TFT para comparacao pareada valida.
 sem cruzar com fontes processadas.
 
 **Cross-link:** A_code_audit.md §M3-Q4.
+
+### Notas de revisao:
 
 ### Tasks
 
@@ -579,6 +614,8 @@ para essas tabelas.
 
 **Cross-link:** A_code_audit.md §"Leis do Analytics Store" — Lei 1.
 
+### Notas de revisao:
+
 ### Tasks
 
 - [ ] **15.1 (opt)** Criar `RunLevelGoldBuilder` em
@@ -608,6 +645,8 @@ para essas tabelas.
 
 **Objetivo:** ponto de invocacao para gold pareado/agregado (DM, MCS,
 win-rate) que precisa de multiplos runs do mesmo sweep.
+
+### Notas de revisao:
 
 ### Tasks
 
@@ -645,6 +684,8 @@ win-rate) que precisa de multiplos runs do mesmo sweep.
 **Objetivo:** garantir que falha no meio da escrita de gold per-run
 ou per-sweep nao deixe estado parcial.
 
+### Notas de revisao:
+
 ### Tasks
 
 - [ ] **17.1 (opt)** Implementar padrao "write to temp + atomic rename":
@@ -667,6 +708,8 @@ ou per-sweep nao deixe estado parcial.
 
 **Objetivo:** atualizar plot generators, validate quality e qualquer
 downstream para esperar gold cohort-aware nativo (sem refresh global).
+
+### Notas de revisao:
 
 ### Tasks
 
@@ -694,6 +737,8 @@ downstream para esperar gold cohort-aware nativo (sem refresh global).
 **Objetivo:** marcar `RefreshAnalyticsStoreUseCase` como deprecated e
 documentar caminho oficial.
 
+### Notas de revisao:
+
 ### Tasks
 
 - [ ] **19.1 (opt)** Adicionar `DeprecationWarning` em
@@ -715,6 +760,8 @@ documentar caminho oficial.
 ---
 
 ## Stage final — Smoke confirmatorio + pre-registro (B+C)
+
+### Notas de revisao:
 
 ### Tasks
 

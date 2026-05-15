@@ -300,6 +300,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Run ablation experiments in addition to main training (disabled by default).",
     )
+    parser.add_argument(
+        "--overwrite-on-collision",
+        action="store_true",
+        help="Overwrite colliding analytics silver rows instead of failing on logical PK collision.",
+    )
     return parser.parse_args()
 
 
@@ -481,6 +486,9 @@ def main() -> None:
             split_config[key] = value
 
     run_ablation = bool(file_config.get("run_ablation", False)) or args.run_ablation
+    overwrite_on_collision = bool(file_config.get("overwrite_on_collision", False)) or bool(
+        getattr(args, "overwrite_on_collision", False)
+    )
 
     result = use_case.execute(
         asset_id,
@@ -488,6 +496,7 @@ def main() -> None:
         training_config=training_config,
         split_config=split_config,
         run_ablation=run_ablation,
+        overwrite_on_collision=overwrite_on_collision,
     )
 
     logger.info(

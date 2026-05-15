@@ -68,6 +68,7 @@ class RunTFTInferenceUseCase:
         skipped_count: int,
         upserts_count: int,
         duration_seconds: float,
+        overwrite_on_collision: bool = False,
     ) -> None:
         if self.analytics_run_repository is None:
             return
@@ -87,7 +88,10 @@ class RunTFTInferenceUseCase:
             "upserts_count": int(upserts_count),
             "duration_seconds": float(duration_seconds),
         }
-        self.analytics_run_repository.append_fact_inference_runs(row)
+        self.analytics_run_repository.append_fact_inference_runs(
+            row,
+            overwrite=overwrite_on_collision,
+        )
 
     def _persist_fact_inference_predictions(
         self,
@@ -99,6 +103,7 @@ class RunTFTInferenceUseCase:
         features_used_csv: str,
         model_path: str,
         inference_run_id: str,
+        overwrite_on_collision: bool = False,
     ) -> None:
         if self.analytics_run_repository is None or not records:
             return
@@ -143,7 +148,10 @@ class RunTFTInferenceUseCase:
                     "created_at_utc": created_at_utc,
                 }
             )
-        self.analytics_run_repository.append_fact_inference_predictions(rows)
+        self.analytics_run_repository.append_fact_inference_predictions(
+            rows,
+            overwrite=overwrite_on_collision,
+        )
 
     def _persist_fact_feature_contrib_local(
         self,
@@ -156,6 +164,7 @@ class RunTFTInferenceUseCase:
         feature_set_name: str,
         inference_run_id: str,
         top_k: int = 5,
+        overwrite_on_collision: bool = False,
     ) -> None:
         if self.analytics_run_repository is None or not records or not feature_cols:
             return
@@ -223,7 +232,10 @@ class RunTFTInferenceUseCase:
                 )
 
         if rows:
-            self.analytics_run_repository.append_fact_feature_contrib_local(rows)
+            self.analytics_run_repository.append_fact_feature_contrib_local(
+                rows,
+                overwrite=overwrite_on_collision,
+            )
 
     @staticmethod
     def _normalize_asset(asset_id: str) -> str:
@@ -351,6 +363,7 @@ class RunTFTInferenceUseCase:
         default_end_date: datetime | None = None,
         strict_quantiles: bool = True,
         inference_mode: str = "rolling",
+        overwrite_on_collision: bool = False,
     ) -> RunTFTInferenceResult:
         run_started_at = datetime.now(UTC)
         asset = self._normalize_asset(asset_id)
@@ -363,6 +376,7 @@ class RunTFTInferenceUseCase:
                 "Invalid inference_mode. Expected one of: rolling, last_point. "
                 f"Received: {inference_mode}"
             )
+        silver_overwrite = bool(overwrite_on_collision)
 
         model_bundle = self.model_loader.load(model_path)
         model_asset = self._normalize_asset(model_bundle.asset_id)
@@ -654,6 +668,7 @@ class RunTFTInferenceUseCase:
             features_used_csv=features_used_csv,
             model_path=str(model_bundle.model_dir),
             inference_run_id=run_id,
+            overwrite_on_collision=silver_overwrite,
         )
         self._persist_fact_feature_contrib_local(
             inference_slice=inference_slice,
@@ -664,6 +679,7 @@ class RunTFTInferenceUseCase:
             feature_set_name=model_bundle.feature_set_name,
             inference_run_id=run_id,
             top_k=min(5, max(1, len(model_bundle.feature_cols))),
+            overwrite_on_collision=silver_overwrite,
         )
 
         duration_seconds = float((datetime.now(UTC) - run_started_at).total_seconds())
@@ -680,6 +696,7 @@ class RunTFTInferenceUseCase:
             skipped_count=skipped_existing,
             upserts_count=attempted_upserts,
             duration_seconds=duration_seconds,
+            overwrite_on_collision=silver_overwrite,
         )
 
         return RunTFTInferenceResult(

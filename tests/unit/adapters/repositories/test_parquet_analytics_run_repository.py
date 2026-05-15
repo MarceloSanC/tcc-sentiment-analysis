@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import pandas as pd
+import pytest
 
 from src.adapters.parquet_analytics_run_repository import ParquetAnalyticsRunRepository
+from src.interfaces.analytics_run_repository import DuplicateKeyError
 
 
 def _row(run_id: str) -> dict:
@@ -35,6 +37,65 @@ def _row(run_id: str) -> dict:
     }
 
 
+def _snapshot_row(run_id: str, *, n_samples_train: int = 3) -> dict:
+    return {
+        "schema_version": 1,
+        "run_id": run_id,
+        "asset": "AAPL",
+        "parent_sweep_id": None,
+        "dataset_start_utc": "2026-01-01T00:00:00Z",
+        "dataset_end_utc": "2026-01-05T00:00:00Z",
+        "train_start_utc": "2026-01-01T00:00:00Z",
+        "train_end_utc": "2026-01-03T00:00:00Z",
+        "val_start_utc": "2026-01-04T00:00:00Z",
+        "val_end_utc": "2026-01-04T00:00:00Z",
+        "test_start_utc": "2026-01-05T00:00:00Z",
+        "test_end_utc": "2026-01-05T00:00:00Z",
+        "warmup_policy": "strict_fail",
+        "required_warmup_count": 0,
+        "warmup_applied": "false",
+        "effective_train_start_utc": "20260101",
+        "n_samples_train": n_samples_train,
+        "n_samples_val": 1,
+        "n_samples_test": 1,
+        "dataset_fingerprint": "dfp",
+        "split_fingerprint": "sfp",
+    }
+
+
+def _oos_row(
+    run_id: str,
+    *,
+    timestamp_utc: str = "2026-01-01T00:00:00+00:00",
+    target_timestamp_utc: str = "2026-01-01T00:00:00+00:00",
+    year: int = 2026,
+    y_pred: float = 0.2,
+) -> dict:
+    return {
+        "schema_version": 1,
+        "run_id": run_id,
+        "model_version": "v1",
+        "asset": "AAPL",
+        "feature_set_name": "B",
+        "config_signature": "cfg",
+        "split": "test",
+        "fold": "wf_1",
+        "seed": 7,
+        "horizon": 1,
+        "timestamp_utc": timestamp_utc,
+        "target_timestamp_utc": target_timestamp_utc,
+        "y_true": 0.1,
+        "y_pred": y_pred,
+        "error": y_pred - 0.1,
+        "abs_error": abs(y_pred - 0.1),
+        "sq_error": (y_pred - 0.1) ** 2,
+        "quantile_p10": 0.05,
+        "quantile_p50": y_pred,
+        "quantile_p90": 0.3,
+        "year": year,
+    }
+
+
 def test_upsert_dim_run_by_run_id(tmp_path) -> None:
     repo = ParquetAnalyticsRunRepository(output_dir=tmp_path)
 
@@ -48,6 +109,91 @@ def test_upsert_dim_run_by_run_id(tmp_path) -> None:
     assert df.iloc[0]["run_id"] == "r1"
     assert df.iloc[0]["model_version"] == "v2"
 
+
+
+def test_overwrite_policy_first_write_creates_parquet(tmp_path) -> None:
+    repo = ParquetAnalyticsRunRepository(output_dir=tmp_path)
+
+    repo.append_fact_run_snapshot(_snapshot_row("r1"))
+
+    path = tmp_path / "fact_run_snapshot" / "asset=AAPL" / "sweep_id=__none__" / "fact_run_snapshot.parquet"
+    df = pd.read_parquet(path)
+
+    assert len(df) == 1
+    assert df.iloc[0]["run_id"] == "r1"
+
+
+def test_overwrite_policy_appends_when_pk_is_distinct(tmp_path) -> None:
+    repo = ParquetAnalyticsRunRepository(output_dir=tmp_path)
+
+    repo.append_fact_run_snapshot(_snapshot_row("r1"))
+    repo.append_fact_run_snapshot(_snapshot_row("r2"))
+
+    path = tmp_path / "fact_run_snapshot" / "asset=AAPL" / "sweep_id=__none__" / "fact_run_snapshot.parquet"
+    df = pd.read_parquet(path)
+
+    assert len(df) == 2
+    assert set(df["run_id"].tolist()) == {"r1", "r2"}
+
+
+def test_overwrite_policy_raises_on_pk_collision_without_flag(tmp_path) -> None:
+    repo = ParquetAnalyticsRunRepository(output_dir=tmp_path)
+    row = _oos_row("r1")
+
+    repo.append_fact_oos_predictions([row])
+
+    with pytest.raises(DuplicateKeyError, match="fact_oos_predictions"):
+        repo.append_fact_oos_predictions([{**row, "y_pred": 0.9}])
+
+
+def test_overwrite_policy_replaces_colliding_rows_when_enabled(tmp_path) -> None:
+    repo = ParquetAnalyticsRunRepository(output_dir=tmp_path)
+    original = _oos_row("r1", y_pred=0.2)
+    preserved = _oos_row(
+        "r1",
+        timestamp_utc="2026-01-02T00:00:00+00:00",
+        target_timestamp_utc="2026-01-02T00:00:00+00:00",
+        y_pred=0.3,
+    )
+
+    repo.append_fact_oos_predictions([original, preserved])
+    repo.append_fact_oos_predictions(
+        [{**original, "y_pred": 0.9, "quantile_p50": 0.9}],
+        overwrite=True,
+    )
+
+    path = tmp_path / "fact_oos_predictions" / "asset=AAPL" / "feature_set_name=B" / "year=2026" / "fact_oos_predictions.parquet"
+    df = pd.read_parquet(path).sort_values("target_timestamp_utc").reset_index(drop=True)
+
+    assert len(df) == 2
+    assert float(df.iloc[0]["y_pred"]) == 0.9
+    assert float(df.iloc[1]["y_pred"]) == 0.3
+
+
+def test_overwrite_policy_only_checks_collisions_within_partition_path(tmp_path) -> None:
+    repo = ParquetAnalyticsRunRepository(output_dir=tmp_path)
+    base = {
+        "schema_version": 1,
+        "run_id": "r1",
+        "asset": "AAPL",
+        "parent_sweep_id": "swp",
+        "epoch": 0,
+        "train_loss": 0.5,
+        "val_loss": 0.6,
+        "epoch_time_seconds": 1.2,
+        "best_epoch": 0,
+        "stopped_epoch": 2,
+        "early_stop_reason": "max_epochs",
+    }
+
+    repo.append_fact_epoch_metrics([{**base, "fold": "wf_1"}])
+    repo.append_fact_epoch_metrics([{**base, "fold": "wf_2"}])
+
+    path_1 = tmp_path / "fact_epoch_metrics" / "asset=AAPL" / "sweep_id=swp" / "fold=wf_1" / "fact_epoch_metrics.parquet"
+    path_2 = tmp_path / "fact_epoch_metrics" / "asset=AAPL" / "sweep_id=swp" / "fold=wf_2" / "fact_epoch_metrics.parquet"
+
+    assert len(pd.read_parquet(path_1)) == 1
+    assert len(pd.read_parquet(path_2)) == 1
 
 
 def test_append_fact_run_snapshot_and_split_refs(tmp_path) -> None:
