@@ -102,6 +102,17 @@ class RefreshAnalyticsStoreUseCase:
             out["asset"] = out["asset_x"]
         if "asset_y" in out.columns and "asset" not in out.columns:
             out["asset"] = out["asset_y"]
+        if "parent_sweep_id_x" in out.columns and "parent_sweep_id" not in out.columns:
+            out["parent_sweep_id"] = out["parent_sweep_id_x"]
+        if "parent_sweep_id_y" in out.columns:
+            if "parent_sweep_id" not in out.columns:
+                out["parent_sweep_id"] = out["parent_sweep_id_y"]
+            else:
+                out["parent_sweep_id"] = out["parent_sweep_id"].where(
+                    out["parent_sweep_id"].notna(),
+                    out["parent_sweep_id_y"],
+                )
+        out = RefreshAnalyticsStoreUseCase._normalize_parent_sweep_id_for_merge(out)
         return out
 
     @staticmethod
@@ -183,46 +194,50 @@ class RefreshAnalyticsStoreUseCase:
         if df.empty or "fold" not in df.columns or "seed" not in df.columns:
             return pd.DataFrame()
 
-        keys = ["asset", "feature_set_name", "fold", "seed"]
+        keys = ["asset", "feature_set_name", "parent_sweep_id", "fold", "seed"]
+        agg_keys = ["asset", "feature_set_name", "parent_sweep_id", "config_signature"]
         ranked = df.sort_values(keys + ["rmse"]).copy()
         ranked["position"] = ranked.groupby(keys).cumcount() + 1
 
         all_counts = (
-            ranked.groupby(["asset", "feature_set_name", "config_signature"], dropna=False)
+            ranked.groupby(agg_keys, dropna=False)
             .size()
             .rename("total_groups")
             .reset_index()
         )
         top1 = (
             ranked[ranked["position"] <= 1]
-            .groupby(["asset", "feature_set_name", "config_signature"], dropna=False)
+            .groupby(agg_keys, dropna=False)
             .size()
             .rename("top1_hits")
             .reset_index()
         )
         top3 = (
             ranked[ranked["position"] <= 3]
-            .groupby(["asset", "feature_set_name", "config_signature"], dropna=False)
+            .groupby(agg_keys, dropna=False)
             .size()
             .rename("top3_hits")
             .reset_index()
         )
         top5 = (
             ranked[ranked["position"] <= 5]
-            .groupby(["asset", "feature_set_name", "config_signature"], dropna=False)
+            .groupby(agg_keys, dropna=False)
             .size()
             .rename("top5_hits")
             .reset_index()
         )
-        out = all_counts.merge(top1, on=["asset", "feature_set_name", "config_signature"], how="left")
-        out = out.merge(top3, on=["asset", "feature_set_name", "config_signature"], how="left")
-        out = out.merge(top5, on=["asset", "feature_set_name", "config_signature"], how="left")
+        out = all_counts.merge(top1, on=agg_keys, how="left")
+        out = out.merge(top3, on=agg_keys, how="left")
+        out = out.merge(top5, on=agg_keys, how="left")
         for c in ["top1_hits", "top3_hits", "top5_hits"]:
             out[c] = out[c].fillna(0).astype(int)
         out["top1_pct"] = out["top1_hits"] / out["total_groups"]
         out["top3_pct"] = out["top3_hits"] / out["total_groups"]
         out["top5_pct"] = out["top5_hits"] / out["total_groups"]
-        return out.sort_values(["asset", "feature_set_name", "top1_pct"], ascending=[True, True, False]).reset_index(drop=True)
+        return out.sort_values(
+            ["asset", "feature_set_name", "parent_sweep_id", "top1_pct"],
+            ascending=[True, True, True, False],
+        ).reset_index(drop=True)
 
     @staticmethod
     def _build_gold_ic95(base: pd.DataFrame) -> pd.DataFrame:
