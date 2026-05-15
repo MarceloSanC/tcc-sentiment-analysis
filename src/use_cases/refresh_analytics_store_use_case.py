@@ -267,7 +267,7 @@ class RefreshAnalyticsStoreUseCase:
         df = base.copy()
         metric_cols = ["rmse", "mae", "directional_accuracy"]
         out_rows: list[dict[str, object]] = []
-        group_cols = ["asset", "feature_set_name", "split"]
+        group_cols = ["asset", "feature_set_name", "parent_sweep_id", "split"]
         for metric_col in metric_cols:
             grouped = (
                 df.groupby(group_cols, dropna=False)[metric_col]
@@ -279,6 +279,7 @@ class RefreshAnalyticsStoreUseCase:
                     {
                         "asset": row["asset"],
                         "feature_set_name": row["feature_set_name"],
+                        "parent_sweep_id": row["parent_sweep_id"],
                         "split": row["split"],
                         "metric": metric_col,
                         "n_runs": int(row["count"]),
