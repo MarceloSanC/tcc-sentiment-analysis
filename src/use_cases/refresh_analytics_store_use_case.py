@@ -1561,9 +1561,10 @@ class RefreshAnalyticsStoreUseCase:
             out = out.merge(pi, on=key_cols, how="left")
 
         # ranking columns for decision
-        out["rank_rmse"] = out.groupby(["asset", "horizon"])['mean_rmse'].rank(method='min', ascending=True) if 'mean_rmse' in out.columns else np.nan
-        out["rank_mae"] = out.groupby(["asset", "horizon"])['mean_mae'].rank(method='min', ascending=True) if 'mean_mae' in out.columns else np.nan
-        out["rank_da"] = out.groupby(["asset", "horizon"])['mean_directional_accuracy'].rank(method='min', ascending=False) if 'mean_directional_accuracy' in out.columns else np.nan
+        decision_rank_cols = ["asset", "parent_sweep_id", "horizon"]
+        out["rank_rmse"] = out.groupby(decision_rank_cols, dropna=False)['mean_rmse'].rank(method='min', ascending=True) if 'mean_rmse' in out.columns else np.nan
+        out["rank_mae"] = out.groupby(decision_rank_cols, dropna=False)['mean_mae'].rank(method='min', ascending=True) if 'mean_mae' in out.columns else np.nan
+        out["rank_da"] = out.groupby(decision_rank_cols, dropna=False)['mean_directional_accuracy'].rank(method='min', ascending=False) if 'mean_directional_accuracy' in out.columns else np.nan
 
         for col in ["pairwise_ready_dm", "pairwise_ready_mcs", "target_exact_alignment"]:
             if col not in out.columns:
@@ -1574,7 +1575,7 @@ class RefreshAnalyticsStoreUseCase:
             & out["target_exact_alignment"].fillna(False).astype(bool)
         )
 
-        return out.sort_values(["asset", "horizon", "rank_rmse", "rank_mae"], ascending=[True, True, True, True]).reset_index(drop=True)
+        return out.sort_values(["asset", "parent_sweep_id", "horizon", "rank_rmse", "rank_mae"], ascending=[True, True, True, True, True]).reset_index(drop=True)
 
     @staticmethod
     def _build_gold_win_rate_pairwise_results(dim_run: pd.DataFrame, fact_oos_predictions: pd.DataFrame) -> pd.DataFrame:
