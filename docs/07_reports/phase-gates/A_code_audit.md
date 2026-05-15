@@ -999,6 +999,10 @@ escopos diferentes, as conclusoes ficam invalidas mesmo com codigo correto.
 - Tratar `parent_sweep_id=NULL` como historico global-health/pre-ScopeSpec:
   pode apoiar diagnostico historico, mas nao claims probabilisticos ou decisao
   estatistica confirmatoria.
+- O snapshot pre-`2026-05-10` de silver/gold deve permanecer arquivado em
+  `data/analytics_archive_pre_phase_b/`, conforme
+  `docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md`; esse archive e
+  rollback/diagnostico historico, nao evidencia confirmatoria da Phase B.
 - Para qualquer analise de Fase B, declarar no pre-registro o filtro de coorte
   reproduzivel (`parent_sweep_id`/escopo da rodada) e validar que os outputs
   usados preservam esse escopo ate a tabela final.

@@ -158,25 +158,36 @@ de coexistencia por coluna sem aviso.
 
 ### Notas de revisao:
 
+- 2026-05-14: Stage 3 pronto para revisao. Comandos executados:
+  `mkdir -p data/analytics_archive_pre_phase_b`;
+  `mv data/analytics/silver data/analytics_archive_pre_phase_b/silver`;
+  `mv data/analytics/gold data/analytics_archive_pre_phase_b/gold`;
+  `mkdir -p data/analytics/silver data/analytics/gold`;
+  `chmod -R a-w data/analytics_archive_pre_phase_b`.
+- 2026-05-14: archive `data/analytics_archive_pre_phase_b/` protegido como
+  read-only por permissao de filesystem. Os dados arquivados sao diagnostico
+  historico/exploratorio pre-`2026-05-10`, nao evidencia confirmatoria da
+  Phase B.
+
 ### Tasks
 
-- [ ] **3.1** Mover `data/analytics/silver/` para
+- [~] **3.1** Mover `data/analytics/silver/` para
       `data/analytics_archive_pre_phase_b/silver/` (script ou comando manual,
       registrar comando exato no PR).
       **Aceite:** `data/analytics/silver/` vazio; archive populado;
       `git status` confirma tracking files inalterados (apenas dados).
 
-- [ ] **3.2** Mover `data/analytics/gold/` para
+- [~] **3.2** Mover `data/analytics/gold/` para
       `data/analytics_archive_pre_phase_b/gold/`.
       **Aceite:** mesmo criterio.
 
-- [ ] **3.3** Atualizar `docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md`
+- [~] **3.3** Atualizar `docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md`
       com nota sobre o archive: dados pre-`2026-05-10` sao diagnostico
       historico, nao evidencia confirmatoria.
       **Aceite:** doc canonico atualizado e linkado em
       `A_code_audit.md` §M6.
 
-- [ ] **3.4** Proteger archive como rollback: aplicar permissoes
+- [~] **3.4** Proteger archive como rollback: aplicar permissoes
       read-only em `data/analytics_archive_pre_phase_b/` (`chmod -R a-w`)
       e documentar em `docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md`
       que o archive nao deve ser modificado ate o fechamento do

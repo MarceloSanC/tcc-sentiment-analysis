@@ -50,6 +50,21 @@ metricas (ver `04_evaluation/`) nem o fluxo end-to-end (ver `DATA_FLOW.md`).
 - **`parent_sweep_id` propagado ate as tabelas gold de decisao.** *Why:* sem
   isso, qualquer agregacao mistura coortes silenciosamente — invalida DM/MCS.
 
+## Archive pre-Phase B
+
+`data/analytics_archive_pre_phase_b/` preserva o snapshot historico de
+`data/analytics/silver/` e `data/analytics/gold/` anterior a `2026-05-10`.
+Esse material e diagnostico historico/exploratorio, nao evidencia
+confirmatoria da Phase B. A razao esta registrada no gate M6 de
+`docs/07_reports/phase-gates/A_code_audit.md`: o store historico mistura runs
+pre-ScopeSpec, `parent_sweep_id=NULL` e tabelas gold que ainda nao preservam
+escopo de coorte em todos os agregados.
+
+O archive deve permanecer read-only e nao deve ser modificado ate o fechamento
+do pre-registro da Phase B. Se Stages 4+ precisarem de rollback de dados,
+restaurar a partir de `data/analytics_archive_pre_phase_b/` e o caminho oficial;
+nao recomputar nem editar manualmente o snapshot arquivado.
+
 ## Contratos minimos por linha (exemplos)
 
 | Tabela | Grao logico | Chaves obrigatorias |
