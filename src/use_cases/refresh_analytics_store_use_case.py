@@ -148,6 +148,7 @@ class RefreshAnalyticsStoreUseCase:
                 df["parent_sweep_id"] = df["parent_sweep_id_x"]
             else:
                 df["parent_sweep_id"] = None
+        df = RefreshAnalyticsStoreUseCase._normalize_parent_sweep_id_for_merge(df)
         group_cols = ["asset", "feature_set_name", "parent_sweep_id", "config_signature"]
         agg = (
             df.groupby(group_cols, dropna=False)
@@ -1571,6 +1572,7 @@ class RefreshAnalyticsStoreUseCase:
             out = out.merge(pi, on=key_cols, how="left")
 
         # ranking columns for decision
+        out = RefreshAnalyticsStoreUseCase._normalize_parent_sweep_id_for_merge(out)
         decision_rank_cols = ["asset", "parent_sweep_id", "horizon"]
         out["rank_rmse"] = out.groupby(decision_rank_cols, dropna=False)['mean_rmse'].rank(method='min', ascending=True) if 'mean_rmse' in out.columns else np.nan
         out["rank_mae"] = out.groupby(decision_rank_cols, dropna=False)['mean_mae'].rank(method='min', ascending=True) if 'mean_mae' in out.columns else np.nan
