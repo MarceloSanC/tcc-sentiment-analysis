@@ -719,13 +719,15 @@ class RefreshAnalyticsStoreUseCase:
             return pd.DataFrame()
         if not {'run_id', 'feature_importance_json'}.issubset(set(fact_model_artifacts.columns)):
             return pd.DataFrame()
-        req = {'run_id', 'asset', 'feature_set_name', 'split', 'horizon'}
+        req = {'run_id', 'asset', 'feature_set_name', 'parent_sweep_id', 'split', 'horizon'}
         if not req.issubset(set(metrics_run_split_h.columns)):
             return pd.DataFrame()
 
         import json
 
-        split_h = metrics_run_split_h[['run_id', 'asset', 'feature_set_name', 'split', 'horizon']].drop_duplicates()
+        split_h = metrics_run_split_h[
+            ['run_id', 'asset', 'feature_set_name', 'parent_sweep_id', 'split', 'horizon']
+        ].drop_duplicates()
         split_h = split_h[split_h['split'].astype(str).isin(['val', 'test'])].copy()
         if split_h.empty:
             return pd.DataFrame()
@@ -754,6 +756,7 @@ class RefreshAnalyticsStoreUseCase:
                             'run_id': run_id,
                             'asset': hz.get('asset'),
                             'feature_set_name': hz.get('feature_set_name'),
+                            'parent_sweep_id': hz.get('parent_sweep_id'),
                             'split': hz.get('split'),
                             'horizon': int(hz.get('horizon')) if pd.notna(hz.get('horizon')) else None,
                             'feature_name': str(item.get('feature')),
@@ -769,7 +772,10 @@ class RefreshAnalyticsStoreUseCase:
             return pd.DataFrame()
         detail = pd.DataFrame(rows)
         agg = (
-            detail.groupby(['asset', 'feature_set_name', 'split', 'horizon', 'feature_name', 'method'], dropna=False)
+            detail.groupby(
+                ['asset', 'feature_set_name', 'parent_sweep_id', 'split', 'horizon', 'feature_name', 'method'],
+                dropna=False,
+            )
             .agg(
                 n_runs=('run_id', 'count'),
                 mean_delta_rmse=('delta_rmse', 'mean'),
