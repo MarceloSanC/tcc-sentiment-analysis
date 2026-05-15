@@ -1813,6 +1813,7 @@ class RefreshAnalyticsStoreUseCase:
     @staticmethod
     def _build_gold_feature_contrib_local_summary(
         fact_feature_contrib_local: pd.DataFrame,
+        dim_run: pd.DataFrame,
     ) -> pd.DataFrame:
         if fact_feature_contrib_local.empty:
             return pd.DataFrame()
@@ -1822,6 +1823,14 @@ class RefreshAnalyticsStoreUseCase:
             return pd.DataFrame()
 
         df = fact_feature_contrib_local.copy()
+        if "run_id" in df.columns and {"run_id", "parent_sweep_id"}.issubset(set(dim_run.columns)):
+            dim_trim = RefreshAnalyticsStoreUseCase._normalize_parent_sweep_id_for_merge(
+                dim_run[["run_id", "parent_sweep_id"]].drop_duplicates("run_id")
+            )
+            df = df.merge(dim_trim, on="run_id", how="left")
+            df = RefreshAnalyticsStoreUseCase._normalize_parent_sweep_id_for_merge(df)
+        else:
+            df["parent_sweep_id"] = None
         df["horizon"] = pd.to_numeric(df["horizon"], errors="coerce")
         df["contribution"] = pd.to_numeric(df["contribution"], errors="coerce")
         df["abs_contribution"] = pd.to_numeric(df["abs_contribution"], errors="coerce")
@@ -1837,7 +1846,7 @@ class RefreshAnalyticsStoreUseCase:
         if "method" not in df.columns:
             df["method"] = "unknown"
 
-        group_cols = ["asset", "feature_set_name", "horizon", "feature_name", "method"]
+        group_cols = ["asset", "feature_set_name", "parent_sweep_id", "horizon", "feature_name", "method"]
         agg = (
             df.groupby(group_cols, dropna=False)
             .agg(
@@ -1857,7 +1866,7 @@ class RefreshAnalyticsStoreUseCase:
 
         stability_rows: list[dict[str, object]] = []
         if "inference_run_id" in df.columns:
-            stab_group_cols = ["asset", "feature_set_name", "horizon", "method"]
+            stab_group_cols = ["asset", "feature_set_name", "parent_sweep_id", "horizon", "method"]
             for keys, g in df.groupby(stab_group_cols, dropna=False):
                 run_top: dict[str, set[str]] = {}
                 for rid, rg in g.groupby("inference_run_id", dropna=False):
@@ -1885,8 +1894,9 @@ class RefreshAnalyticsStoreUseCase:
                     {
                         "asset": keys[0],
                         "feature_set_name": keys[1],
-                        "horizon": int(keys[2]) if pd.notna(keys[2]) else None,
-                        "method": keys[3],
+                        "parent_sweep_id": keys[2],
+                        "horizon": int(keys[3]) if pd.notna(keys[3]) else None,
+                        "method": keys[4],
                         "local_top3_jaccard_mean": float(np.mean(vals)) if vals else np.nan,
                         "local_top3_jaccard_pairs": int(len(vals)),
                     }
@@ -1894,7 +1904,7 @@ class RefreshAnalyticsStoreUseCase:
 
         if stability_rows:
             stab = pd.DataFrame(stability_rows)
-            agg = agg.merge(stab, on=["asset", "feature_set_name", "horizon", "method"], how="left")
+            agg = agg.merge(stab, on=["asset", "feature_set_name", "parent_sweep_id", "horizon", "method"], how="left")
 
         return agg
 
@@ -1978,7 +1988,7 @@ class RefreshAnalyticsStoreUseCase:
             self.analytics_gold_dir / "gold_feature_impact_by_horizon.parquet",
         )
         outputs["gold_feature_contrib_local_summary"] = self._safe_write(
-            self._build_gold_feature_contrib_local_summary(fact_feature_contrib_local),
+            self._build_gold_feature_contrib_local_summary(fact_feature_contrib_local, dim_run),
             self.analytics_gold_dir / "gold_feature_contrib_local_summary.parquet",
         )
         gold_quality = self._build_gold_oos_quality_report(dim_run, fact_oos_predictions)
