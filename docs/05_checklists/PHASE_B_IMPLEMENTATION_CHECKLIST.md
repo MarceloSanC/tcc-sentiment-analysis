@@ -210,20 +210,20 @@ porque `gold_model_decision_final` eh a tabela final de decisao do paper.
 
 ### Tasks
 
-- [ ] **4.1** Adicionar `parent_sweep_id` ao groupby em
+- [~] **4.1** Adicionar `parent_sweep_id` ao groupby em
       [refresh_analytics_store_use_case.py:1564-1566](../../src/use_cases/refresh_analytics_store_use_case.py#L1564-L1566)
       (`gold_model_decision_final`: `rank_rmse`, `rank_mae`, `rank_da`).
       **Aceite:** rank eh calculado dentro de
       `(asset, parent_sweep_id, horizon)`, nao mais cross-coorte.
 
-- [ ] **4.2** Adicionar `parent_sweep_id` ao groupby em
+- [~] **4.2** Adicionar `parent_sweep_id` ao groupby em
       [refresh_analytics_store_use_case.py:156-163](../../src/use_cases/refresh_analytics_store_use_case.py#L156-L163)
       (`gold_ranking_by_config`: `rank_test_rmse`, `rank_test_mae`,
       `rank_test_da`).
       **Aceite:** ranks sao por
       `(asset, parent_sweep_id, feature_set_name)`.
 
-- [ ] **4.3** Testes unitarios: criar dois sweeps sinteticos com mesmas
+- [~] **4.3** Testes unitarios: criar dois sweeps sinteticos com mesmas
       configs, verificar que ranks sao independentes por sweep.
       **Aceite:** `pytest tests/unit/use_cases/test_refresh_analytics_store_use_case.py`
       passa com novos casos.
