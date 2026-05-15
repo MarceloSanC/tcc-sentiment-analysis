@@ -254,35 +254,52 @@ omitem `config_signature` e hoje misturam coortes silenciosamente.
 
 ### Notas de revisao:
 
+- 2026-05-15: Stage 5 implementado em branch
+  `fix/analytics-store-stage5-cohort-aware-groupby` para corrigir o subgrupo
+  RED "5 sem config_signature" de A_code_audit.md §M5-Q2.
+  Validacao local: `.venv/bin/pytest tests/unit/use_cases/test_refresh_analytics_store_use_case.py -v`
+  (`9 passed, 3 warnings`),
+  `.venv/bin/pytest tests/unit/use_cases/test_generate_prediction_analysis_plots_use_case.py -v`
+  (`7 passed`) e `.venv/bin/pytest tests/unit/use_cases/ -v`
+  (`134 passed, 5 warnings`).
+- Busca de consumidores executada com
+  `grep -rnE --exclude='*.pyc' "gold_feature_set_impact|gold_prediction_metrics_by_horizon|gold_feature_impact_by_horizon|gold_feature_contrib_local_summary|gold_consistency_topk" src/ tests/`
+  e `grep -rn --exclude='*.pyc' "load_gold_table" src/ tests/`.
+- Ressalva de 5.4: `gold_feature_contrib_local_summary` deriva
+  `parent_sweep_id` via `dim_run.run_id`; rows legadas de inferencia sem
+  `run_id` permanecem com `parent_sweep_id=None` ate Stage 10.
+- Stage 6 permanece fora deste PR; as 5 tabelas com `config_signature` no
+  groupby tem tratamento proprio no Stage 6.
+
 ### Tasks
 
-- [ ] **5.1** `gold_feature_set_impact`: adicionar `parent_sweep_id` ao
+- [~] **5.1** `gold_feature_set_impact`: adicionar `parent_sweep_id` ao
       groupby em [refresh_analytics_store_use_case.py:259](../../src/use_cases/refresh_analytics_store_use_case.py#L259).
       **Aceite:** output tem coluna `parent_sweep_id`; agregados nao
       somam runs de sweeps diferentes.
 
-- [ ] **5.2** `gold_prediction_metrics_by_horizon`: idem em
+- [~] **5.2** `gold_prediction_metrics_by_horizon`: idem em
       [:556](../../src/use_cases/refresh_analytics_store_use_case.py#L556).
       **Aceite:** mesmo criterio.
 
-- [ ] **5.3** `gold_feature_impact_by_horizon`: idem em
+- [~] **5.3** `gold_feature_impact_by_horizon`: idem em
       [:760](../../src/use_cases/refresh_analytics_store_use_case.py#L760).
       **Aceite:** mesmo criterio.
 
-- [ ] **5.4** `gold_feature_contrib_local_summary`: idem em
+- [~] **5.4** `gold_feature_contrib_local_summary`: idem em
       [:1820](../../src/use_cases/refresh_analytics_store_use_case.py#L1820).
       **Aceite:** mesmo criterio.
 
-- [ ] **5.5** `gold_consistency_topk`: adicionar `parent_sweep_id` ao
+- [~] **5.5** `gold_consistency_topk`: adicionar `parent_sweep_id` ao
       `keys` em [:175](../../src/use_cases/refresh_analytics_store_use_case.py#L175).
       **Aceite:** rankings de top-k sao por sweep.
 
-- [ ] **5.6** Atualizar testes existentes em
+- [~] **5.6** Atualizar testes existentes em
       `test_refresh_analytics_store_use_case.py` que assumem o shape
       antigo dessas 5 tabelas.
       **Aceite:** suite passa com novos shapes.
 
-- [ ] **5.7** Atualizar consumidores que leem as 5 tabelas alteradas
+- [~] **5.7** Atualizar consumidores que leem as 5 tabelas alteradas
       para acomodar o novo shape (coluna `parent_sweep_id` adicional e
       grao mais fino):
       - [generate_prediction_analysis_plots_use_case.py](../../src/use_cases/generate_prediction_analysis_plots_use_case.py)
