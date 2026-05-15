@@ -139,7 +139,16 @@ class RefreshAnalyticsStoreUseCase:
         df = base[base["split"] == "test"].copy()
         if df.empty:
             return pd.DataFrame()
-        group_cols = ["asset", "feature_set_name", "config_signature"]
+        if "parent_sweep_id" not in df.columns:
+            if "parent_sweep_id_y" in df.columns:
+                df["parent_sweep_id"] = df["parent_sweep_id_y"]
+                if "parent_sweep_id_x" in df.columns:
+                    df["parent_sweep_id"] = df["parent_sweep_id"].combine_first(df["parent_sweep_id_x"])
+            elif "parent_sweep_id_x" in df.columns:
+                df["parent_sweep_id"] = df["parent_sweep_id_x"]
+            else:
+                df["parent_sweep_id"] = None
+        group_cols = ["asset", "feature_set_name", "parent_sweep_id", "config_signature"]
         agg = (
             df.groupby(group_cols, dropna=False)
             .agg(
@@ -153,16 +162,17 @@ class RefreshAnalyticsStoreUseCase:
             )
             .reset_index()
         )
-        agg["rank_test_rmse"] = agg.groupby(["asset", "feature_set_name"])["mean_test_rmse"].rank(
+        ranking_group_cols = ["asset", "feature_set_name", "parent_sweep_id"]
+        agg["rank_test_rmse"] = agg.groupby(ranking_group_cols, dropna=False)["mean_test_rmse"].rank(
             method="min", ascending=True
         )
-        agg["rank_test_mae"] = agg.groupby(["asset", "feature_set_name"])["mean_test_mae"].rank(
+        agg["rank_test_mae"] = agg.groupby(ranking_group_cols, dropna=False)["mean_test_mae"].rank(
             method="min", ascending=True
         )
-        agg["rank_test_da"] = agg.groupby(["asset", "feature_set_name"])["mean_test_da"].rank(
+        agg["rank_test_da"] = agg.groupby(ranking_group_cols, dropna=False)["mean_test_da"].rank(
             method="min", ascending=False
         )
-        return agg.sort_values(["asset", "feature_set_name", "rank_test_rmse"]).reset_index(drop=True)
+        return agg.sort_values(["asset", "feature_set_name", "parent_sweep_id", "rank_test_rmse"]).reset_index(drop=True)
 
     @staticmethod
     def _build_gold_consistency_topk(base: pd.DataFrame) -> pd.DataFrame:
