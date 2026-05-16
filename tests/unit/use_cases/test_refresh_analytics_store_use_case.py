@@ -257,6 +257,33 @@ def test_refresh_with_scope_spec_cohort_decision_filters_silver(tmp_path) -> Non
     assert set(metrics["run_id"]) == {"sw1_r1"}
 
 
+def test_refresh_execute_scope_spec_overrides_instance_default(tmp_path) -> None:
+    silver = tmp_path / "silver"
+    gold = tmp_path / "gold"
+    _write_two_sweep_refresh_fixture(silver)
+
+    RefreshAnalyticsStoreUseCase(
+        analytics_silver_dir=silver,
+        analytics_gold_dir=gold,
+        scope_spec=ScopeSpec.create(
+            scope_mode="cohort_decision",
+            parent_sweep_prefixes=("sw2",),
+        ),
+    ).execute(
+        scope_spec=ScopeSpec.create(
+            scope_mode="cohort_decision",
+            parent_sweep_prefixes=("sw1",),
+        )
+    )
+
+    oos = pd.read_parquet(gold / "gold_oos_consolidated.parquet")
+    ranking = pd.read_parquet(gold / "gold_ranking_by_config.parquet")
+
+    assert set(oos["run_id"]) == {"sw1_r1"}
+    assert set(oos["parent_sweep_id"].dropna()) == {"sw1_round"}
+    assert set(ranking["parent_sweep_id"].dropna()) == {"sw1_round"}
+
+
 def test_refresh_with_scope_spec_validates_eagerly(tmp_path) -> None:
     with pytest.raises(ValueError, match="scope_mode=cohort_decision requires"):
         RefreshAnalyticsStoreUseCase(
