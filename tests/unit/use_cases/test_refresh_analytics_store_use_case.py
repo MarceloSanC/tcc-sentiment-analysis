@@ -606,6 +606,56 @@ def test_gold_metrics_by_config_carries_parent_sweep_id() -> None:
     assert actual_parent_by_config == expected_parent_by_config
 
 
+def test_gold_metrics_by_config_preserves_legacy_null_parent_sweep_id() -> None:
+    metrics = pd.DataFrame(
+        [
+            {
+                "run_id": "sw1_r1",
+                "asset": "AAPL",
+                "feature_set_name": "BT",
+                "parent_sweep_id": "sw1",
+                "config_signature": "cfg1",
+                "split": "test",
+                "horizon": 1,
+                "n_samples": 3,
+                "rmse": 1.0,
+                "mae": 1.0,
+            },
+            {
+                "run_id": "sw1_r2",
+                "asset": "AAPL",
+                "feature_set_name": "BT",
+                "parent_sweep_id": "sw1",
+                "config_signature": "cfg1",
+                "split": "test",
+                "horizon": 1,
+                "n_samples": 5,
+                "rmse": 3.0,
+                "mae": 3.0,
+            },
+            {
+                "run_id": "legacy_r1",
+                "asset": "AAPL",
+                "feature_set_name": "BT",
+                "parent_sweep_id": None,
+                "config_signature": "cfg1",
+                "split": "test",
+                "horizon": 1,
+                "n_samples": 7,
+                "rmse": 10.0,
+                "mae": 10.0,
+            },
+        ]
+    )
+
+    out = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_config(metrics)
+    cfg1 = out[out["config_signature"] == "cfg1"].reset_index(drop=True)
+
+    assert len(cfg1) == 2
+    assert (cfg1["parent_sweep_id"] == "sw1").any()
+    assert cfg1["parent_sweep_id"].isna().any()
+
+
 def test_gold_feature_set_impact_is_cohort_aware() -> None:
     base = pd.DataFrame(
         [
