@@ -1017,6 +1017,77 @@ def test_n_oos_contract_passes_per_sweep(tmp_path) -> None:
     assert "mismatch_with_run_level=0" in str(check["detail"])
 
 
+def test_n_oos_contract_passes_with_legacy_shared_config_signature(tmp_path) -> None:
+    """Regression test for M5-Q4: same config_signature across sweeps must not collapse."""
+    silver = tmp_path / "silver"
+    gold = tmp_path / "gold"
+    _seed_minimal_valid_silver(silver)
+
+    _write_table(
+        gold,
+        "gold_prediction_metrics_by_run_split_horizon",
+        [
+            {
+                "run_id": "r1",
+                "asset": "AAPL",
+                "feature_set_name": "B",
+                "parent_sweep_id": "sw1",
+                "config_signature": "cfg_shared",
+                "split": "test",
+                "horizon": 1,
+                "n_samples": 2,
+                "confidence_calibrated": 0.7,
+            },
+            {
+                "run_id": "r2",
+                "asset": "AAPL",
+                "feature_set_name": "B",
+                "parent_sweep_id": "sw2",
+                "config_signature": "cfg_shared",
+                "split": "test",
+                "horizon": 1,
+                "n_samples": 3,
+                "confidence_calibrated": 0.8,
+            },
+        ],
+    )
+    _write_table(
+        gold,
+        "gold_prediction_metrics_by_config",
+        [
+            {
+                "asset": "AAPL",
+                "feature_set_name": "B",
+                "parent_sweep_id": "sw1",
+                "config_signature": "cfg_shared",
+                "split": "test",
+                "horizon": 1,
+                "n_runs": 1,
+                "n_oos": 2,
+            },
+            {
+                "asset": "AAPL",
+                "feature_set_name": "B",
+                "parent_sweep_id": "sw2",
+                "config_signature": "cfg_shared",
+                "split": "test",
+                "horizon": 1,
+                "n_runs": 1,
+                "n_oos": 3,
+            },
+        ],
+    )
+
+    result = ValidateAnalyticsQualityUseCase(
+        analytics_silver_dir=silver,
+        analytics_gold_dir=gold,
+    ).execute()
+
+    check = next(item for item in result.checks if item["check"] == "gold_metrics_by_config_n_oos_contract")
+    assert check["passed"] is True
+    assert "mismatch_with_run_level=0" in str(check["detail"])
+
+
 def test_validate_analytics_quality_block_a_check_passes_on_minimal_valid_dataset(tmp_path) -> None:
     silver = tmp_path / "silver"
     _seed_minimal_valid_silver(silver)
