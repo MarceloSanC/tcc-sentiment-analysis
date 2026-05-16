@@ -250,7 +250,7 @@ class RefreshAnalyticsStoreUseCase:
         rows: list[dict[str, object]] = []
         for metric_col, metric_name in metrics:
             grouped = (
-                df.groupby(["asset", "feature_set_name", "config_signature"], dropna=False)[metric_col]
+                df.groupby(["asset", "feature_set_name", "parent_sweep_id", "config_signature"], dropna=False)[metric_col]
                 .agg(["count", "mean", "std"])
                 .reset_index()
             )
@@ -263,6 +263,7 @@ class RefreshAnalyticsStoreUseCase:
                     {
                         "asset": row["asset"],
                         "feature_set_name": row["feature_set_name"],
+                        "parent_sweep_id": row["parent_sweep_id"],
                         "config_signature": row["config_signature"],
                         "metric": metric_name,
                         "n": int(row["count"]),
