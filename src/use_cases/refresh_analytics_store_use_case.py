@@ -250,7 +250,7 @@ class RefreshAnalyticsStoreUseCase:
         rows: list[dict[str, object]] = []
         for metric_col, metric_name in metrics:
             grouped = (
-                df.groupby(["asset", "feature_set_name", "config_signature"], dropna=False)[metric_col]
+                df.groupby(["asset", "feature_set_name", "parent_sweep_id", "config_signature"], dropna=False)[metric_col]
                 .agg(["count", "mean", "std"])
                 .reset_index()
             )
@@ -263,6 +263,7 @@ class RefreshAnalyticsStoreUseCase:
                     {
                         "asset": row["asset"],
                         "feature_set_name": row["feature_set_name"],
+                        "parent_sweep_id": row["parent_sweep_id"],
                         "config_signature": row["config_signature"],
                         "metric": metric_name,
                         "n": int(row["count"]),
@@ -543,7 +544,7 @@ class RefreshAnalyticsStoreUseCase:
         if metrics_run_split_h.empty:
             return pd.DataFrame()
 
-        cols = ['asset', 'feature_set_name', 'config_signature', 'split', 'horizon']
+        cols = ['asset', 'feature_set_name', 'parent_sweep_id', 'config_signature', 'split', 'horizon']
         if not set(cols).issubset(set(metrics_run_split_h.columns)):
             return pd.DataFrame()
 
@@ -617,7 +618,7 @@ class RefreshAnalyticsStoreUseCase:
         if metrics_run_split_h.empty:
             return pd.DataFrame()
 
-        cols = ['asset', 'feature_set_name', 'config_signature', 'split', 'horizon']
+        cols = ['asset', 'feature_set_name', 'parent_sweep_id', 'config_signature', 'split', 'horizon']
         if not set(cols).issubset(set(metrics_run_split_h.columns)):
             return pd.DataFrame()
 
@@ -637,7 +638,7 @@ class RefreshAnalyticsStoreUseCase:
         if metrics_run_split_h.empty:
             return pd.DataFrame()
 
-        req = {'asset', 'feature_set_name', 'config_signature', 'horizon', 'split'}
+        req = {'asset', 'feature_set_name', 'parent_sweep_id', 'config_signature', 'horizon', 'split'}
         if not req.issubset(set(metrics_run_split_h.columns)):
             return pd.DataFrame()
 
@@ -652,7 +653,7 @@ class RefreshAnalyticsStoreUseCase:
             return pd.DataFrame()
 
         grouped = metrics_run_split_h.groupby(
-            ['asset', 'feature_set_name', 'config_signature', 'horizon', 'split'],
+            ['asset', 'feature_set_name', 'parent_sweep_id', 'config_signature', 'horizon', 'split'],
             dropna=False,
         )
 
@@ -662,7 +663,7 @@ class RefreshAnalyticsStoreUseCase:
         if test_df.empty or val_df.empty:
             return pd.DataFrame()
 
-        key_cols = ['asset', 'feature_set_name', 'config_signature', 'horizon']
+        key_cols = ['asset', 'feature_set_name', 'parent_sweep_id', 'config_signature', 'horizon']
         out = test_df.merge(val_df, on=key_cols, how='inner', suffixes=('_test', '_val'))
         if out.empty:
             return pd.DataFrame()
@@ -678,7 +679,7 @@ class RefreshAnalyticsStoreUseCase:
         if metrics_run_split_h.empty:
             return pd.DataFrame()
 
-        req = {'asset', 'feature_set_name', 'config_signature', 'horizon', 'split'}
+        req = {'asset', 'feature_set_name', 'parent_sweep_id', 'config_signature', 'horizon', 'split'}
         if not req.issubset(set(metrics_run_split_h.columns)):
             return pd.DataFrame()
 
@@ -697,7 +698,7 @@ class RefreshAnalyticsStoreUseCase:
             return pd.DataFrame()
 
         rows: list[dict[str, object]] = []
-        gcols = ['asset', 'feature_set_name', 'config_signature', 'horizon']
+        gcols = ['asset', 'feature_set_name', 'parent_sweep_id', 'config_signature', 'horizon']
         for keys, g in df.groupby(gcols, dropna=False):
             for m in metric_cols:
                 series = pd.to_numeric(g[m], errors='coerce').dropna()
@@ -711,8 +712,9 @@ class RefreshAnalyticsStoreUseCase:
                     {
                         'asset': keys[0],
                         'feature_set_name': keys[1],
-                        'config_signature': keys[2],
-                        'horizon': int(keys[3]) if pd.notna(keys[3]) else None,
+                        'parent_sweep_id': keys[2],
+                        'config_signature': keys[3],
+                        'horizon': int(keys[4]) if pd.notna(keys[4]) else None,
                         'metric': m,
                         'n_runs': n,
                         'mean': mean,

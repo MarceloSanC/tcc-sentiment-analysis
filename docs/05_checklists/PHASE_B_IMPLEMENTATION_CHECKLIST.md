@@ -324,36 +324,59 @@ no output para rastreabilidade direta (Lei 3).
 
 ### Notas de revisao:
 
+- 2026-05-16: Stage 6 implementado em branch
+  `fix/analytics-store-stage6-parent-sweep-id-output` para corrigir o
+  subgrupo RED "5 com config_signature" de A_code_audit.md §M5-Q2 e fechar o
+  gap M5-Q4 de `gold_metrics_by_config_n_oos_contract`.
+  Validacao local: `.venv/bin/pytest tests/unit/use_cases/test_refresh_analytics_store_use_case.py -v`
+  (`11 passed, 3 warnings`),
+  `.venv/bin/pytest tests/unit/use_cases/test_validate_analytics_quality_use_case.py -v`
+  (`19 passed, 2 warnings`) e `.venv/bin/pytest tests/unit/use_cases/ -v`
+  (`138 passed, 5 warnings`).
+- Busca de consumidores executada com
+  `rg -n "gold_ic95_by_config_metric|gold_prediction_metrics_by_config|gold_prediction_calibration|gold_prediction_generalization_gap|gold_prediction_robustness_by_horizon" src/ tests/`.
+- Ressalva: para runs pos-`9f0ccec`, `config_signature` ja segrega coortes e
+  o grao das 5 tabelas nao muda; legado pre-`9f0ccec` com
+  `parent_sweep_id=None` permanece visivel via `dropna=False` e pode aparecer
+  como bucket separado.
+- 2026-05-16 (follow-up): 4 YELLOW da revisao enderecados antes do merge —
+  refactor da indentacao do n_oos_contract, teste de cenario M5-Q4 com
+  config_signature cross-sweep, teste de bucket legado parent_sweep_id=None,
+  e Finding 4 dispensado por falta de evidencia downstream concreta.
+  Validacao: `.venv/bin/pytest tests/unit/use_cases/` (`140 passed, 5 warnings`);
+  `.venv/bin/ruff check src/use_cases/validate_analytics_quality_use_case.py`
+  (`All checks passed!`).
+
 ### Tasks
 
-- [ ] **6.1** `gold_ic95_by_config_metric`
+- [~] **6.1** `gold_ic95_by_config_metric`
       ([refresh_analytics_store_use_case.py:227](../../src/use_cases/refresh_analytics_store_use_case.py#L227)):
       adicionar `parent_sweep_id` derivado via merge com `dim_run`.
       **Aceite:** output tem coluna nao-nula para runs pos-9f0ccec.
 
-- [ ] **6.2** `gold_prediction_metrics_by_config`
+- [~] **6.2** `gold_prediction_metrics_by_config`
       ([:519](../../src/use_cases/refresh_analytics_store_use_case.py#L519)):
       idem.
 
-- [ ] **6.3** `gold_prediction_calibration`
+- [~] **6.3** `gold_prediction_calibration`
       ([:597-604](../../src/use_cases/refresh_analytics_store_use_case.py#L597-L604)):
       idem.
 
-- [ ] **6.4** `gold_prediction_generalization_gap`
+- [~] **6.4** `gold_prediction_generalization_gap`
       ([:627-630](../../src/use_cases/refresh_analytics_store_use_case.py#L627-L630)):
       idem.
 
-- [ ] **6.5** `gold_prediction_robustness_by_horizon`
+- [~] **6.5** `gold_prediction_robustness_by_horizon`
       ([:673](../../src/use_cases/refresh_analytics_store_use_case.py#L673)):
       idem.
 
-- [ ] **6.6** Atualizar `gold_metrics_by_config_n_oos_contract` em
+- [~] **6.6** Atualizar `gold_metrics_by_config_n_oos_contract` em
       `validate_analytics_quality_use_case.py` para filtrar pelos dois
       lados via `parent_sweep_id` direto (resolve mismatch_with_run_level=13800
       historico documentado em M5-Q4).
       **Aceite:** check passa em `cohort_decision` para sweep limpo.
 
-- [ ] **6.7** Atualizar consumidores que leem as 5 tabelas com nova
+- [~] **6.7** Atualizar consumidores que leem as 5 tabelas com nova
       coluna `parent_sweep_id` no output:
       - [generate_prediction_analysis_plots_use_case.py](../../src/use_cases/generate_prediction_analysis_plots_use_case.py)
       - [validate_analytics_quality_use_case.py](../../src/use_cases/validate_analytics_quality_use_case.py)
