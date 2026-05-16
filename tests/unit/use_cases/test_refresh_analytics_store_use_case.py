@@ -173,6 +173,25 @@ def _write_two_sweep_refresh_fixture(silver) -> None:
     _write_table(silver, "fact_feature_contrib_local", local_contrib_rows, {"asset": "AAPL", "year": "2026"})
 
 
+def _stable_gold_frame(path) -> pd.DataFrame:
+    df = pd.read_parquet(path).sort_index(axis=1)
+    if df.empty:
+        return df.reset_index(drop=True)
+    return df.sort_values(
+        by=list(df.columns),
+        na_position="first",
+        kind="mergesort",
+    ).reset_index(drop=True)
+
+
+def _assert_gold_table_equal(gold_a, gold_b, table_name: str) -> None:
+    pd.testing.assert_frame_equal(
+        _stable_gold_frame(gold_a / f"{table_name}.parquet"),
+        _stable_gold_frame(gold_b / f"{table_name}.parquet"),
+        check_exact=True,
+    )
+
+
 def test_refresh_without_scope_spec_preserves_global_behavior(tmp_path) -> None:
     silver = tmp_path / "silver"
     gold = tmp_path / "gold"
@@ -188,6 +207,32 @@ def test_refresh_without_scope_spec_preserves_global_behavior(tmp_path) -> None:
 
     assert set(oos["parent_sweep_id"].dropna()) == {"sw1_round", "sw2_round"}
     assert set(ranking["parent_sweep_id"].dropna()) == {"sw1_round", "sw2_round"}
+
+
+def test_refresh_without_scope_spec_is_bitwise_equivalent_to_legacy(tmp_path) -> None:
+    silver = tmp_path / "silver"
+    gold_legacy = tmp_path / "gold_legacy"
+    gold_explicit_none = tmp_path / "gold_explicit_none"
+    _write_two_sweep_refresh_fixture(silver)
+
+    RefreshAnalyticsStoreUseCase(
+        analytics_silver_dir=silver,
+        analytics_gold_dir=gold_legacy,
+    ).execute()
+    RefreshAnalyticsStoreUseCase(
+        analytics_silver_dir=silver,
+        analytics_gold_dir=gold_explicit_none,
+        scope_spec=None,
+    ).execute()
+
+    for table_name in [
+        "gold_ranking_by_config",
+        "gold_oos_consolidated",
+        "gold_prediction_metrics_by_run_split_horizon",
+        "gold_feature_contrib_local_summary",
+        "gold_model_decision_final",
+    ]:
+        _assert_gold_table_equal(gold_legacy, gold_explicit_none, table_name)
 
 
 def test_refresh_with_scope_spec_cohort_decision_filters_silver(tmp_path) -> None:
