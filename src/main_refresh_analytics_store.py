@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import logging
 
+from src.domain.services.scope_spec import ScopeSpec
 from src.use_cases.generate_prediction_analysis_plots_use_case import (
     GeneratePredictionAnalysisPlotsUseCase,
 )
@@ -14,6 +15,24 @@ from src.utils.logging_config import setup_logging
 from src.utils.path_resolver import load_data_paths
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_csv_values(value: str | None) -> list[str] | None:
+    if not value:
+        return None
+    return [part.strip() for part in str(value).split(",") if part.strip()]
+
+
+def _parse_csv_int_values(value: str | None) -> list[int] | None:
+    if not value:
+        return None
+    values: list[int] = []
+    for part in str(value).split(","):
+        part = part.strip()
+        if not part:
+            continue
+        values.append(int(part))
+    return values
 
 
 def parse_args() -> argparse.Namespace:
@@ -64,6 +83,30 @@ def parse_args() -> argparse.Namespace:
             "(example: 0_2_2_)."
         ),
     )
+    parser.add_argument(
+        "--scope-mode",
+        choices=("global_health", "cohort_decision"),
+        default=None,
+        help="Optional analytics refresh scope mode.",
+    )
+    parser.add_argument(
+        "--scope-sweep-prefixes",
+        type=str,
+        default=None,
+        help="Optional comma-separated parent_sweep_id prefixes used to scope the gold refresh.",
+    )
+    parser.add_argument(
+        "--scope-splits",
+        type=str,
+        default=None,
+        help="Optional comma-separated split filter used to scope the gold refresh (example: val,test).",
+    )
+    parser.add_argument(
+        "--scope-horizons",
+        type=str,
+        default=None,
+        help="Optional comma-separated horizon filter used to scope the gold refresh (example: 1,7,30).",
+    )
 
     parser.add_argument(
         "--block-a-scope-sweep-prefixes",
@@ -109,7 +152,16 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Require post-guardrail quantile columns for Block A acceptance.",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    scope_flags_used = bool(
+        args.scope_mode
+        or args.scope_sweep_prefixes
+        or args.scope_splits
+        or args.scope_horizons
+    )
+    if scope_flags_used and not args.scope_mode:
+        parser.error("--scope-mode is required when using refresh scope filters.")
+    return args
 
 
 def main() -> None:
@@ -117,9 +169,29 @@ def main() -> None:
     args = parse_args()
     paths = load_data_paths()
 
+    scope_spec = None
+    if args.scope_mode or args.scope_sweep_prefixes or args.scope_splits or args.scope_horizons:
+        scope_spec = ScopeSpec.create(
+            scope_mode=args.scope_mode,
+            parent_sweep_prefixes=_parse_csv_values(args.scope_sweep_prefixes),
+            splits=_parse_csv_values(args.scope_splits),
+            horizons=_parse_csv_int_values(args.scope_horizons),
+        )
+
     use_case = RefreshAnalyticsStoreUseCase(
         analytics_silver_dir=paths["analytics_silver"],
         analytics_gold_dir=paths["analytics_gold"],
+        scope_spec=scope_spec,
+    )
+    logger.info(
+        "Analytics gold refresh scope resolved",
+        extra={
+            "scope_spec": (
+                ValidateAnalyticsQualityUseCase._scope_detail(use_case.scope_spec)
+                if use_case.scope_spec is not None
+                else None
+            ),
+        },
     )
     result = use_case.execute()
     logger.info(

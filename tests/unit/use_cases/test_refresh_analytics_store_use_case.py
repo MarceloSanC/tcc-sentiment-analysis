@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import pandas as pd
+import pytest
 
+from src.domain.services.scope_spec import ScopeSpec
 from src.use_cases.refresh_analytics_store_use_case import RefreshAnalyticsStoreUseCase
 
 
@@ -12,6 +14,389 @@ def _write_table(base, table_name: str, rows: list[dict], parts: dict[str, str] 
             table_dir = table_dir / f"{k}={v}"
     table_dir.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(rows).to_parquet(table_dir / f"{table_name}.parquet", index=False)
+
+
+def _write_two_sweep_refresh_fixture(silver) -> None:
+    dim_rows = []
+    split_rows = []
+    oos_rows = []
+    artifact_rows = []
+    local_contrib_rows = []
+
+    for idx, (run_id, sweep, cfg, rmse) in enumerate(
+        [
+            ("sw1_r1", "sw1_round", "cfg_sw1", 0.10),
+            ("sw2_r1", "sw2_round", "cfg_sw2", 0.30),
+        ],
+        start=1,
+    ):
+        dim_rows.append(
+            {
+                "schema_version": 1,
+                "run_id": run_id,
+                "asset": "AAPL",
+                "feature_set_name": "B",
+                "feature_set_hash": "fh1",
+                "config_signature": cfg,
+                "model_version": f"v{idx}",
+                "parent_sweep_id": sweep,
+                "trial_number": idx,
+                "fold": "wf_1",
+                "seed": idx,
+                "status": "ok",
+                "created_at_utc": f"2026-01-0{idx}T00:00:00+00:00",
+                "feature_list_ordered_json": "[]",
+                "split_fingerprint": f"sp{idx}",
+                "pipeline_version": "0.1",
+                "checkpoint_path_final": "/tmp/final.pt",
+                "checkpoint_path_best": "/tmp/best.ckpt",
+                "git_commit": "abc",
+                "library_versions_json": "{}",
+                "hardware_info_json": "{}",
+                "duration_total_seconds": 1.0,
+                "eta_recorded_seconds": 0.0,
+                "retries": 0,
+            }
+        )
+        split_rows.append(
+            {
+                "schema_version": 1,
+                "run_id": run_id,
+                "asset": "AAPL",
+                "parent_sweep_id": sweep,
+                "split": "test",
+                "rmse": rmse,
+                "mae": rmse,
+                "mape": 0.0,
+                "smape": 0.0,
+                "directional_accuracy": 0.50 + idx / 100,
+                "n_samples": 1,
+            }
+        )
+        oos_rows.append(
+            {
+                "schema_version": 1,
+                "run_id": run_id,
+                "asset": "AAPL",
+                "feature_set_name": "B",
+                "config_signature": cfg,
+                "split": "test",
+                "fold": "wf_1",
+                "seed": idx,
+                "horizon": 1,
+                "timestamp_utc": f"2026-01-0{idx}T00:00:00+00:00",
+                "target_timestamp_utc": f"2026-01-0{idx}T00:00:00+00:00",
+                "y_true": 0.1,
+                "y_pred": 0.1 + rmse,
+                "error": rmse,
+                "abs_error": rmse,
+                "sq_error": rmse**2,
+                "quantile_p10": 0.0,
+                "quantile_p50": 0.1 + rmse,
+                "quantile_p90": 0.5,
+                "quantile_p10_post_guardrail": 0.0,
+                "quantile_p50_post_guardrail": 0.1 + rmse,
+                "quantile_p90_post_guardrail": 0.5,
+                "quantile_guardrail_applied": 0,
+                "year": 2026,
+            }
+        )
+        if idx == 1:
+            for split, horizon, day in [("val", 1, "03"), ("test", 7, "04")]:
+                oos_rows.append(
+                    {
+                        "schema_version": 1,
+                        "run_id": run_id,
+                        "asset": "AAPL",
+                        "feature_set_name": "B",
+                        "config_signature": cfg,
+                        "split": split,
+                        "fold": "wf_1",
+                        "seed": idx,
+                        "horizon": horizon,
+                        "timestamp_utc": f"2026-01-{day}T00:00:00+00:00",
+                        "target_timestamp_utc": f"2026-01-{day}T00:00:00+00:00",
+                        "y_true": 0.1,
+                        "y_pred": 0.1 + rmse,
+                        "error": rmse,
+                        "abs_error": rmse,
+                        "sq_error": rmse**2,
+                        "quantile_p10": 0.0,
+                        "quantile_p50": 0.1 + rmse,
+                        "quantile_p90": 0.5,
+                        "quantile_p10_post_guardrail": 0.0,
+                        "quantile_p50_post_guardrail": 0.1 + rmse,
+                        "quantile_p90_post_guardrail": 0.5,
+                        "quantile_guardrail_applied": 0,
+                        "year": 2026,
+                    }
+                )
+        artifact_rows.append(
+            {
+                "schema_version": 1,
+                "run_id": run_id,
+                "asset": "AAPL",
+                "model_version": f"v{idx}",
+                "checkpoint_path_final": "/tmp/final.pt",
+                "checkpoint_path_best": "/tmp/best.ckpt",
+                "config_path": "/tmp/config.json",
+                "scaler_path": None,
+                "encoder_path": None,
+                "feature_importance_json": (
+                    f'[{{"feature": "close", "delta_rmse": {rmse}, '
+                    f'"delta_mae": {rmse}, "baseline_rmse": {rmse}, "baseline_mae": {rmse}}}]'
+                ),
+                "attention_summary_json": '{"available": false}',
+                "logs_ref_json": "{}",
+            }
+        )
+        local_contrib_rows.append(
+            {
+                "schema_version": 1,
+                "inference_run_id": f"inf_{run_id}",
+                "run_id": run_id,
+                "model_version": f"v{idx}",
+                "asset": "AAPL",
+                "feature_set_name": "B",
+                "split": "inference",
+                "horizon": 1,
+                "timestamp_utc": f"2026-01-0{idx}T00:00:00+00:00",
+                "target_timestamp_utc": f"2026-01-0{idx}T00:00:00+00:00",
+                "feature_name": "close",
+                "feature_rank": 1,
+                "contribution": rmse,
+                "abs_contribution": rmse,
+                "contribution_sign": "positive",
+                "method": "local_magnitude_signed_v1",
+                "year": 2026,
+                "created_at_utc": f"2026-01-0{idx}T01:00:00+00:00",
+            }
+        )
+
+    local_contrib_rows.append(
+        {
+            "schema_version": 1,
+            "inference_run_id": "inf_legacy",
+            "run_id": None,
+            "model_version": "v_legacy",
+            "asset": "AAPL",
+            "feature_set_name": "B",
+            "split": "inference",
+            "horizon": 1,
+            "timestamp_utc": "2026-01-03T00:00:00+00:00",
+            "target_timestamp_utc": "2026-01-03T00:00:00+00:00",
+            "feature_name": "close",
+            "feature_rank": 1,
+            "contribution": 1.0,
+            "abs_contribution": 1.0,
+            "contribution_sign": "positive",
+            "method": "local_magnitude_signed_v1",
+            "year": 2026,
+            "created_at_utc": "2026-01-03T01:00:00+00:00",
+        }
+    )
+
+    _write_table(silver, "dim_run", dim_rows, {"asset": "AAPL"})
+    _write_table(silver, "fact_split_metrics", split_rows, {"asset": "AAPL"})
+    _write_table(silver, "fact_oos_predictions", oos_rows, {"asset": "AAPL", "year": "2026"})
+    _write_table(silver, "fact_model_artifacts", artifact_rows, {"asset": "AAPL"})
+    _write_table(silver, "fact_feature_contrib_local", local_contrib_rows, {"asset": "AAPL", "year": "2026"})
+
+
+def _stable_gold_frame(path) -> pd.DataFrame:
+    df = pd.read_parquet(path).sort_index(axis=1)
+    if df.empty:
+        return df.reset_index(drop=True)
+    return df.sort_values(
+        by=list(df.columns),
+        na_position="first",
+        kind="mergesort",
+    ).reset_index(drop=True)
+
+
+def _assert_gold_table_equal(gold_a, gold_b, table_name: str) -> None:
+    pd.testing.assert_frame_equal(
+        _stable_gold_frame(gold_a / f"{table_name}.parquet"),
+        _stable_gold_frame(gold_b / f"{table_name}.parquet"),
+        check_exact=True,
+    )
+
+
+def test_refresh_without_scope_spec_preserves_global_behavior(tmp_path) -> None:
+    silver = tmp_path / "silver"
+    gold = tmp_path / "gold"
+    _write_two_sweep_refresh_fixture(silver)
+
+    RefreshAnalyticsStoreUseCase(
+        analytics_silver_dir=silver,
+        analytics_gold_dir=gold,
+    ).execute()
+
+    oos = pd.read_parquet(gold / "gold_oos_consolidated.parquet")
+    ranking = pd.read_parquet(gold / "gold_ranking_by_config.parquet")
+
+    assert set(oos["parent_sweep_id"].dropna()) == {"sw1_round", "sw2_round"}
+    assert set(ranking["parent_sweep_id"].dropna()) == {"sw1_round", "sw2_round"}
+
+
+def test_refresh_without_scope_spec_is_bitwise_equivalent_to_legacy(tmp_path) -> None:
+    silver = tmp_path / "silver"
+    gold_legacy = tmp_path / "gold_legacy"
+    gold_explicit_none = tmp_path / "gold_explicit_none"
+    _write_two_sweep_refresh_fixture(silver)
+
+    RefreshAnalyticsStoreUseCase(
+        analytics_silver_dir=silver,
+        analytics_gold_dir=gold_legacy,
+    ).execute()
+    RefreshAnalyticsStoreUseCase(
+        analytics_silver_dir=silver,
+        analytics_gold_dir=gold_explicit_none,
+        scope_spec=None,
+    ).execute()
+
+    for table_name in [
+        "gold_ranking_by_config",
+        "gold_oos_consolidated",
+        "gold_prediction_metrics_by_run_split_horizon",
+        "gold_feature_contrib_local_summary",
+        "gold_model_decision_final",
+    ]:
+        _assert_gold_table_equal(gold_legacy, gold_explicit_none, table_name)
+
+
+def test_refresh_with_scope_spec_cohort_decision_filters_silver(tmp_path) -> None:
+    silver = tmp_path / "silver"
+    gold = tmp_path / "gold"
+    _write_two_sweep_refresh_fixture(silver)
+
+    RefreshAnalyticsStoreUseCase(
+        analytics_silver_dir=silver,
+        analytics_gold_dir=gold,
+        scope_spec=ScopeSpec.create(
+            scope_mode="cohort_decision",
+            parent_sweep_prefixes=("sw1",),
+        ),
+    ).execute()
+
+    oos = pd.read_parquet(gold / "gold_oos_consolidated.parquet")
+    metrics = pd.read_parquet(gold / "gold_prediction_metrics_by_run_split_horizon.parquet")
+
+    assert set(oos["run_id"]) == {"sw1_r1"}
+    assert set(oos["parent_sweep_id"].dropna()) == {"sw1_round"}
+    assert set(metrics["run_id"]) == {"sw1_r1"}
+
+
+def test_refresh_execute_scope_spec_overrides_instance_default(tmp_path) -> None:
+    silver = tmp_path / "silver"
+    gold = tmp_path / "gold"
+    _write_two_sweep_refresh_fixture(silver)
+
+    RefreshAnalyticsStoreUseCase(
+        analytics_silver_dir=silver,
+        analytics_gold_dir=gold,
+        scope_spec=ScopeSpec.create(
+            scope_mode="cohort_decision",
+            parent_sweep_prefixes=("sw2",),
+        ),
+    ).execute(
+        scope_spec=ScopeSpec.create(
+            scope_mode="cohort_decision",
+            parent_sweep_prefixes=("sw1",),
+        )
+    )
+
+    oos = pd.read_parquet(gold / "gold_oos_consolidated.parquet")
+    ranking = pd.read_parquet(gold / "gold_ranking_by_config.parquet")
+
+    assert set(oos["run_id"]) == {"sw1_r1"}
+    assert set(oos["parent_sweep_id"].dropna()) == {"sw1_round"}
+    assert set(ranking["parent_sweep_id"].dropna()) == {"sw1_round"}
+
+
+def test_refresh_global_health_ignores_cohort_filters(tmp_path) -> None:
+    silver = tmp_path / "silver"
+    gold_global = tmp_path / "gold_global"
+    gold_global_health = tmp_path / "gold_global_health"
+    _write_two_sweep_refresh_fixture(silver)
+
+    RefreshAnalyticsStoreUseCase(
+        analytics_silver_dir=silver,
+        analytics_gold_dir=gold_global,
+        scope_spec=None,
+    ).execute()
+    RefreshAnalyticsStoreUseCase(
+        analytics_silver_dir=silver,
+        analytics_gold_dir=gold_global_health,
+        scope_spec=ScopeSpec.create(
+            scope_mode="global_health",
+            parent_sweep_prefixes=("sw1",),
+        ),
+    ).execute()
+
+    oos = pd.read_parquet(gold_global_health / "gold_oos_consolidated.parquet")
+    assert set(oos["parent_sweep_id"].dropna()) == {"sw1_round", "sw2_round"}
+
+    for table_name in [
+        "gold_ranking_by_config",
+        "gold_oos_consolidated",
+        "gold_prediction_metrics_by_run_split_horizon",
+        "gold_feature_contrib_local_summary",
+        "gold_model_decision_final",
+    ]:
+        _assert_gold_table_equal(gold_global, gold_global_health, table_name)
+
+
+def test_refresh_with_scope_spec_filters_by_split_and_horizon(tmp_path) -> None:
+    silver = tmp_path / "silver"
+    gold = tmp_path / "gold"
+    _write_two_sweep_refresh_fixture(silver)
+
+    RefreshAnalyticsStoreUseCase(
+        analytics_silver_dir=silver,
+        analytics_gold_dir=gold,
+        scope_spec=ScopeSpec.create(
+            scope_mode="cohort_decision",
+            splits=("test",),
+            horizons=(1,),
+        ),
+    ).execute()
+
+    oos = pd.read_parquet(gold / "gold_oos_consolidated.parquet")
+
+    assert set(oos["split"]) == {"test"}
+    assert set(oos["horizon"]) == {1}
+
+
+def test_refresh_with_scope_spec_validates_eagerly(tmp_path) -> None:
+    with pytest.raises(ValueError, match="scope_mode=cohort_decision requires"):
+        RefreshAnalyticsStoreUseCase(
+            analytics_silver_dir=tmp_path / "silver",
+            analytics_gold_dir=tmp_path / "gold",
+            scope_spec=ScopeSpec.create(scope_mode="cohort_decision"),
+        )
+
+
+def test_refresh_does_not_empty_tables_without_scope_columns(tmp_path) -> None:
+    silver = tmp_path / "silver"
+    gold = tmp_path / "gold"
+    _write_two_sweep_refresh_fixture(silver)
+
+    RefreshAnalyticsStoreUseCase(
+        analytics_silver_dir=silver,
+        analytics_gold_dir=gold,
+        scope_spec=ScopeSpec.create(
+            scope_mode="cohort_decision",
+            parent_sweep_prefixes=("sw1",),
+        ),
+    ).execute()
+
+    local = pd.read_parquet(gold / "gold_feature_contrib_local_summary.parquet")
+
+    assert not local.empty
+    assert set(local["parent_sweep_id"].dropna()) == {"sw1_round"}
+    assert set(local["feature_name"]) == {"close"}
+    assert "sw2_round" not in set(local["parent_sweep_id"].dropna())
 
 
 def test_refresh_analytics_store_builds_gold_tables(tmp_path) -> None:

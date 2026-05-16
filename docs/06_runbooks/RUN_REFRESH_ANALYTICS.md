@@ -17,6 +17,9 @@ Padrao:
 Escopado para Bloco A (exemplo `0_2_3`, val/test, h=1):
 `python -m src.main_refresh_analytics_store --fail-on-quality --block-a-scope-sweep-prefixes 0_2_3_ --block-a-splits val,test --block-a-horizons 1 --block-a-max-crossing-bruto-rate 0.001 --block-a-max-negative-interval-width-count 0 --block-a-max-crossing-post-guardrail-rate 0.0`
 
+Refresh scoped por coorte declarada (exemplo `round_1_`):
+`python -m src.main_refresh_analytics_store --scope-mode cohort_decision --scope-sweep-prefixes round_1_`
+
 ## Expected
 - gold tables updated
 - quality checks pass (`failed_checks=[]`)
@@ -66,8 +69,20 @@ Validacao automatizada:
 - `--block-a-require-post-guardrail`: exige colunas pós-guardrail para aprovar o Bloco A.
 
 
+### Parametros CLI de Refresh Scoped
+- `--scope-mode`: modo de escopo do refresh (`global_health` ou `cohort_decision`).
+- `--scope-sweep-prefixes`: prefixos de `parent_sweep_id` usados para recortar silver antes de gerar gold.
+- `--scope-splits`: splits usados para recortar silver antes de gerar gold (ex.: `val,test`).
+- `--scope-horizons`: horizontes usados para recortar silver antes de gerar gold (ex.: `1,7,30`).
+
+Quando nenhuma flag `--scope-*` e passada, o refresh preserva o comportamento
+global historico. Quando `--scope-mode cohort_decision` e usado, pelo menos um
+filtro de coorte deve ser declarado.
+
 ## Scope Semantics (Governance)
 - `--fail-on-quality` sem filtros e um gate global de saude do asset/dataset.
+- Filtros `--scope-*` escopam a leitura silver do refresh e materializam gold
+  reduzido para a coorte declarada.
 - Filtros `--block-a-*` atualmente escopam o check `oos_quantile_block_a_acceptance`; outros checks permanecem globais.
 - Para decisao estatistica por coorte (ex.: sweep `0_2_3`), use sempre o mesmo escopo em tabelas/plots/report e declare o escopo no resultado.
 - Nao usar quality global isolado para concluir vencedor de coorte especifica.
