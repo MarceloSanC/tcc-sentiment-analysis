@@ -9,6 +9,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from src.domain.services.scope_spec import ScopeSpec, validate_scope_spec
 from src.utils.path_policy import to_project_relative
 
 
@@ -19,10 +20,17 @@ class RefreshAnalyticsStoreResult:
 
 
 class RefreshAnalyticsStoreUseCase:
-    def __init__(self, *, analytics_silver_dir: str | Path, analytics_gold_dir: str | Path) -> None:
+    def __init__(
+        self,
+        *,
+        analytics_silver_dir: str | Path,
+        analytics_gold_dir: str | Path,
+        scope_spec: ScopeSpec | None = None,
+    ) -> None:
         self.analytics_silver_dir = Path(analytics_silver_dir)
         self.analytics_gold_dir = Path(analytics_gold_dir)
         self.analytics_gold_dir.mkdir(parents=True, exist_ok=True)
+        self.scope_spec = validate_scope_spec(scope_spec) if scope_spec is not None else None
 
     @staticmethod
     def _load_partitioned_table(base_dir: Path, table_name: str) -> pd.DataFrame:
@@ -1925,7 +1933,9 @@ class RefreshAnalyticsStoreUseCase:
 
         return agg
 
-    def execute(self) -> RefreshAnalyticsStoreResult:
+    def execute(self, scope_spec: ScopeSpec | None = None) -> RefreshAnalyticsStoreResult:
+        effective_scope = validate_scope_spec(scope_spec) if scope_spec is not None else self.scope_spec
+
         dim_run = self._load_partitioned_table(self.analytics_silver_dir, "dim_run")
         fact_split_metrics = self._load_partitioned_table(self.analytics_silver_dir, "fact_split_metrics")
         fact_oos_predictions = self._load_partitioned_table(self.analytics_silver_dir, "fact_oos_predictions")
