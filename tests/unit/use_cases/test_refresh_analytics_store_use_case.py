@@ -719,6 +719,50 @@ def test_gold_feature_contrib_local_summary_is_cohort_aware_via_dim_run() -> Non
     assert out["mean_abs_contribution"].tolist() == [2.0, 20.0]
 
 
+def test_gold_feature_contrib_local_summary_keeps_legacy_rows_without_parent_sweep_id() -> None:
+    fact_feature_contrib_local = pd.DataFrame(
+        [
+            {
+                "inference_run_id": "inf_1",
+                "run_id": "legacy_r1",
+                "asset": "AAPL",
+                "feature_set_name": "BT",
+                "horizon": 1,
+                "feature_name": "close",
+                "feature_rank": 1,
+                "contribution": 1.0,
+                "abs_contribution": 1.0,
+                "method": "local_magnitude_signed_v1",
+            },
+            {
+                "inference_run_id": "inf_2",
+                "run_id": "legacy_r2",
+                "asset": "AAPL",
+                "feature_set_name": "BT",
+                "horizon": 1,
+                "feature_name": "close",
+                "feature_rank": 2,
+                "contribution": -3.0,
+                "abs_contribution": 3.0,
+                "method": "local_magnitude_signed_v1",
+            },
+        ]
+    )
+
+    out = RefreshAnalyticsStoreUseCase._build_gold_feature_contrib_local_summary(
+        fact_feature_contrib_local,
+        pd.DataFrame(),
+    )
+
+    assert not out.empty
+    assert "parent_sweep_id" in out.columns
+    assert out["parent_sweep_id"].isna().all()
+    assert len(out) == 1
+    row = out.iloc[0]
+    assert int(row["n_inference_runs"]) == 2
+    assert float(row["mean_abs_contribution"]) == 2.0
+
+
 def test_gold_consistency_topk_ranks_within_parent_sweep() -> None:
     base = pd.DataFrame(
         [
