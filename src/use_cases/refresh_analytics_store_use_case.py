@@ -42,7 +42,25 @@ class RefreshAnalyticsStoreUseCase:
         "coverage_error",
         "confidence_calibrated",
     )
+    _POINT_METRIC_COLUMNS: ClassVar[tuple[str, ...]] = (
+        "rmse",
+        "mae",
+        "mape",
+        "smape",
+        "directional_accuracy",
+        "bias",
+        "prob_up",
+        "prob_down",
+    )
     _POST_GUARDRAIL_MISSING_WARNING_EMITTED: ClassVar[bool] = False
+
+    @classmethod
+    def _prediction_metric_columns(cls) -> list[str]:
+        return [
+            *cls._POINT_METRIC_COLUMNS,
+            *(f"{m}_raw" for m in cls._PROBABILISTIC_METRIC_COLUMNS),
+            *(f"{m}_post_guardrail" for m in cls._PROBABILISTIC_METRIC_COLUMNS),
+        ]
 
     def __init__(
         self,
@@ -750,12 +768,7 @@ class RefreshAnalyticsStoreUseCase:
         if not set(cols).issubset(set(metrics_run_split_h.columns)):
             return pd.DataFrame()
 
-        metric_cols = [
-            'rmse', 'mae', 'mape', 'smape', 'directional_accuracy', 'bias',
-            'pinball_q10', 'pinball_q50', 'pinball_q90', 'mean_pinball',
-            'picp', 'mpiw', 'pred_interval_width', 'prob_up', 'prob_down',
-            'coverage_error', 'confidence_calibrated'
-        ]
+        metric_cols = RefreshAnalyticsStoreUseCase._prediction_metric_columns()
         available_metric_cols = [c for c in metric_cols if c in metrics_run_split_h.columns]
 
         frame = metrics_run_split_h.copy()
@@ -787,12 +800,7 @@ class RefreshAnalyticsStoreUseCase:
         if not set(cols).issubset(set(metrics_run_split_h.columns)):
             return pd.DataFrame()
 
-        metric_cols = [
-            'rmse', 'mae', 'mape', 'smape', 'directional_accuracy', 'bias',
-            'pinball_q10', 'pinball_q50', 'pinball_q90', 'mean_pinball',
-            'picp', 'mpiw', 'pred_interval_width', 'prob_up', 'prob_down',
-            'coverage_error', 'confidence_calibrated'
-        ]
+        metric_cols = RefreshAnalyticsStoreUseCase._prediction_metric_columns()
         available_metric_cols = [c for c in metric_cols if c in metrics_run_split_h.columns]
 
         frame = metrics_run_split_h.copy()
@@ -826,9 +834,15 @@ class RefreshAnalyticsStoreUseCase:
 
         keep = [
             c for c in [
-                'run_id', *cols, 'n_samples', 'pinball_q10', 'pinball_q50', 'pinball_q90',
-                'mean_pinball', 'picp', 'mpiw', 'pred_interval_width', 'coverage_nominal',
-                'coverage_error', 'prob_up', 'prob_down', 'confidence_calibrated'
+                'run_id', *cols, 'n_samples',
+                'pinball_q10_raw', 'pinball_q50_raw', 'pinball_q90_raw',
+                'mean_pinball_raw', 'picp_raw', 'mpiw_raw', 'pred_interval_width_raw',
+                'coverage_error_raw', 'confidence_calibrated_raw',
+                'pinball_q10_post_guardrail', 'pinball_q50_post_guardrail', 'pinball_q90_post_guardrail',
+                'mean_pinball_post_guardrail', 'picp_post_guardrail', 'mpiw_post_guardrail',
+                'pred_interval_width_post_guardrail', 'coverage_error_post_guardrail',
+                'confidence_calibrated_post_guardrail',
+                'coverage_nominal', 'prob_up', 'prob_down', 'confidence_calibrated'
             ] if c in metrics_run_split_h.columns
         ]
         return metrics_run_split_h[keep].copy()
@@ -845,11 +859,8 @@ class RefreshAnalyticsStoreUseCase:
             return pd.DataFrame()
 
         metric_cols = [
-            c for c in [
-                'rmse', 'mae', 'mape', 'smape', 'directional_accuracy', 'bias',
-                'mean_pinball', 'picp', 'mpiw', 'pred_interval_width',
-                'prob_up', 'prob_down', 'coverage_error', 'confidence_calibrated'
-            ] if c in metrics_run_split_h.columns
+            c for c in RefreshAnalyticsStoreUseCase._prediction_metric_columns()
+            if c in metrics_run_split_h.columns
         ]
         if not metric_cols:
             return pd.DataFrame()
@@ -890,11 +901,8 @@ class RefreshAnalyticsStoreUseCase:
             return pd.DataFrame()
 
         metric_cols = [
-            c for c in [
-                'rmse', 'mae', 'mape', 'smape', 'directional_accuracy', 'bias',
-                'mean_pinball', 'picp', 'mpiw', 'pred_interval_width',
-                'prob_up', 'prob_down', 'coverage_error', 'confidence_calibrated'
-            ] if c in df.columns
+            c for c in RefreshAnalyticsStoreUseCase._prediction_metric_columns()
+            if c in df.columns
         ]
         if not metric_cols:
             return pd.DataFrame()
