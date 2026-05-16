@@ -679,7 +679,7 @@ class RefreshAnalyticsStoreUseCase:
         if metrics_run_split_h.empty:
             return pd.DataFrame()
 
-        req = {'asset', 'feature_set_name', 'config_signature', 'horizon', 'split'}
+        req = {'asset', 'feature_set_name', 'parent_sweep_id', 'config_signature', 'horizon', 'split'}
         if not req.issubset(set(metrics_run_split_h.columns)):
             return pd.DataFrame()
 
@@ -698,7 +698,7 @@ class RefreshAnalyticsStoreUseCase:
             return pd.DataFrame()
 
         rows: list[dict[str, object]] = []
-        gcols = ['asset', 'feature_set_name', 'config_signature', 'horizon']
+        gcols = ['asset', 'feature_set_name', 'parent_sweep_id', 'config_signature', 'horizon']
         for keys, g in df.groupby(gcols, dropna=False):
             for m in metric_cols:
                 series = pd.to_numeric(g[m], errors='coerce').dropna()
@@ -712,8 +712,9 @@ class RefreshAnalyticsStoreUseCase:
                     {
                         'asset': keys[0],
                         'feature_set_name': keys[1],
-                        'config_signature': keys[2],
-                        'horizon': int(keys[3]) if pd.notna(keys[3]) else None,
+                        'parent_sweep_id': keys[2],
+                        'config_signature': keys[3],
+                        'horizon': int(keys[4]) if pd.notna(keys[4]) else None,
                         'metric': m,
                         'n_runs': n,
                         'mean': mean,
