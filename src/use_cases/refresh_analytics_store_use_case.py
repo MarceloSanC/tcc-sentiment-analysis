@@ -1,16 +1,21 @@
 from __future__ import annotations
 
 import math
+import logging
 
 from dataclasses import dataclass
 from itertools import combinations
 from pathlib import Path
+from typing import ClassVar, Literal
 
 import numpy as np
 import pandas as pd
 
 from src.domain.services.scope_spec import ScopeSpec, filter_dataframe_by_scope, validate_scope_spec
 from src.utils.path_policy import to_project_relative
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -20,6 +25,25 @@ class RefreshAnalyticsStoreResult:
 
 
 class RefreshAnalyticsStoreUseCase:
+    _RAW_QUANTILE_COLUMNS: ClassVar[tuple[str, str, str]] = ("quantile_p10", "quantile_p50", "quantile_p90")
+    _POST_GUARDRAIL_QUANTILE_COLUMNS: ClassVar[tuple[str, str, str]] = (
+        "quantile_p10_post_guardrail",
+        "quantile_p50_post_guardrail",
+        "quantile_p90_post_guardrail",
+    )
+    _PROBABILISTIC_METRIC_COLUMNS: ClassVar[tuple[str, ...]] = (
+        "pinball_q10",
+        "pinball_q50",
+        "pinball_q90",
+        "mean_pinball",
+        "picp",
+        "mpiw",
+        "pred_interval_width",
+        "coverage_error",
+        "confidence_calibrated",
+    )
+    _POST_GUARDRAIL_MISSING_WARNING_EMITTED: ClassVar[bool] = False
+
     def __init__(
         self,
         *,
@@ -424,11 +448,11 @@ class RefreshAnalyticsStoreUseCase:
         return pd.Series(1.0 - cdf0, index=q10.index, dtype='float64')
 
     @staticmethod
-    def _build_gold_prediction_metrics_by_run_split_horizon(
+    def _build_gold_prediction_metrics_by_run_split_horizon_single_contract(
         dim_run: pd.DataFrame,
         fact_oos_predictions: pd.DataFrame,
         *,
-        quantile_columns: tuple[str, str, str] = ("quantile_p10", "quantile_p50", "quantile_p90"),
+        quantile_columns: tuple[str, str, str],
     ) -> pd.DataFrame:
         if fact_oos_predictions.empty:
             return pd.DataFrame()
@@ -527,6 +551,94 @@ class RefreshAnalyticsStoreUseCase:
         return agg
 
     @staticmethod
+    def _build_gold_prediction_metrics_by_run_split_horizon(
+        dim_run: pd.DataFrame,
+        fact_oos_predictions: pd.DataFrame,
+        *,
+        quantile_columns: tuple[str, str, str] = _RAW_QUANTILE_COLUMNS,
+    ) -> pd.DataFrame:
+        if quantile_columns != RefreshAnalyticsStoreUseCase._RAW_QUANTILE_COLUMNS:
+            return RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon_single_contract(
+                dim_run,
+                fact_oos_predictions,
+                quantile_columns=quantile_columns,
+            )
+
+        raw_metrics = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon_single_contract(
+            dim_run,
+            fact_oos_predictions,
+            quantile_columns=RefreshAnalyticsStoreUseCase._RAW_QUANTILE_COLUMNS,
+        )
+        if raw_metrics.empty:
+            return pd.DataFrame()
+
+        key_cols = [
+            c for c in [
+                'run_id', 'asset', 'feature_set_name', 'config_signature',
+                'split', 'fold', 'seed', 'horizon',
+                'model_version', 'feature_set_hash', 'parent_sweep_id', 'trial_number', 'status'
+            ] if c in raw_metrics.columns
+        ]
+        probabilistic_cols = [
+            c for c in RefreshAnalyticsStoreUseCase._PROBABILISTIC_METRIC_COLUMNS
+            if c in raw_metrics.columns
+        ]
+        unique_cols = [
+            c for c in raw_metrics.columns
+            if c not in probabilistic_cols
+        ]
+
+        out = raw_metrics[unique_cols].copy()
+        raw_renamed = raw_metrics[key_cols + probabilistic_cols].copy().rename(
+            columns={m: f"{m}_raw" for m in probabilistic_cols}
+        )
+        out = out.merge(raw_renamed, on=key_cols, how='left')
+
+        missing_post = [
+            c for c in RefreshAnalyticsStoreUseCase._POST_GUARDRAIL_QUANTILE_COLUMNS
+            if c not in fact_oos_predictions.columns
+        ]
+        if missing_post:
+            if not RefreshAnalyticsStoreUseCase._POST_GUARDRAIL_MISSING_WARNING_EMITTED:
+                logger.warning(
+                    "Post-guardrail quantile columns missing; gold probabilistic post-guardrail metrics will be NaN",
+                    extra={"missing_columns": missing_post},
+                )
+                RefreshAnalyticsStoreUseCase._POST_GUARDRAIL_MISSING_WARNING_EMITTED = True
+            for m in probabilistic_cols:
+                out[f"{m}_post_guardrail"] = np.nan
+            if "confidence_calibrated_raw" in out.columns:
+                out["confidence_calibrated"] = out["confidence_calibrated_raw"]
+            return out
+
+        post_metrics = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon_single_contract(
+            dim_run,
+            fact_oos_predictions,
+            quantile_columns=RefreshAnalyticsStoreUseCase._POST_GUARDRAIL_QUANTILE_COLUMNS,
+        )
+        if post_metrics.empty:
+            for m in probabilistic_cols:
+                out[f"{m}_post_guardrail"] = np.nan
+            if "confidence_calibrated_raw" in out.columns:
+                out["confidence_calibrated"] = out["confidence_calibrated_raw"]
+            return out
+
+        post_probabilistic_cols = [c for c in probabilistic_cols if c in post_metrics.columns]
+        post_renamed = post_metrics[key_cols + post_probabilistic_cols].copy().rename(
+            columns={m: f"{m}_post_guardrail" for m in post_probabilistic_cols}
+        )
+        out = out.merge(post_renamed, on=key_cols, how='left')
+        for m in probabilistic_cols:
+            col = f"{m}_post_guardrail"
+            if col not in out.columns:
+                out[col] = np.nan
+        if "confidence_calibrated_post_guardrail" in out.columns:
+            out["confidence_calibrated"] = out["confidence_calibrated_post_guardrail"]
+        elif "confidence_calibrated_raw" in out.columns:
+            out["confidence_calibrated"] = out["confidence_calibrated_raw"]
+        return out
+
+    @staticmethod
     def _build_gold_quantile_guardrail_audit(
         dim_run: pd.DataFrame,
         fact_oos_predictions: pd.DataFrame,
@@ -539,12 +651,12 @@ class RefreshAnalyticsStoreUseCase:
         if fact_oos_predictions.empty or not required.issubset(set(fact_oos_predictions.columns)):
             return pd.DataFrame()
 
-        base_metrics = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon(
+        base_metrics = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon_single_contract(
             dim_run,
             fact_oos_predictions,
             quantile_columns=('quantile_p10', 'quantile_p50', 'quantile_p90'),
         )
-        post_metrics = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon(
+        post_metrics = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon_single_contract(
             dim_run,
             fact_oos_predictions,
             quantile_columns=(
