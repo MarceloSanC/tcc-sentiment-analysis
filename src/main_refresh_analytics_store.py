@@ -51,6 +51,12 @@ def parse_args() -> argparse.Namespace:
         help="Skip generation of section 9.2/9.3 prediction analysis plots after gold refresh.",
     )
     parser.add_argument(
+        "--primary-quantile-contract",
+        choices=("raw", "post_guardrail"),
+        default="post_guardrail",
+        help="Primary quantile contract used for decision gold tables and prediction plots.",
+    )
+    parser.add_argument(
         "--plots-asset",
         type=str,
         default=None,
@@ -182,6 +188,7 @@ def main() -> None:
         analytics_silver_dir=paths["analytics_silver"],
         analytics_gold_dir=paths["analytics_gold"],
         scope_spec=scope_spec,
+        primary_quantile_contract=args.primary_quantile_contract,
     )
     logger.info(
         "Analytics gold refresh scope resolved",
@@ -199,6 +206,7 @@ def main() -> None:
         extra={
             "gold_dir": result.gold_dir,
             "outputs": result.outputs,
+            "primary_quantile_contract": args.primary_quantile_contract,
         },
     )
 

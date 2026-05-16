@@ -68,11 +68,17 @@ class RefreshAnalyticsStoreUseCase:
         analytics_silver_dir: str | Path,
         analytics_gold_dir: str | Path,
         scope_spec: ScopeSpec | None = None,
+        primary_quantile_contract: Literal["raw", "post_guardrail"] = "post_guardrail",
     ) -> None:
+        if primary_quantile_contract not in {"raw", "post_guardrail"}:
+            raise ValueError(
+                "primary_quantile_contract must be one of: raw, post_guardrail"
+            )
         self.analytics_silver_dir = Path(analytics_silver_dir)
         self.analytics_gold_dir = Path(analytics_gold_dir)
         self.analytics_gold_dir.mkdir(parents=True, exist_ok=True)
         self.scope_spec = validate_scope_spec(scope_spec) if scope_spec is not None else None
+        self.primary_quantile_contract = primary_quantile_contract
 
     @staticmethod
     def _scope_loaded_table(
@@ -1619,7 +1625,13 @@ class RefreshAnalyticsStoreUseCase:
         mcs_results: pd.DataFrame,
         win_rate_results: pd.DataFrame,
         paired_intersection: pd.DataFrame,
+        *,
+        primary_quantile_contract: Literal["raw", "post_guardrail"] = "post_guardrail",
     ) -> pd.DataFrame:
+        if primary_quantile_contract not in {"raw", "post_guardrail"}:
+            raise ValueError(
+                "primary_quantile_contract must be one of: raw, post_guardrail"
+            )
         if metrics_by_config.empty:
             return pd.DataFrame()
 
@@ -1631,16 +1643,26 @@ class RefreshAnalyticsStoreUseCase:
         if base.empty:
             return pd.DataFrame()
 
+        primary_metric_map = {
+            f"mean_pinball_q10_{primary_quantile_contract}": "mean_pinball_q10",
+            f"mean_pinball_q50_{primary_quantile_contract}": "mean_pinball_q50",
+            f"mean_pinball_q90_{primary_quantile_contract}": "mean_pinball_q90",
+            f"mean_mean_pinball_{primary_quantile_contract}": "mean_mean_pinball",
+            f"mean_picp_{primary_quantile_contract}": "mean_picp",
+            f"mean_mpiw_{primary_quantile_contract}": "mean_mpiw",
+        }
+
         # keep core metrics used in academic comparison
         keep = [
             c for c in [
                 "asset", "feature_set_name", "config_signature", "split", "horizon", "n_runs",
                 "mean_rmse", "std_rmse", "mean_mae", "std_mae", "mean_directional_accuracy", "std_directional_accuracy",
-                "mean_pinball_q10", "mean_pinball_q50", "mean_pinball_q90", "mean_mean_pinball",
-                "mean_picp", "mean_mpiw",
+                *primary_metric_map.keys(),
             ] if c in base.columns
         ]
         out = base[keep].copy()
+        out = out.rename(columns={src: dst for src, dst in primary_metric_map.items() if src in out.columns})
+        out["primary_quantile_contract"] = primary_quantile_contract
         out["config_label"] = out["feature_set_name"].astype(str) + "|" + out["config_signature"].astype(str)
         out = RefreshAnalyticsStoreUseCase._normalize_parent_sweep_id_for_merge(out)
 
@@ -1669,14 +1691,22 @@ class RefreshAnalyticsStoreUseCase:
 
         # merge generalization gap
         if not generalization_gap.empty and {"asset", "feature_set_name", "config_signature", "horizon"}.issubset(set(generalization_gap.columns)):
+            primary_gap_map = {
+                f"gap_mean_pinball_{primary_quantile_contract}_test_minus_val": "gap_mean_pinball_test_minus_val",
+                f"gap_picp_{primary_quantile_contract}_test_minus_val": "gap_picp_test_minus_val",
+                f"gap_mpiw_{primary_quantile_contract}_test_minus_val": "gap_mpiw_test_minus_val",
+            }
             gap_keep = [
                 c for c in [
                     "asset", "feature_set_name", "config_signature", "horizon",
                     "gap_rmse_test_minus_val", "gap_mae_test_minus_val", "gap_directional_accuracy_test_minus_val",
-                    "gap_mean_pinball_test_minus_val", "gap_picp_test_minus_val", "gap_mpiw_test_minus_val",
+                    *primary_gap_map.keys(),
                 ] if c in generalization_gap.columns
             ]
-            out = out.merge(generalization_gap[gap_keep], on=["asset", "feature_set_name", "config_signature", "horizon"], how="left")
+            gap = generalization_gap[gap_keep].rename(
+                columns={src: dst for src, dst in primary_gap_map.items() if src in gap_keep}
+            )
+            out = out.merge(gap, on=["asset", "feature_set_name", "config_signature", "horizon"], how="left")
 
         # DM summary per config
         dm_rows: list[dict[str, object]] = []
@@ -2210,6 +2240,10 @@ class RefreshAnalyticsStoreUseCase:
             dim_run,
             fact_oos_predictions,
         )
+        logger.info(
+            "Analytics primary quantile contract resolved",
+            extra={"primary_quantile_contract": self.primary_quantile_contract},
+        )
         outputs["gold_prediction_metrics_by_run_split_horizon"] = self._safe_write(
             gold_prediction_metrics_by_run_split_horizon,
             self.analytics_gold_dir / "gold_prediction_metrics_by_run_split_horizon.parquet",
@@ -2293,6 +2327,7 @@ class RefreshAnalyticsStoreUseCase:
                 mcs_results=gold_mcs,
                 win_rate_results=gold_win_rate,
                 paired_intersection=gold_paired_intersection,
+                primary_quantile_contract=self.primary_quantile_contract,
             ),
             self.analytics_gold_dir / "gold_model_decision_final.parquet",
         )
