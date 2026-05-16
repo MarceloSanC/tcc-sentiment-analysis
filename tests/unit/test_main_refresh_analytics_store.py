@@ -15,6 +15,7 @@ class _FakeRefreshResult:
 class _FakeRefreshUseCase:
     def __init__(self, **kwargs) -> None:  # noqa: ANN003
         self.kwargs = kwargs
+        self.scope_spec = kwargs.get("scope_spec")
 
     def execute(self) -> _FakeRefreshResult:
         return _FakeRefreshResult()
@@ -68,6 +69,10 @@ def test_main_refresh_passes_scope_flags_to_plots_use_case(monkeypatch, tmp_path
             plots_output_dir=str(tmp_path / "out"),
             plots_scope_csv=str(tmp_path / "scope.csv"),
             plots_scope_sweep_prefixes="0_2_2_, 0_2_3_",
+            scope_mode=None,
+            scope_sweep_prefixes=None,
+            scope_splits=None,
+            scope_horizons=None,
             block_a_scope_sweep_prefixes=None,
             block_a_splits=None,
             block_a_horizons=None,
@@ -113,6 +118,10 @@ def test_main_refresh_passes_block_a_flags_to_quality_use_case(monkeypatch, tmp_
             plots_output_dir=None,
             plots_scope_csv=None,
             plots_scope_sweep_prefixes=None,
+            scope_mode=None,
+            scope_sweep_prefixes=None,
+            scope_splits=None,
+            scope_horizons=None,
             block_a_scope_sweep_prefixes="0_2_3_,0_2_4_",
             block_a_splits="val,test",
             block_a_horizons="1,7,30",
