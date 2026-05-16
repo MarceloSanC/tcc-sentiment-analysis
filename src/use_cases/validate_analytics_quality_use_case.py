@@ -868,15 +868,21 @@ class ValidateAnalyticsQualityUseCase:
                     n_oos_ok = non_positive == 0
                     n_oos_detail = f"non_positive_n_oos={non_positive}, consistency=skipped(no_run_level_gold)"
                 else:
-                    needed = {"asset", "feature_set_name", "config_signature", "split", "horizon", "n_samples"}
-                    missing_run_level_cols = sorted(needed - set(gold_run_h.columns))
-                    if missing_run_level_cols:
+                    needed = {"asset", "feature_set_name", "parent_sweep_id", "config_signature", "split", "horizon", "n_samples"}
+                    needed_by_cfg = needed - {"n_samples"}
+                    missing_by_cfg_cols = sorted(needed_by_cfg - set(by.columns))
+                    if missing_by_cfg_cols:
+                        n_oos_ok = False
+                        n_oos_detail = f"missing_by_config_columns={missing_by_cfg_cols}"
+                    else:
+                        missing_run_level_cols = sorted(needed - set(gold_run_h.columns))
+                    if not missing_by_cfg_cols and missing_run_level_cols:
                         n_oos_ok = False
                         n_oos_detail = f"missing_run_level_columns={missing_run_level_cols}"
-                    else:
+                    elif not missing_by_cfg_cols:
                         run = gold_run_h.copy()
                         run["n_samples"] = pd.to_numeric(run["n_samples"], errors="coerce").fillna(0)
-                        key_cols = ["asset", "feature_set_name", "config_signature", "split", "horizon"]
+                        key_cols = ["asset", "feature_set_name", "parent_sweep_id", "config_signature", "split", "horizon"]
                         expected = (
                             run.groupby(key_cols, dropna=False)["n_samples"]
                             .sum()
