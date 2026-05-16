@@ -270,6 +270,10 @@ omitem `config_signature` e hoje misturam coortes silenciosamente.
   `run_id` permanecem com `parent_sweep_id=None` ate Stage 10.
 - Stage 6 permanece fora deste PR; as 5 tabelas com `config_signature` no
   groupby tem tratamento proprio no Stage 6.
+- 2026-05-15: Follow-ups YELLOW da revisao Stage 5 aplicados:
+  `752f6b7` cobre o branch legado de
+  `gold_feature_contrib_local_summary` sem `parent_sweep_id`, e `33fdebe`
+  pondera a agregacao global de feature importance por `n_runs`.
 
 ### Tasks
 
