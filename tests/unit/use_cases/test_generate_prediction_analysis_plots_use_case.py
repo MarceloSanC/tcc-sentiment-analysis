@@ -602,3 +602,49 @@ def test_filter_df_by_scope_filters_pairwise_tables_by_both_sides() -> None:
     assert len(out) == 1
     assert out.iloc[0]["left_config"] == "BT|cfg1"
     assert out.iloc[0]["right_config"] == "BT|cfg2"
+
+
+def test_feature_importance_global_weights_mean_delta_rmse_by_n_runs(tmp_path: Path) -> None:
+    impact_df = pd.DataFrame(
+        [
+            {
+                "asset": "AAPL",
+                "feature_set_name": "BT",
+                "parent_sweep_id": "sw1",
+                "split": "test",
+                "horizon": 1,
+                "feature_name": "close",
+                "method": "global_importance_reused_by_horizon",
+                "mean_delta_rmse": 1.0,
+                "n_runs": 1,
+            },
+            {
+                "asset": "AAPL",
+                "feature_set_name": "BT",
+                "parent_sweep_id": "sw2",
+                "split": "test",
+                "horizon": 1,
+                "feature_name": "close",
+                "method": "global_importance_reused_by_horizon",
+                "mean_delta_rmse": 9.0,
+                "n_runs": 9,
+            },
+        ]
+    )
+    path = tmp_path / "feature_importance.png"
+    uc = GeneratePredictionAnalysisPlotsUseCase(
+        analytics_gold_dir=tmp_path / "gold",
+        analytics_silver_dir=tmp_path / "silver",
+        output_dir=tmp_path / "out",
+    )
+
+    weighted = GeneratePredictionAnalysisPlotsUseCase._weighted_mean_delta_rmse(impact_df, 1)
+    uc._build_fig_feature_importance_global(
+        path=path,
+        impact_df=impact_df,
+        horizons=[1],
+        top_k_features=1,
+    )
+
+    assert path.exists()
+    assert float(weighted.loc["close"]) == pytest.approx(8.2)

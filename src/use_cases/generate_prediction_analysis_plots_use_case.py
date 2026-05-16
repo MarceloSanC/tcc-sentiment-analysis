@@ -624,6 +624,29 @@ class GeneratePredictionAnalysisPlotsUseCase:
         fig.savefig(path, dpi=160, bbox_inches="tight")
         plt.close(fig)
 
+    @staticmethod
+    def _weighted_mean_delta_rmse(df: pd.DataFrame, horizon: int) -> pd.Series:
+        d_src = df[df["horizon"] == horizon].copy()
+        if "n_runs" not in d_src.columns:
+            return (
+                d_src.groupby("feature_name", dropna=False)["mean_delta_rmse"]
+                .mean()
+                .abs()
+                .sort_values(ascending=False)
+            )
+        w = pd.to_numeric(d_src["n_runs"], errors="coerce").fillna(0.0).clip(lower=0.0)
+        d_src["_w"] = w
+        d_src["_wx"] = d_src["mean_delta_rmse"] * w
+        agg = d_src.groupby("feature_name", dropna=False).agg(
+            sum_wx=("_wx", "sum"),
+            sum_w=("_w", "sum"),
+        )
+        return (
+            (agg["sum_wx"] / agg["sum_w"].where(agg["sum_w"] > 0))
+            .abs()
+            .sort_values(ascending=False)
+        )
+
     def _build_fig_feature_importance_global(
         self,
         *,
@@ -661,13 +684,7 @@ class GeneratePredictionAnalysisPlotsUseCase:
                 limit = max(1, k)
 
         for ax, h in zip(axes, hs):
-            d = (
-                df[df["horizon"] == h]
-                .groupby("feature_name", dropna=False)["mean_delta_rmse"]
-                .mean()
-                .abs()
-                .sort_values(ascending=False)
-            )
+            d = self._weighted_mean_delta_rmse(df, h)
             if limit is not None:
                 d = d.head(limit)
             d = d.sort_values(ascending=True)
