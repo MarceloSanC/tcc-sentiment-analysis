@@ -34,6 +34,7 @@ def _seed_minimal_valid_silver(silver) -> None:
                 "config_signature": "cfg1",
                 "split_fingerprint": "sp1",
                 "model_version": "v1",
+                "parent_sweep_id": "sw1",
                 "checkpoint_path_final": "/tmp/final.pt",
                 "checkpoint_path_best": "/tmp/best.ckpt",
                 "git_commit": "abc",
@@ -159,6 +160,7 @@ def _seed_minimal_valid_silver(silver) -> None:
                 "model_version": "v1",
                 "asset": "AAPL",
                 "feature_set_name": "B",
+                "parent_sweep_id": "sw1",
                 "config_signature": "cfg1",
                 "split": "test",
                 "fold": "none",
@@ -240,6 +242,7 @@ def test_validate_analytics_quality_fails_when_quantile_contract_is_broken(tmp_p
                 "model_version": "v1",
                 "asset": "AAPL",
                 "feature_set_name": "B",
+                "parent_sweep_id": "sw1",
                 "config_signature": "cfg1",
                 "split": "test",
                 "fold": "none",
@@ -283,6 +286,7 @@ def test_validate_analytics_quality_fails_on_oos_duplicate_key(tmp_path) -> None
                 "model_version": "v1",
                 "asset": "AAPL",
                 "feature_set_name": "B",
+                "parent_sweep_id": "sw1",
                 "config_signature": "cfg1",
                 "split": "test",
                 "fold": "none",
@@ -306,6 +310,7 @@ def test_validate_analytics_quality_fails_on_oos_duplicate_key(tmp_path) -> None
                 "model_version": "v1",
                 "asset": "AAPL",
                 "feature_set_name": "B",
+                "parent_sweep_id": "sw1",
                 "config_signature": "cfg1",
                 "split": "test",
                 "fold": "none",
@@ -844,6 +849,7 @@ def test_validate_analytics_quality_fails_on_missing_n_oos_in_gold_metrics_by_co
                 "run_id": "r1",
                 "asset": "AAPL",
                 "feature_set_name": "B",
+                "parent_sweep_id": "sw1",
                 "config_signature": "cfg1",
                 "split": "test",
                 "horizon": 1,
@@ -859,6 +865,7 @@ def test_validate_analytics_quality_fails_on_missing_n_oos_in_gold_metrics_by_co
             {
                 "asset": "AAPL",
                 "feature_set_name": "B",
+                "parent_sweep_id": "sw1",
                 "config_signature": "cfg1",
                 "split": "test",
                 "horizon": 1,
@@ -891,6 +898,7 @@ def test_validate_analytics_quality_passes_n_oos_contract_when_consistent(tmp_pa
                 "run_id": "r1",
                 "asset": "AAPL",
                 "feature_set_name": "B",
+                "parent_sweep_id": "sw1",
                 "config_signature": "cfg1",
                 "split": "test",
                 "horizon": 1,
@@ -901,6 +909,7 @@ def test_validate_analytics_quality_passes_n_oos_contract_when_consistent(tmp_pa
                 "run_id": "r2",
                 "asset": "AAPL",
                 "feature_set_name": "B",
+                "parent_sweep_id": "sw1",
                 "config_signature": "cfg1",
                 "split": "test",
                 "horizon": 1,
@@ -916,6 +925,7 @@ def test_validate_analytics_quality_passes_n_oos_contract_when_consistent(tmp_pa
             {
                 "asset": "AAPL",
                 "feature_set_name": "B",
+                "parent_sweep_id": "sw1",
                 "config_signature": "cfg1",
                 "split": "test",
                 "horizon": 1,
@@ -931,6 +941,80 @@ def test_validate_analytics_quality_passes_n_oos_contract_when_consistent(tmp_pa
     ).execute()
     check = next(item for item in result.checks if item["check"] == "gold_metrics_by_config_n_oos_contract")
     assert check["passed"] is True
+
+
+def test_n_oos_contract_passes_per_sweep(tmp_path) -> None:
+    silver = tmp_path / "silver"
+    gold = tmp_path / "gold"
+    _seed_minimal_valid_silver(silver)
+
+    _write_table(
+        gold,
+        "gold_prediction_metrics_by_run_split_horizon",
+        [
+            {
+                "run_id": "r1",
+                "asset": "AAPL",
+                "feature_set_name": "B",
+                "parent_sweep_id": "sw1",
+                "config_signature": "cfg_sw1",
+                "split": "test",
+                "horizon": 1,
+                "n_samples": 2,
+                "confidence_calibrated": 0.7,
+            },
+            {
+                "run_id": "r2",
+                "asset": "AAPL",
+                "feature_set_name": "B",
+                "parent_sweep_id": "sw2",
+                "config_signature": "cfg_sw2",
+                "split": "test",
+                "horizon": 1,
+                "n_samples": 3,
+                "confidence_calibrated": 0.8,
+            },
+        ],
+    )
+    _write_table(
+        gold,
+        "gold_prediction_metrics_by_config",
+        [
+            {
+                "asset": "AAPL",
+                "feature_set_name": "B",
+                "parent_sweep_id": "sw1",
+                "config_signature": "cfg_sw1",
+                "split": "test",
+                "horizon": 1,
+                "n_runs": 1,
+                "n_oos": 2,
+            },
+            {
+                "asset": "AAPL",
+                "feature_set_name": "B",
+                "parent_sweep_id": "sw2",
+                "config_signature": "cfg_sw2",
+                "split": "test",
+                "horizon": 1,
+                "n_runs": 1,
+                "n_oos": 3,
+            },
+        ],
+    )
+
+    result = ValidateAnalyticsQualityUseCase(
+        analytics_silver_dir=silver,
+        analytics_gold_dir=gold,
+        scope_spec=ScopeSpec.create(
+            scope_mode="cohort_decision",
+            parent_sweep_prefixes=["sw1"],
+        ),
+    ).execute()
+
+    check = next(item for item in result.checks if item["check"] == "gold_metrics_by_config_n_oos_contract")
+    assert check["passed"] is True
+    assert "mismatch_with_run_level=0" in str(check["detail"])
 
 
 def test_validate_analytics_quality_block_a_check_passes_on_minimal_valid_dataset(tmp_path) -> None:

@@ -391,6 +391,11 @@ def test_refresh_analytics_store_builds_gold_tables(tmp_path) -> None:
     assert not impact.empty
     assert {"parent_sweep_id", "metric"}.issubset(set(impact.columns))
 
+    ic95 = pd.read_parquet(gold / "gold_ic95_by_config_metric.parquet")
+    assert not ic95.empty
+    assert {"parent_sweep_id", "metric"}.issubset(set(ic95.columns))
+    assert set(ic95["parent_sweep_id"].dropna()) == {"sw1"}
+
 
     pred_run_h = pd.read_parquet(gold / "gold_prediction_metrics_by_run_split_horizon.parquet")
     assert len(pred_run_h) == 4
@@ -412,10 +417,11 @@ def test_refresh_analytics_store_builds_gold_tables(tmp_path) -> None:
 
     by_cfg = pd.read_parquet(gold / "gold_prediction_metrics_by_config.parquet")
     assert not by_cfg.empty
-    assert {"n_oos", "mean_bias", "mean_mean_pinball", "mean_picp", "mean_mpiw", "mean_coverage_error", "mean_prob_down", "mean_confidence_calibrated", "iqr_rmse"}.issubset(set(by_cfg.columns))
+    assert {"parent_sweep_id", "n_oos", "mean_bias", "mean_mean_pinball", "mean_picp", "mean_mpiw", "mean_coverage_error", "mean_prob_down", "mean_confidence_calibrated", "iqr_rmse"}.issubset(set(by_cfg.columns))
+    assert set(by_cfg["parent_sweep_id"].dropna()) == {"sw1"}
     assert int((pd.to_numeric(by_cfg["n_oos"], errors="coerce") <= 0).sum()) == 0
 
-    key_cols = ["asset", "feature_set_name", "config_signature", "split", "horizon"]
+    key_cols = ["asset", "feature_set_name", "parent_sweep_id", "config_signature", "split", "horizon"]
     expected_n_oos = (
         pred_run_h.groupby(key_cols, dropna=False)["n_samples"]
         .sum()
@@ -436,7 +442,8 @@ def test_refresh_analytics_store_builds_gold_tables(tmp_path) -> None:
 
     cal = pd.read_parquet(gold / "gold_prediction_calibration.parquet")
     assert not cal.empty
-    assert {"run_id", "horizon", "pinball_q10", "pinball_q50", "pinball_q90", "mean_pinball", "picp", "mpiw", "coverage_error"}.issubset(set(cal.columns))
+    assert {"run_id", "parent_sweep_id", "horizon", "pinball_q10", "pinball_q50", "pinball_q90", "mean_pinball", "picp", "mpiw", "coverage_error"}.issubset(set(cal.columns))
+    assert set(cal["parent_sweep_id"].dropna()) == {"sw1"}
     qaudit = pd.read_parquet(gold / "gold_quantile_guardrail_audit.parquet")
     assert not qaudit.empty
     assert {"mean_pinball_before", "mean_pinball_after", "crossing_before_count", "crossing_after_count"}.issubset(set(qaudit.columns))
@@ -482,10 +489,10 @@ def test_refresh_analytics_store_builds_gold_tables(tmp_path) -> None:
 
 
     gap = pd.read_parquet(gold / "gold_prediction_generalization_gap.parquet")
-    assert set(gap.columns).issuperset({"gap_rmse_test_minus_val", "gap_mae_test_minus_val"}) or gap.empty
+    assert set(gap.columns).issuperset({"parent_sweep_id", "gap_rmse_test_minus_val", "gap_mae_test_minus_val"}) or gap.empty
 
     robust_h = pd.read_parquet(gold / "gold_prediction_robustness_by_horizon.parquet")
-    assert set(robust_h.columns).issuperset({"metric", "mean", "std", "median", "iqr", "ci95_low", "ci95_high"}) or robust_h.empty
+    assert set(robust_h.columns).issuperset({"parent_sweep_id", "metric", "mean", "std", "median", "iqr", "ci95_low", "ci95_high"}) or robust_h.empty
 
     fih = pd.read_parquet(gold / "gold_feature_impact_by_horizon.parquet")
     assert not fih.empty
@@ -512,6 +519,7 @@ def test_build_gold_prediction_metrics_by_config_n_oos_is_idempotent_on_row_orde
             "run_id": "r1",
             "asset": "AAPL",
             "feature_set_name": "BT",
+            "parent_sweep_id": "sw1",
             "config_signature": "cfg1",
             "split": "test",
             "horizon": 1,
@@ -524,6 +532,7 @@ def test_build_gold_prediction_metrics_by_config_n_oos_is_idempotent_on_row_orde
             "run_id": "r2",
             "asset": "AAPL",
             "feature_set_name": "BT",
+            "parent_sweep_id": "sw1",
             "config_signature": "cfg1",
             "split": "test",
             "horizon": 1,
@@ -540,13 +549,61 @@ def test_build_gold_prediction_metrics_by_config_n_oos_is_idempotent_on_row_orde
     out_b = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_config(shuffled)
 
     assert "n_oos" in out_a.columns
+    assert "parent_sweep_id" in out_a.columns
     assert int(out_a.iloc[0]["n_oos"]) == 8
     assert int(out_b.iloc[0]["n_oos"]) == 8
 
-    sort_cols = ["asset", "feature_set_name", "config_signature", "split", "horizon"]
+    sort_cols = ["asset", "feature_set_name", "parent_sweep_id", "config_signature", "split", "horizon"]
     out_a = out_a.sort_values(sort_cols).reset_index(drop=True)
     out_b = out_b.sort_values(sort_cols).reset_index(drop=True)
     pd.testing.assert_frame_equal(out_a, out_b, check_like=True)
+
+
+def test_gold_metrics_by_config_carries_parent_sweep_id() -> None:
+    dim_run = pd.DataFrame(
+        [
+            {"run_id": "sw1_r1", "parent_sweep_id": "sw1"},
+            {"run_id": "sw1_r2", "parent_sweep_id": "sw1"},
+            {"run_id": "sw2_r1", "parent_sweep_id": "sw2"},
+            {"run_id": "sw2_r2", "parent_sweep_id": "sw2"},
+        ]
+    )
+    metrics = pd.DataFrame(
+        [
+            {
+                "run_id": run_id,
+                "asset": "AAPL",
+                "feature_set_name": "BT",
+                "parent_sweep_id": sweep,
+                "config_signature": config,
+                "split": "test",
+                "horizon": 1,
+                "n_samples": samples,
+                "rmse": rmse,
+                "mae": rmse,
+            }
+            for run_id, sweep, config, samples, rmse in [
+                ("sw1_r1", "sw1", "cfg_sw1", 3, 1.0),
+                ("sw1_r2", "sw1", "cfg_sw1", 5, 3.0),
+                ("sw2_r1", "sw2", "cfg_sw2", 7, 10.0),
+                ("sw2_r2", "sw2", "cfg_sw2", 11, 30.0),
+            ]
+        ]
+    )
+
+    out = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_config(metrics)
+    expected_by_config = metrics.groupby(["asset", "feature_set_name", "config_signature", "split", "horizon"], dropna=False).ngroups
+
+    assert "parent_sweep_id" in out.columns
+    assert len(out) == expected_by_config
+    assert set(out["parent_sweep_id"]) == {"sw1", "sw2"}
+    expected_parent_by_run = dim_run.set_index("run_id")["parent_sweep_id"].to_dict()
+    expected_parent_by_config = {
+        row["config_signature"]: expected_parent_by_run[row["run_id"]]
+        for _, row in metrics.drop_duplicates("config_signature").iterrows()
+    }
+    actual_parent_by_config = out.set_index("config_signature")["parent_sweep_id"].to_dict()
+    assert actual_parent_by_config == expected_parent_by_config
 
 
 def test_gold_feature_set_impact_is_cohort_aware() -> None:
