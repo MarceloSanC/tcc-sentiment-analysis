@@ -419,6 +419,22 @@ coorte declarada em vez de ler o silver inteiro.
 - Reuso de contrato: a leitura scoped usa `filter_dataframe_by_scope` de
   `src/domain/services/scope_spec.py`; Stage 8, Stage 9, Stage 10 e etapas
   posteriores permanecem fora deste PR.
+- 2026-05-16: Follow-up da revisao Stage 7 fechado sem alterar codigo de
+  producao. Findings cobertos:
+  `test_main_refresh_passes_scope_flags_to_plots_use_case` e
+  `test_main_refresh_passes_block_a_flags_to_quality_use_case` atualizam os
+  fixtures `Namespace`; `test_refresh_without_scope_spec_is_bitwise_equivalent_to_legacy`
+  compara golds principais com `assert_frame_equal(check_exact=True)`;
+  `test_refresh_execute_scope_spec_overrides_instance_default` cobre override
+  por chamada; `test_refresh_global_health_ignores_cohort_filters` cobre o
+  descarte de filtros em `global_health`; e
+  `test_refresh_with_scope_spec_filters_by_split_and_horizon` cobre o ramo
+  `split`/`horizon` de `_build_scoped_run_ids`.
+  Validacao local: `.venv/bin/pytest tests/unit/test_main_refresh_analytics_store.py -v`
+  (`2 passed`), `.venv/bin/pytest tests/unit/use_cases/test_refresh_analytics_store_use_case.py -v`
+  (`20 passed, 30 warnings`), `.venv/bin/pytest tests/unit/use_cases/ -q`
+  (`148 passed, 32 warnings`) e `.venv/bin/pytest tests/unit/ -q`
+  (`419 passed, 32 warnings`).
 
 ### Tasks
 
@@ -442,7 +458,7 @@ coorte declarada em vez de ler o silver inteiro.
       `--scope-horizons`. Reusar parsing existente do block-A.
       **Aceite:** `python -m src.main_refresh_analytics_store --scope-mode cohort_decision --scope-sweep-prefixes round_1_` produz gold scoped.
 
-- [~] **7.4** Testes unitarios: refresh com scope produz gold reduzido
+- [x] **7.4** Testes unitarios: refresh com scope produz gold reduzido
       consistente; refresh sem scope produz comportamento atual.
       **Aceite:** suite passa.
 
