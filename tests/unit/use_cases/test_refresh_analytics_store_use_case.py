@@ -101,6 +101,36 @@ def _write_two_sweep_refresh_fixture(silver) -> None:
                 "year": 2026,
             }
         )
+        if idx == 1:
+            for split, horizon, day in [("val", 1, "03"), ("test", 7, "04")]:
+                oos_rows.append(
+                    {
+                        "schema_version": 1,
+                        "run_id": run_id,
+                        "asset": "AAPL",
+                        "feature_set_name": "B",
+                        "config_signature": cfg,
+                        "split": split,
+                        "fold": "wf_1",
+                        "seed": idx,
+                        "horizon": horizon,
+                        "timestamp_utc": f"2026-01-{day}T00:00:00+00:00",
+                        "target_timestamp_utc": f"2026-01-{day}T00:00:00+00:00",
+                        "y_true": 0.1,
+                        "y_pred": 0.1 + rmse,
+                        "error": rmse,
+                        "abs_error": rmse,
+                        "sq_error": rmse**2,
+                        "quantile_p10": 0.0,
+                        "quantile_p50": 0.1 + rmse,
+                        "quantile_p90": 0.5,
+                        "quantile_p10_post_guardrail": 0.0,
+                        "quantile_p50_post_guardrail": 0.1 + rmse,
+                        "quantile_p90_post_guardrail": 0.5,
+                        "quantile_guardrail_applied": 0,
+                        "year": 2026,
+                    }
+                )
         artifact_rows.append(
             {
                 "schema_version": 1,
@@ -315,6 +345,27 @@ def test_refresh_global_health_ignores_cohort_filters(tmp_path) -> None:
         "gold_model_decision_final",
     ]:
         _assert_gold_table_equal(gold_global, gold_global_health, table_name)
+
+
+def test_refresh_with_scope_spec_filters_by_split_and_horizon(tmp_path) -> None:
+    silver = tmp_path / "silver"
+    gold = tmp_path / "gold"
+    _write_two_sweep_refresh_fixture(silver)
+
+    RefreshAnalyticsStoreUseCase(
+        analytics_silver_dir=silver,
+        analytics_gold_dir=gold,
+        scope_spec=ScopeSpec.create(
+            scope_mode="cohort_decision",
+            splits=("test",),
+            horizons=(1,),
+        ),
+    ).execute()
+
+    oos = pd.read_parquet(gold / "gold_oos_consolidated.parquet")
+
+    assert set(oos["split"]) == {"test"}
+    assert set(oos["horizon"]) == {1}
 
 
 def test_refresh_with_scope_spec_validates_eagerly(tmp_path) -> None:
