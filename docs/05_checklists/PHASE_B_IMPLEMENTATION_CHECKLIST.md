@@ -396,13 +396,37 @@ coorte declarada em vez de ler o silver inteiro.
 
 ### Notas de revisao:
 
+- 2026-05-16: Stage 7 implementado em branch
+  `feat/analytics-store-stage7-refresh-scoped` para enderecar
+  A_code_audit.md §M5-Q3 (YELLOW) com refresh scoped via `ScopeSpec`.
+  Validacao local: `.venv/bin/pytest tests/unit/use_cases/test_refresh_analytics_store_use_case.py -v`
+  (`16 passed, 12 warnings`) e `.venv/bin/pytest tests/unit/use_cases/ -v`
+  (`144 passed, 14 warnings`).
+- Smoke CLI executado com
+  `.venv/bin/python -m src.main_refresh_analytics_store --scope-mode cohort_decision --scope-sweep-prefixes round_1_`
+  (`exit 0`). O silver local estava vazio para esse prefixo, entao os golds
+  scoped foram materializados vazios; a garantia de gold reduzido nao vazio
+  fica coberta pelo teste unitario `test_refresh_with_scope_spec_cohort_decision_filters_silver`.
+- Decisao de assinatura: `scope_spec` foi aceito no construtor e tambem em
+  `execute(...)` como override por chamada, preservando `None` como
+  comportamento global default.
+- Tratamento semantico por tabela: `dim_run` define `scoped_run_ids`, filtros
+  diretos de `parent_sweep_id`/`split`/`horizon` so sao aplicados quando a
+  coluna existe, e tabelas sem colunas de escopo nao sao esvaziadas
+  arbitrariamente. `fact_feature_contrib_local` nao tem `parent_sweep_id`; sob
+  scope cohort, filtra por `run_id` quando disponivel e rows legadas com
+  `run_id=None` caem fora.
+- Reuso de contrato: a leitura scoped usa `filter_dataframe_by_scope` de
+  `src/domain/services/scope_spec.py`; Stage 8, Stage 9, Stage 10 e etapas
+  posteriores permanecem fora deste PR.
+
 ### Tasks
 
-- [ ] **7.1** Adicionar `scope_spec: ScopeSpec | None = None` em
+- [~] **7.1** Adicionar `scope_spec: ScopeSpec | None = None` em
       `RefreshAnalyticsStoreUseCase.__init__` e em `execute`.
       **Aceite:** assinatura atualizada; default mantem comportamento global.
 
-- [ ] **7.2** Modificar `_load_partitioned_table`
+- [~] **7.2** Modificar `_load_partitioned_table`
       ([refresh_analytics_store_use_case.py:28-38](../../src/use_cases/refresh_analytics_store_use_case.py#L28-L38))
       para suportar scoping semantico por tabela (nao filtro cego global):
       - construir `scoped_run_ids` a partir de `dim_run` filtrado por scope;
@@ -412,13 +436,13 @@ coorte declarada em vez de ler o silver inteiro.
       **Aceite:** com scope, leitura retorna coorte correta sem esvaziar
       tabelas que nao possuem todas as colunas de escopo.
 
-- [ ] **7.3** Adicionar flags de scope em
+- [~] **7.3** Adicionar flags de scope em
       [main_refresh_analytics_store.py](../../src/main_refresh_analytics_store.py):
       `--scope-mode`, `--scope-sweep-prefixes`, `--scope-splits`,
       `--scope-horizons`. Reusar parsing existente do block-A.
       **Aceite:** `python -m src.main_refresh_analytics_store --scope-mode cohort_decision --scope-sweep-prefixes round_1_` produz gold scoped.
 
-- [ ] **7.4** Testes unitarios: refresh com scope produz gold reduzido
+- [~] **7.4** Testes unitarios: refresh com scope produz gold reduzido
       consistente; refresh sem scope produz comportamento atual.
       **Aceite:** suite passa.
 
