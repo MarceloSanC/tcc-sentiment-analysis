@@ -618,7 +618,7 @@ class RefreshAnalyticsStoreUseCase:
         if metrics_run_split_h.empty:
             return pd.DataFrame()
 
-        cols = ['asset', 'feature_set_name', 'config_signature', 'split', 'horizon']
+        cols = ['asset', 'feature_set_name', 'parent_sweep_id', 'config_signature', 'split', 'horizon']
         if not set(cols).issubset(set(metrics_run_split_h.columns)):
             return pd.DataFrame()
 
