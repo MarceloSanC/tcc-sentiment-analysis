@@ -638,7 +638,7 @@ class RefreshAnalyticsStoreUseCase:
         if metrics_run_split_h.empty:
             return pd.DataFrame()
 
-        req = {'asset', 'feature_set_name', 'config_signature', 'horizon', 'split'}
+        req = {'asset', 'feature_set_name', 'parent_sweep_id', 'config_signature', 'horizon', 'split'}
         if not req.issubset(set(metrics_run_split_h.columns)):
             return pd.DataFrame()
 
@@ -653,7 +653,7 @@ class RefreshAnalyticsStoreUseCase:
             return pd.DataFrame()
 
         grouped = metrics_run_split_h.groupby(
-            ['asset', 'feature_set_name', 'config_signature', 'horizon', 'split'],
+            ['asset', 'feature_set_name', 'parent_sweep_id', 'config_signature', 'horizon', 'split'],
             dropna=False,
         )
 
@@ -663,7 +663,7 @@ class RefreshAnalyticsStoreUseCase:
         if test_df.empty or val_df.empty:
             return pd.DataFrame()
 
-        key_cols = ['asset', 'feature_set_name', 'config_signature', 'horizon']
+        key_cols = ['asset', 'feature_set_name', 'parent_sweep_id', 'config_signature', 'horizon']
         out = test_df.merge(val_df, on=key_cols, how='inner', suffixes=('_test', '_val'))
         if out.empty:
             return pd.DataFrame()
