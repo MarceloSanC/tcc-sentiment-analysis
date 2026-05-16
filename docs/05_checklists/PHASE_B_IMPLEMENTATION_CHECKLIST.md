@@ -339,6 +339,13 @@ no output para rastreabilidade direta (Lei 3).
   o grao das 5 tabelas nao muda; legado pre-`9f0ccec` com
   `parent_sweep_id=None` permanece visivel via `dropna=False` e pode aparecer
   como bucket separado.
+- 2026-05-16 (follow-up): 4 YELLOW da revisao enderecados antes do merge —
+  refactor da indentacao do n_oos_contract, teste de cenario M5-Q4 com
+  config_signature cross-sweep, teste de bucket legado parent_sweep_id=None,
+  e Finding 4 dispensado por falta de evidencia downstream concreta.
+  Validacao: `.venv/bin/pytest tests/unit/use_cases/` (`140 passed, 5 warnings`);
+  `.venv/bin/ruff check src/use_cases/validate_analytics_quality_use_case.py`
+  (`All checks passed!`).
 
 ### Tasks
 
