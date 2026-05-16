@@ -876,25 +876,25 @@ class ValidateAnalyticsQualityUseCase:
                         n_oos_detail = f"missing_by_config_columns={missing_by_cfg_cols}"
                     else:
                         missing_run_level_cols = sorted(needed - set(gold_run_h.columns))
-                    if not missing_by_cfg_cols and missing_run_level_cols:
-                        n_oos_ok = False
-                        n_oos_detail = f"missing_run_level_columns={missing_run_level_cols}"
-                    elif not missing_by_cfg_cols:
-                        run = gold_run_h.copy()
-                        run["n_samples"] = pd.to_numeric(run["n_samples"], errors="coerce").fillna(0)
-                        key_cols = ["asset", "feature_set_name", "parent_sweep_id", "config_signature", "split", "horizon"]
-                        expected = (
-                            run.groupby(key_cols, dropna=False)["n_samples"]
-                            .sum()
-                            .reset_index()
-                            .rename(columns={"n_samples": "expected_n_oos"})
-                        )
-                        cmp = by.merge(expected, on=key_cols, how="left")
-                        cmp["expected_n_oos"] = pd.to_numeric(cmp["expected_n_oos"], errors="coerce")
-                        cmp["expected_n_oos"] = cmp["expected_n_oos"].fillna(0)
-                        mismatch = int((cmp["n_oos"].fillna(0).astype(int) != cmp["expected_n_oos"].astype(int)).sum())
-                        n_oos_ok = non_positive == 0 and mismatch == 0
-                        n_oos_detail = f"non_positive_n_oos={non_positive}, mismatch_with_run_level={mismatch}"
+                        if missing_run_level_cols:
+                            n_oos_ok = False
+                            n_oos_detail = f"missing_run_level_columns={missing_run_level_cols}"
+                        else:
+                            run = gold_run_h.copy()
+                            run["n_samples"] = pd.to_numeric(run["n_samples"], errors="coerce").fillna(0)
+                            key_cols = ["asset", "feature_set_name", "parent_sweep_id", "config_signature", "split", "horizon"]
+                            expected = (
+                                run.groupby(key_cols, dropna=False)["n_samples"]
+                                .sum()
+                                .reset_index()
+                                .rename(columns={"n_samples": "expected_n_oos"})
+                            )
+                            cmp = by.merge(expected, on=key_cols, how="left")
+                            cmp["expected_n_oos"] = pd.to_numeric(cmp["expected_n_oos"], errors="coerce")
+                            cmp["expected_n_oos"] = cmp["expected_n_oos"].fillna(0)
+                            mismatch = int((cmp["n_oos"].fillna(0).astype(int) != cmp["expected_n_oos"].astype(int)).sum())
+                            n_oos_ok = non_positive == 0 and mismatch == 0
+                            n_oos_detail = f"non_positive_n_oos={non_positive}, mismatch_with_run_level={mismatch}"
 
         self._record(checks, "gold_metrics_by_config_n_oos_contract", n_oos_ok, n_oos_detail)
 
