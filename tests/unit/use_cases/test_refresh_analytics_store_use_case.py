@@ -284,6 +284,39 @@ def test_refresh_execute_scope_spec_overrides_instance_default(tmp_path) -> None
     assert set(ranking["parent_sweep_id"].dropna()) == {"sw1_round"}
 
 
+def test_refresh_global_health_ignores_cohort_filters(tmp_path) -> None:
+    silver = tmp_path / "silver"
+    gold_global = tmp_path / "gold_global"
+    gold_global_health = tmp_path / "gold_global_health"
+    _write_two_sweep_refresh_fixture(silver)
+
+    RefreshAnalyticsStoreUseCase(
+        analytics_silver_dir=silver,
+        analytics_gold_dir=gold_global,
+        scope_spec=None,
+    ).execute()
+    RefreshAnalyticsStoreUseCase(
+        analytics_silver_dir=silver,
+        analytics_gold_dir=gold_global_health,
+        scope_spec=ScopeSpec.create(
+            scope_mode="global_health",
+            parent_sweep_prefixes=("sw1",),
+        ),
+    ).execute()
+
+    oos = pd.read_parquet(gold_global_health / "gold_oos_consolidated.parquet")
+    assert set(oos["parent_sweep_id"].dropna()) == {"sw1_round", "sw2_round"}
+
+    for table_name in [
+        "gold_ranking_by_config",
+        "gold_oos_consolidated",
+        "gold_prediction_metrics_by_run_split_horizon",
+        "gold_feature_contrib_local_summary",
+        "gold_model_decision_final",
+    ]:
+        _assert_gold_table_equal(gold_global, gold_global_health, table_name)
+
+
 def test_refresh_with_scope_spec_validates_eagerly(tmp_path) -> None:
     with pytest.raises(ValueError, match="scope_mode=cohort_decision requires"):
         RefreshAnalyticsStoreUseCase(
