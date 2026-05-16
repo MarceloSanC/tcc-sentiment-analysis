@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from src.domain.services.scope_spec import ScopeSpec, validate_scope_spec
+from src.domain.services.scope_spec import ScopeSpec, filter_dataframe_by_scope, validate_scope_spec
 from src.utils.path_policy import to_project_relative
 
 
@@ -33,7 +33,42 @@ class RefreshAnalyticsStoreUseCase:
         self.scope_spec = validate_scope_spec(scope_spec) if scope_spec is not None else None
 
     @staticmethod
-    def _load_partitioned_table(base_dir: Path, table_name: str) -> pd.DataFrame:
+    def _scope_loaded_table(
+        df: pd.DataFrame,
+        *,
+        scope_spec: ScopeSpec | None,
+        scoped_run_ids: set[str] | None,
+    ) -> pd.DataFrame:
+        if df.empty or scope_spec is None or not scope_spec.has_cohort_filters():
+            return df.copy()
+
+        out = df.copy()
+        applied_scope = False
+
+        if scoped_run_ids is not None and "run_id" in out.columns:
+            out = out[out["run_id"].astype(str).isin(scoped_run_ids)].copy()
+            applied_scope = True
+
+        table_scope = ScopeSpec.create(
+            scope_mode=scope_spec.scope_mode,
+            parent_sweep_prefixes=scope_spec.parent_sweep_prefixes if "parent_sweep_id" in out.columns else None,
+            splits=scope_spec.splits if "split" in out.columns else None,
+            horizons=scope_spec.horizons if "horizon" in out.columns else None,
+        )
+        if table_scope.has_cohort_filters():
+            out = filter_dataframe_by_scope(out, scope_spec=table_scope)
+            applied_scope = True
+
+        return out if applied_scope else df.copy()
+
+    def _load_partitioned_table(
+        self,
+        base_dir: Path,
+        table_name: str,
+        *,
+        scope_spec: ScopeSpec | None = None,
+        scoped_run_ids: set[str] | None = None,
+    ) -> pd.DataFrame:
         table_dir = base_dir / table_name
         if not table_dir.exists():
             return pd.DataFrame()
@@ -43,7 +78,54 @@ class RefreshAnalyticsStoreUseCase:
         frames = [pd.read_parquet(fp) for fp in files]
         if not frames:
             return pd.DataFrame()
-        return pd.concat(frames, ignore_index=True)
+        df = pd.concat(frames, ignore_index=True)
+        return self._scope_loaded_table(
+            df,
+            scope_spec=scope_spec,
+            scoped_run_ids=scoped_run_ids,
+        )
+
+    @staticmethod
+    def _build_scoped_run_ids(
+        *,
+        dim_run: pd.DataFrame,
+        fact_oos_predictions: pd.DataFrame,
+        scope_spec: ScopeSpec | None,
+    ) -> set[str] | None:
+        if scope_spec is None or not scope_spec.has_cohort_filters():
+            return None
+        if dim_run.empty or "run_id" not in dim_run.columns:
+            return set()
+
+        dim_scope = ScopeSpec.create(
+            scope_mode=scope_spec.scope_mode,
+            parent_sweep_prefixes=scope_spec.parent_sweep_prefixes,
+        )
+        dim_scoped = RefreshAnalyticsStoreUseCase._scope_loaded_table(
+            dim_run,
+            scope_spec=dim_scope if dim_scope.has_cohort_filters() else None,
+            scoped_run_ids=None,
+        )
+        run_ids = set(dim_scoped["run_id"].dropna().astype(str).tolist())
+        if not run_ids or not (scope_spec.splits or scope_spec.horizons):
+            return run_ids
+
+        if fact_oos_predictions.empty or "run_id" not in fact_oos_predictions.columns:
+            return set()
+
+        oos_scope = ScopeSpec.create(
+            scope_mode=scope_spec.scope_mode,
+            splits=scope_spec.splits,
+            horizons=scope_spec.horizons,
+        )
+        oos_scoped = RefreshAnalyticsStoreUseCase._scope_loaded_table(
+            fact_oos_predictions,
+            scope_spec=oos_scope if oos_scope.has_cohort_filters() else None,
+            scoped_run_ids=run_ids,
+        )
+        if oos_scoped.empty:
+            return set()
+        return set(oos_scoped["run_id"].dropna().astype(str).tolist())
 
     @staticmethod
     def _safe_write(df: pd.DataFrame, path: Path) -> str:
@@ -1937,10 +2019,43 @@ class RefreshAnalyticsStoreUseCase:
         effective_scope = validate_scope_spec(scope_spec) if scope_spec is not None else self.scope_spec
 
         dim_run = self._load_partitioned_table(self.analytics_silver_dir, "dim_run")
-        fact_split_metrics = self._load_partitioned_table(self.analytics_silver_dir, "fact_split_metrics")
-        fact_oos_predictions = self._load_partitioned_table(self.analytics_silver_dir, "fact_oos_predictions")
-        fact_model_artifacts = self._load_partitioned_table(self.analytics_silver_dir, "fact_model_artifacts")
-        fact_feature_contrib_local = self._load_partitioned_table(self.analytics_silver_dir, "fact_feature_contrib_local")
+        fact_oos_predictions_unscoped = self._load_partitioned_table(
+            self.analytics_silver_dir,
+            "fact_oos_predictions",
+        )
+        scoped_run_ids = self._build_scoped_run_ids(
+            dim_run=dim_run,
+            fact_oos_predictions=fact_oos_predictions_unscoped,
+            scope_spec=effective_scope,
+        )
+        dim_run = self._scope_loaded_table(
+            dim_run,
+            scope_spec=effective_scope,
+            scoped_run_ids=scoped_run_ids,
+        )
+        fact_split_metrics = self._load_partitioned_table(
+            self.analytics_silver_dir,
+            "fact_split_metrics",
+            scope_spec=effective_scope,
+            scoped_run_ids=scoped_run_ids,
+        )
+        fact_oos_predictions = self._scope_loaded_table(
+            fact_oos_predictions_unscoped,
+            scope_spec=effective_scope,
+            scoped_run_ids=scoped_run_ids,
+        )
+        fact_model_artifacts = self._load_partitioned_table(
+            self.analytics_silver_dir,
+            "fact_model_artifacts",
+            scope_spec=effective_scope,
+            scoped_run_ids=scoped_run_ids,
+        )
+        fact_feature_contrib_local = self._load_partitioned_table(
+            self.analytics_silver_dir,
+            "fact_feature_contrib_local",
+            scope_spec=effective_scope,
+            scoped_run_ids=scoped_run_ids,
+        )
 
         base = self._base_join_runs_split_metrics(dim_run, fact_split_metrics)
 
