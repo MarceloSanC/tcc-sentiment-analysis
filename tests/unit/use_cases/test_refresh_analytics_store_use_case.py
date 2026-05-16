@@ -389,7 +389,7 @@ def test_refresh_analytics_store_builds_gold_tables(tmp_path) -> None:
 
     impact = pd.read_parquet(gold / "gold_feature_set_impact.parquet")
     assert not impact.empty
-    assert "metric" in impact.columns
+    assert {"parent_sweep_id", "metric"}.issubset(set(impact.columns))
 
 
     pred_run_h = pd.read_parquet(gold / "gold_prediction_metrics_by_run_split_horizon.parquet")
@@ -432,7 +432,7 @@ def test_refresh_analytics_store_builds_gold_tables(tmp_path) -> None:
 
     by_h = pd.read_parquet(gold / "gold_prediction_metrics_by_horizon.parquet")
     assert not by_h.empty
-    assert "horizon" in by_h.columns
+    assert {"parent_sweep_id", "horizon"}.issubset(set(by_h.columns))
 
     cal = pd.read_parquet(gold / "gold_prediction_calibration.parquet")
     assert not cal.empty
@@ -489,11 +489,11 @@ def test_refresh_analytics_store_builds_gold_tables(tmp_path) -> None:
 
     fih = pd.read_parquet(gold / "gold_feature_impact_by_horizon.parquet")
     assert not fih.empty
-    assert {"feature_name", "horizon", "mean_delta_rmse", "method"}.issubset(set(fih.columns))
+    assert {"parent_sweep_id", "feature_name", "horizon", "mean_delta_rmse", "method"}.issubset(set(fih.columns))
 
     local = pd.read_parquet(gold / "gold_feature_contrib_local_summary.parquet")
     assert not local.empty
-    assert {"feature_name", "horizon", "mean_abs_contribution", "top3_frequency", "local_top3_jaccard_mean", "local_top3_jaccard_pairs"}.issubset(set(local.columns))
+    assert {"parent_sweep_id", "feature_name", "horizon", "mean_abs_contribution", "top3_frequency", "local_top3_jaccard_mean", "local_top3_jaccard_pairs"}.issubset(set(local.columns))
     stab = local[(local["horizon"] == 1) & (local["method"] == "local_magnitude_signed_v1")]
     assert not stab.empty
     assert int(pd.to_numeric(stab["local_top3_jaccard_pairs"], errors="coerce").max()) >= 1
@@ -547,6 +547,283 @@ def test_build_gold_prediction_metrics_by_config_n_oos_is_idempotent_on_row_orde
     out_a = out_a.sort_values(sort_cols).reset_index(drop=True)
     out_b = out_b.sort_values(sort_cols).reset_index(drop=True)
     pd.testing.assert_frame_equal(out_a, out_b, check_like=True)
+
+
+def test_gold_feature_set_impact_is_cohort_aware() -> None:
+    base = pd.DataFrame(
+        [
+            {
+                "run_id": "sw1_r1",
+                "asset": "AAPL",
+                "feature_set_name": "BT",
+                "parent_sweep_id": "sw1",
+                "split": "test",
+                "rmse": 1.0,
+                "mae": 0.10,
+                "directional_accuracy": 0.60,
+            },
+            {
+                "run_id": "sw1_r2",
+                "asset": "AAPL",
+                "feature_set_name": "BT",
+                "parent_sweep_id": "sw1",
+                "split": "test",
+                "rmse": 3.0,
+                "mae": 0.30,
+                "directional_accuracy": 0.70,
+            },
+            {
+                "run_id": "sw2_r1",
+                "asset": "AAPL",
+                "feature_set_name": "BT",
+                "parent_sweep_id": "sw2",
+                "split": "test",
+                "rmse": 10.0,
+                "mae": 1.00,
+                "directional_accuracy": 0.40,
+            },
+            {
+                "run_id": "sw2_r2",
+                "asset": "AAPL",
+                "feature_set_name": "BT",
+                "parent_sweep_id": "sw2",
+                "split": "test",
+                "rmse": 30.0,
+                "mae": 3.00,
+                "directional_accuracy": 0.50,
+            },
+        ]
+    )
+
+    out = RefreshAnalyticsStoreUseCase._build_gold_feature_set_impact(base)
+    rmse = out[out["metric"] == "rmse"].sort_values("parent_sweep_id").reset_index(drop=True)
+
+    assert "parent_sweep_id" in out.columns
+    assert rmse["parent_sweep_id"].tolist() == ["sw1", "sw2"]
+    assert rmse["n_runs"].tolist() == [2, 2]
+    assert rmse["mean_value"].tolist() == [2.0, 20.0]
+
+
+def test_gold_prediction_metrics_by_horizon_is_cohort_aware() -> None:
+    rows = [
+        {
+            "run_id": run_id,
+            "asset": "AAPL",
+            "feature_set_name": "BT",
+            "parent_sweep_id": sweep,
+            "split": "test",
+            "horizon": 1,
+            "n_samples": samples,
+            "rmse": rmse,
+            "mae": rmse,
+        }
+        for run_id, sweep, samples, rmse in [
+            ("sw1_r1", "sw1", 3, 1.0),
+            ("sw1_r2", "sw1", 5, 3.0),
+            ("sw2_r1", "sw2", 7, 10.0),
+            ("sw2_r2", "sw2", 11, 30.0),
+        ]
+    ]
+
+    out = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_horizon(pd.DataFrame(rows))
+    out = out.sort_values("parent_sweep_id").reset_index(drop=True)
+
+    assert "parent_sweep_id" in out.columns
+    assert out["parent_sweep_id"].tolist() == ["sw1", "sw2"]
+    assert out["n_runs"].tolist() == [2, 2]
+    assert out["n_oos"].tolist() == [8, 18]
+    assert out["mean_rmse"].tolist() == [2.0, 20.0]
+
+
+def test_gold_feature_impact_by_horizon_is_cohort_aware() -> None:
+    fact_model_artifacts = pd.DataFrame(
+        [
+            {"run_id": run_id, "feature_importance_json": f'[{{"feature": "close", "delta_rmse": {delta}, "delta_mae": {delta}}}]'}
+            for run_id, delta in [
+                ("sw1_r1", 1.0),
+                ("sw1_r2", 3.0),
+                ("sw2_r1", 10.0),
+                ("sw2_r2", 30.0),
+            ]
+        ]
+    )
+    metrics = pd.DataFrame(
+        [
+            {
+                "run_id": run_id,
+                "asset": "AAPL",
+                "feature_set_name": "BT",
+                "parent_sweep_id": sweep,
+                "split": "test",
+                "horizon": 1,
+            }
+            for run_id, sweep in [
+                ("sw1_r1", "sw1"),
+                ("sw1_r2", "sw1"),
+                ("sw2_r1", "sw2"),
+                ("sw2_r2", "sw2"),
+            ]
+        ]
+    )
+
+    out = RefreshAnalyticsStoreUseCase._build_gold_feature_impact_by_horizon(fact_model_artifacts, metrics)
+    out = out.sort_values("parent_sweep_id").reset_index(drop=True)
+
+    assert "parent_sweep_id" in out.columns
+    assert out["parent_sweep_id"].tolist() == ["sw1", "sw2"]
+    assert out["n_runs"].tolist() == [2, 2]
+    assert out["mean_delta_rmse"].tolist() == [2.0, 20.0]
+
+
+def test_gold_feature_contrib_local_summary_is_cohort_aware_via_dim_run() -> None:
+    fact_feature_contrib_local = pd.DataFrame(
+        [
+            {
+                "inference_run_id": f"inf_{run_id}",
+                "run_id": run_id,
+                "asset": "AAPL",
+                "feature_set_name": "BT",
+                "horizon": 1,
+                "feature_name": "close",
+                "feature_rank": 1,
+                "contribution": contribution,
+                "abs_contribution": abs(contribution),
+                "method": "local_magnitude_signed_v1",
+            }
+            for run_id, contribution in [
+                ("sw1_r1", 1.0),
+                ("sw1_r2", 3.0),
+                ("sw2_r1", 10.0),
+                ("sw2_r2", 30.0),
+            ]
+        ]
+    )
+    dim_run = pd.DataFrame(
+        [
+            {"run_id": "sw1_r1", "parent_sweep_id": "sw1"},
+            {"run_id": "sw1_r2", "parent_sweep_id": "sw1"},
+            {"run_id": "sw2_r1", "parent_sweep_id": "sw2"},
+            {"run_id": "sw2_r2", "parent_sweep_id": "sw2"},
+        ]
+    )
+
+    out = RefreshAnalyticsStoreUseCase._build_gold_feature_contrib_local_summary(
+        fact_feature_contrib_local,
+        dim_run,
+    )
+    out = out.sort_values("parent_sweep_id").reset_index(drop=True)
+
+    assert "parent_sweep_id" in out.columns
+    assert out["parent_sweep_id"].tolist() == ["sw1", "sw2"]
+    assert out["n_inference_runs"].tolist() == [2, 2]
+    assert out["mean_abs_contribution"].tolist() == [2.0, 20.0]
+
+
+def test_gold_feature_contrib_local_summary_keeps_legacy_rows_without_parent_sweep_id() -> None:
+    fact_feature_contrib_local = pd.DataFrame(
+        [
+            {
+                "inference_run_id": "inf_1",
+                "run_id": "legacy_r1",
+                "asset": "AAPL",
+                "feature_set_name": "BT",
+                "horizon": 1,
+                "feature_name": "close",
+                "feature_rank": 1,
+                "contribution": 1.0,
+                "abs_contribution": 1.0,
+                "method": "local_magnitude_signed_v1",
+            },
+            {
+                "inference_run_id": "inf_2",
+                "run_id": "legacy_r2",
+                "asset": "AAPL",
+                "feature_set_name": "BT",
+                "horizon": 1,
+                "feature_name": "close",
+                "feature_rank": 2,
+                "contribution": -3.0,
+                "abs_contribution": 3.0,
+                "method": "local_magnitude_signed_v1",
+            },
+        ]
+    )
+
+    out = RefreshAnalyticsStoreUseCase._build_gold_feature_contrib_local_summary(
+        fact_feature_contrib_local,
+        pd.DataFrame(),
+    )
+
+    assert not out.empty
+    assert "parent_sweep_id" in out.columns
+    assert out["parent_sweep_id"].isna().all()
+    assert len(out) == 1
+    row = out.iloc[0]
+    assert int(row["n_inference_runs"]) == 2
+    assert float(row["mean_abs_contribution"]) == 2.0
+
+
+def test_gold_consistency_topk_ranks_within_parent_sweep() -> None:
+    base = pd.DataFrame(
+        [
+            {
+                "run_id": "sw1_cfg_a",
+                "asset": "AAPL",
+                "feature_set_name": "BT",
+                "parent_sweep_id": "sw1",
+                "config_signature": "cfg_a",
+                "split": "test",
+                "fold": "wf_1",
+                "seed": 7,
+                "rmse": 0.10,
+            },
+            {
+                "run_id": "sw1_cfg_b",
+                "asset": "AAPL",
+                "feature_set_name": "BT",
+                "parent_sweep_id": "sw1",
+                "config_signature": "cfg_b",
+                "split": "test",
+                "fold": "wf_1",
+                "seed": 7,
+                "rmse": 0.90,
+            },
+            {
+                "run_id": "sw2_cfg_a",
+                "asset": "AAPL",
+                "feature_set_name": "BT",
+                "parent_sweep_id": "sw2",
+                "config_signature": "cfg_a",
+                "split": "test",
+                "fold": "wf_1",
+                "seed": 7,
+                "rmse": 0.90,
+            },
+            {
+                "run_id": "sw2_cfg_b",
+                "asset": "AAPL",
+                "feature_set_name": "BT",
+                "parent_sweep_id": "sw2",
+                "config_signature": "cfg_b",
+                "split": "test",
+                "fold": "wf_1",
+                "seed": 7,
+                "rmse": 0.10,
+            },
+        ]
+    )
+
+    out = RefreshAnalyticsStoreUseCase._build_gold_consistency_topk(base)
+
+    assert "parent_sweep_id" in out.columns
+    lookup = {
+        (row["parent_sweep_id"], row["config_signature"]): float(row["top1_pct"])
+        for _, row in out.iterrows()
+    }
+    assert lookup[("sw1", "cfg_a")] == 1.0
+    assert lookup[("sw1", "cfg_b")] == 0.0
+    assert lookup[("sw2", "cfg_a")] == 0.0
+    assert lookup[("sw2", "cfg_b")] == 1.0
 
 
 def test_gold_ranking_by_config_is_cohort_aware() -> None:

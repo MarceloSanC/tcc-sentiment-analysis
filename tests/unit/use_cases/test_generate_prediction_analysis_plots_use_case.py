@@ -162,6 +162,7 @@ def test_generate_prediction_analysis_plots_use_case_generates_all_outputs(tmp_p
         [
             {
                 "asset": "AAPL",
+                "parent_sweep_id": "sw1",
                 "split": "test",
                 "horizon": 1,
                 "feature_name": "close",
@@ -362,6 +363,7 @@ def test_generate_prediction_analysis_plots_use_case_scope_csv_filters_candidate
         [
             {
                 "asset": "AAPL",
+                "parent_sweep_id": "0_2_2_explicit",
                 "split": "test",
                 "horizon": 1,
                 "feature_name": "close",
@@ -420,6 +422,41 @@ def test_generate_prediction_analysis_plots_use_case_scope_csv_filters_candidate
     assert payload["scope_csv_path"] == str(scope_csv)
     assert payload["scope_selected_labels"] == ["BT|cfg_keep"]
     assert "fig_heatmap_metrics_by_horizon" in result.outputs
+
+
+def test_filter_scope_preserves_parent_sweep_grain_for_stage5_gold_tables() -> None:
+    df = pd.DataFrame(
+        [
+            {
+                "asset": "AAPL",
+                "parent_sweep_id": "sw_keep",
+                "split": "test",
+                "horizon": 1,
+                "feature_name": "close",
+                "mean_delta_rmse": 0.02,
+            },
+            {
+                "asset": "AAPL",
+                "parent_sweep_id": "sw_drop",
+                "split": "test",
+                "horizon": 1,
+                "feature_name": "close",
+                "mean_delta_rmse": 0.50,
+            },
+        ]
+    )
+    scope = {
+        "pairs": set(),
+        "labels": set(),
+        "run_ids": set(),
+        "model_versions": set(),
+        "parent_sweep_ids": {"sw_keep"},
+    }
+
+    out = GeneratePredictionAnalysisPlotsUseCase._filter_df_by_scope(df, scope)
+
+    assert out["parent_sweep_id"].tolist() == ["sw_keep"]
+    assert out["mean_delta_rmse"].tolist() == [0.02]
 
 
 def test_generate_prediction_analysis_plots_use_case_scope_prefix_uses_checkpoint_path_fallback(tmp_path: Path) -> None:
@@ -565,3 +602,49 @@ def test_filter_df_by_scope_filters_pairwise_tables_by_both_sides() -> None:
     assert len(out) == 1
     assert out.iloc[0]["left_config"] == "BT|cfg1"
     assert out.iloc[0]["right_config"] == "BT|cfg2"
+
+
+def test_feature_importance_global_weights_mean_delta_rmse_by_n_runs(tmp_path: Path) -> None:
+    impact_df = pd.DataFrame(
+        [
+            {
+                "asset": "AAPL",
+                "feature_set_name": "BT",
+                "parent_sweep_id": "sw1",
+                "split": "test",
+                "horizon": 1,
+                "feature_name": "close",
+                "method": "global_importance_reused_by_horizon",
+                "mean_delta_rmse": 1.0,
+                "n_runs": 1,
+            },
+            {
+                "asset": "AAPL",
+                "feature_set_name": "BT",
+                "parent_sweep_id": "sw2",
+                "split": "test",
+                "horizon": 1,
+                "feature_name": "close",
+                "method": "global_importance_reused_by_horizon",
+                "mean_delta_rmse": 9.0,
+                "n_runs": 9,
+            },
+        ]
+    )
+    path = tmp_path / "feature_importance.png"
+    uc = GeneratePredictionAnalysisPlotsUseCase(
+        analytics_gold_dir=tmp_path / "gold",
+        analytics_silver_dir=tmp_path / "silver",
+        output_dir=tmp_path / "out",
+    )
+
+    weighted = GeneratePredictionAnalysisPlotsUseCase._weighted_mean_delta_rmse(impact_df, 1)
+    uc._build_fig_feature_importance_global(
+        path=path,
+        impact_df=impact_df,
+        horizons=[1],
+        top_k_features=1,
+    )
+
+    assert path.exists()
+    assert float(weighted.loc["close"]) == pytest.approx(8.2)

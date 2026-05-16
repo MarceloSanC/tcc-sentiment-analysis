@@ -102,6 +102,17 @@ class RefreshAnalyticsStoreUseCase:
             out["asset"] = out["asset_x"]
         if "asset_y" in out.columns and "asset" not in out.columns:
             out["asset"] = out["asset_y"]
+        if "parent_sweep_id_x" in out.columns and "parent_sweep_id" not in out.columns:
+            out["parent_sweep_id"] = out["parent_sweep_id_x"]
+        if "parent_sweep_id_y" in out.columns:
+            if "parent_sweep_id" not in out.columns:
+                out["parent_sweep_id"] = out["parent_sweep_id_y"]
+            else:
+                out["parent_sweep_id"] = out["parent_sweep_id"].where(
+                    out["parent_sweep_id"].notna(),
+                    out["parent_sweep_id_y"],
+                )
+        out = RefreshAnalyticsStoreUseCase._normalize_parent_sweep_id_for_merge(out)
         return out
 
     @staticmethod
@@ -183,46 +194,50 @@ class RefreshAnalyticsStoreUseCase:
         if df.empty or "fold" not in df.columns or "seed" not in df.columns:
             return pd.DataFrame()
 
-        keys = ["asset", "feature_set_name", "fold", "seed"]
+        keys = ["asset", "feature_set_name", "parent_sweep_id", "fold", "seed"]
+        agg_keys = ["asset", "feature_set_name", "parent_sweep_id", "config_signature"]
         ranked = df.sort_values(keys + ["rmse"]).copy()
         ranked["position"] = ranked.groupby(keys).cumcount() + 1
 
         all_counts = (
-            ranked.groupby(["asset", "feature_set_name", "config_signature"], dropna=False)
+            ranked.groupby(agg_keys, dropna=False)
             .size()
             .rename("total_groups")
             .reset_index()
         )
         top1 = (
             ranked[ranked["position"] <= 1]
-            .groupby(["asset", "feature_set_name", "config_signature"], dropna=False)
+            .groupby(agg_keys, dropna=False)
             .size()
             .rename("top1_hits")
             .reset_index()
         )
         top3 = (
             ranked[ranked["position"] <= 3]
-            .groupby(["asset", "feature_set_name", "config_signature"], dropna=False)
+            .groupby(agg_keys, dropna=False)
             .size()
             .rename("top3_hits")
             .reset_index()
         )
         top5 = (
             ranked[ranked["position"] <= 5]
-            .groupby(["asset", "feature_set_name", "config_signature"], dropna=False)
+            .groupby(agg_keys, dropna=False)
             .size()
             .rename("top5_hits")
             .reset_index()
         )
-        out = all_counts.merge(top1, on=["asset", "feature_set_name", "config_signature"], how="left")
-        out = out.merge(top3, on=["asset", "feature_set_name", "config_signature"], how="left")
-        out = out.merge(top5, on=["asset", "feature_set_name", "config_signature"], how="left")
+        out = all_counts.merge(top1, on=agg_keys, how="left")
+        out = out.merge(top3, on=agg_keys, how="left")
+        out = out.merge(top5, on=agg_keys, how="left")
         for c in ["top1_hits", "top3_hits", "top5_hits"]:
             out[c] = out[c].fillna(0).astype(int)
         out["top1_pct"] = out["top1_hits"] / out["total_groups"]
         out["top3_pct"] = out["top3_hits"] / out["total_groups"]
         out["top5_pct"] = out["top5_hits"] / out["total_groups"]
-        return out.sort_values(["asset", "feature_set_name", "top1_pct"], ascending=[True, True, False]).reset_index(drop=True)
+        return out.sort_values(
+            ["asset", "feature_set_name", "parent_sweep_id", "top1_pct"],
+            ascending=[True, True, True, False],
+        ).reset_index(drop=True)
 
     @staticmethod
     def _build_gold_ic95(base: pd.DataFrame) -> pd.DataFrame:
@@ -267,7 +282,7 @@ class RefreshAnalyticsStoreUseCase:
         df = base.copy()
         metric_cols = ["rmse", "mae", "directional_accuracy"]
         out_rows: list[dict[str, object]] = []
-        group_cols = ["asset", "feature_set_name", "split"]
+        group_cols = ["asset", "feature_set_name", "parent_sweep_id", "split"]
         for metric_col in metric_cols:
             grouped = (
                 df.groupby(group_cols, dropna=False)[metric_col]
@@ -279,6 +294,7 @@ class RefreshAnalyticsStoreUseCase:
                     {
                         "asset": row["asset"],
                         "feature_set_name": row["feature_set_name"],
+                        "parent_sweep_id": row["parent_sweep_id"],
                         "split": row["split"],
                         "metric": metric_col,
                         "n_runs": int(row["count"]),
@@ -564,7 +580,7 @@ class RefreshAnalyticsStoreUseCase:
         if metrics_run_split_h.empty:
             return pd.DataFrame()
 
-        cols = ['asset', 'feature_set_name', 'split', 'horizon']
+        cols = ['asset', 'feature_set_name', 'parent_sweep_id', 'split', 'horizon']
         if not set(cols).issubset(set(metrics_run_split_h.columns)):
             return pd.DataFrame()
 
@@ -718,13 +734,15 @@ class RefreshAnalyticsStoreUseCase:
             return pd.DataFrame()
         if not {'run_id', 'feature_importance_json'}.issubset(set(fact_model_artifacts.columns)):
             return pd.DataFrame()
-        req = {'run_id', 'asset', 'feature_set_name', 'split', 'horizon'}
+        req = {'run_id', 'asset', 'feature_set_name', 'parent_sweep_id', 'split', 'horizon'}
         if not req.issubset(set(metrics_run_split_h.columns)):
             return pd.DataFrame()
 
         import json
 
-        split_h = metrics_run_split_h[['run_id', 'asset', 'feature_set_name', 'split', 'horizon']].drop_duplicates()
+        split_h = metrics_run_split_h[
+            ['run_id', 'asset', 'feature_set_name', 'parent_sweep_id', 'split', 'horizon']
+        ].drop_duplicates()
         split_h = split_h[split_h['split'].astype(str).isin(['val', 'test'])].copy()
         if split_h.empty:
             return pd.DataFrame()
@@ -753,6 +771,7 @@ class RefreshAnalyticsStoreUseCase:
                             'run_id': run_id,
                             'asset': hz.get('asset'),
                             'feature_set_name': hz.get('feature_set_name'),
+                            'parent_sweep_id': hz.get('parent_sweep_id'),
                             'split': hz.get('split'),
                             'horizon': int(hz.get('horizon')) if pd.notna(hz.get('horizon')) else None,
                             'feature_name': str(item.get('feature')),
@@ -768,7 +787,10 @@ class RefreshAnalyticsStoreUseCase:
             return pd.DataFrame()
         detail = pd.DataFrame(rows)
         agg = (
-            detail.groupby(['asset', 'feature_set_name', 'split', 'horizon', 'feature_name', 'method'], dropna=False)
+            detail.groupby(
+                ['asset', 'feature_set_name', 'parent_sweep_id', 'split', 'horizon', 'feature_name', 'method'],
+                dropna=False,
+            )
             .agg(
                 n_runs=('run_id', 'count'),
                 mean_delta_rmse=('delta_rmse', 'mean'),
@@ -1806,6 +1828,7 @@ class RefreshAnalyticsStoreUseCase:
     @staticmethod
     def _build_gold_feature_contrib_local_summary(
         fact_feature_contrib_local: pd.DataFrame,
+        dim_run: pd.DataFrame,
     ) -> pd.DataFrame:
         if fact_feature_contrib_local.empty:
             return pd.DataFrame()
@@ -1815,6 +1838,14 @@ class RefreshAnalyticsStoreUseCase:
             return pd.DataFrame()
 
         df = fact_feature_contrib_local.copy()
+        if "run_id" in df.columns and {"run_id", "parent_sweep_id"}.issubset(set(dim_run.columns)):
+            dim_trim = RefreshAnalyticsStoreUseCase._normalize_parent_sweep_id_for_merge(
+                dim_run[["run_id", "parent_sweep_id"]].drop_duplicates("run_id")
+            )
+            df = df.merge(dim_trim, on="run_id", how="left")
+            df = RefreshAnalyticsStoreUseCase._normalize_parent_sweep_id_for_merge(df)
+        else:
+            df["parent_sweep_id"] = None
         df["horizon"] = pd.to_numeric(df["horizon"], errors="coerce")
         df["contribution"] = pd.to_numeric(df["contribution"], errors="coerce")
         df["abs_contribution"] = pd.to_numeric(df["abs_contribution"], errors="coerce")
@@ -1830,7 +1861,7 @@ class RefreshAnalyticsStoreUseCase:
         if "method" not in df.columns:
             df["method"] = "unknown"
 
-        group_cols = ["asset", "feature_set_name", "horizon", "feature_name", "method"]
+        group_cols = ["asset", "feature_set_name", "parent_sweep_id", "horizon", "feature_name", "method"]
         agg = (
             df.groupby(group_cols, dropna=False)
             .agg(
@@ -1850,7 +1881,7 @@ class RefreshAnalyticsStoreUseCase:
 
         stability_rows: list[dict[str, object]] = []
         if "inference_run_id" in df.columns:
-            stab_group_cols = ["asset", "feature_set_name", "horizon", "method"]
+            stab_group_cols = ["asset", "feature_set_name", "parent_sweep_id", "horizon", "method"]
             for keys, g in df.groupby(stab_group_cols, dropna=False):
                 run_top: dict[str, set[str]] = {}
                 for rid, rg in g.groupby("inference_run_id", dropna=False):
@@ -1878,8 +1909,9 @@ class RefreshAnalyticsStoreUseCase:
                     {
                         "asset": keys[0],
                         "feature_set_name": keys[1],
-                        "horizon": int(keys[2]) if pd.notna(keys[2]) else None,
-                        "method": keys[3],
+                        "parent_sweep_id": keys[2],
+                        "horizon": int(keys[3]) if pd.notna(keys[3]) else None,
+                        "method": keys[4],
                         "local_top3_jaccard_mean": float(np.mean(vals)) if vals else np.nan,
                         "local_top3_jaccard_pairs": int(len(vals)),
                     }
@@ -1887,7 +1919,7 @@ class RefreshAnalyticsStoreUseCase:
 
         if stability_rows:
             stab = pd.DataFrame(stability_rows)
-            agg = agg.merge(stab, on=["asset", "feature_set_name", "horizon", "method"], how="left")
+            agg = agg.merge(stab, on=["asset", "feature_set_name", "parent_sweep_id", "horizon", "method"], how="left")
 
         return agg
 
@@ -1971,7 +2003,7 @@ class RefreshAnalyticsStoreUseCase:
             self.analytics_gold_dir / "gold_feature_impact_by_horizon.parquet",
         )
         outputs["gold_feature_contrib_local_summary"] = self._safe_write(
-            self._build_gold_feature_contrib_local_summary(fact_feature_contrib_local),
+            self._build_gold_feature_contrib_local_summary(fact_feature_contrib_local, dim_run),
             self.analytics_gold_dir / "gold_feature_contrib_local_summary.parquet",
         )
         gold_quality = self._build_gold_oos_quality_report(dim_run, fact_oos_predictions)
