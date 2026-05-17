@@ -16,6 +16,167 @@ def _write_table(base, table_name: str, rows: list[dict], parts: dict[str, str] 
     pd.DataFrame(rows).to_parquet(table_dir / f"{table_name}.parquet", index=False)
 
 
+def _quantile_contract_dim_run() -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "run_id": "r1",
+                "model_version": "v1",
+                "feature_set_hash": "fh1",
+                "parent_sweep_id": "sw1",
+                "trial_number": 1,
+                "status": "ok",
+            }
+        ]
+    )
+
+
+def _quantile_contract_oos(*, include_post_guardrail: bool = True) -> pd.DataFrame:
+    row = {
+        "run_id": "r1",
+        "asset": "AAPL",
+        "feature_set_name": "BT",
+        "config_signature": "cfg1",
+        "split": "test",
+        "fold": "wf_1",
+        "seed": 42,
+        "horizon": 1,
+        "y_true": 0.0,
+        "y_pred": 0.0,
+        "quantile_p10": 1.0,
+        "quantile_p50": 0.0,
+        "quantile_p90": -1.0,
+    }
+    if include_post_guardrail:
+        row.update(
+            {
+                "quantile_p10_post_guardrail": -1.0,
+                "quantile_p50_post_guardrail": 0.0,
+                "quantile_p90_post_guardrail": 1.0,
+            }
+        )
+    return pd.DataFrame([row])
+
+
+def test_metrics_by_run_split_horizon_emits_raw_and_post_guardrail_pairs() -> None:
+    out = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon(
+        _quantile_contract_dim_run(),
+        _quantile_contract_oos(),
+    )
+
+    expected = {
+        "picp_raw",
+        "picp_post_guardrail",
+        "mpiw_raw",
+        "mpiw_post_guardrail",
+        "pinball_q10_raw",
+        "pinball_q10_post_guardrail",
+        "pinball_q50_raw",
+        "pinball_q50_post_guardrail",
+        "pinball_q90_raw",
+        "pinball_q90_post_guardrail",
+        "mean_pinball_raw",
+        "mean_pinball_post_guardrail",
+        "coverage_error_raw",
+        "coverage_error_post_guardrail",
+        "confidence_calibrated_raw",
+        "confidence_calibrated_post_guardrail",
+    }
+    assert expected.issubset(set(out.columns))
+    row = out.iloc[0]
+    assert float(row["mpiw_raw"]) == -2.0
+    assert float(row["mpiw_post_guardrail"]) == 2.0
+    assert float(row["picp_raw"]) == 0.0
+    assert float(row["picp_post_guardrail"]) == 1.0
+    assert float(row["mean_pinball_raw"]) != float(row["mean_pinball_post_guardrail"])
+
+
+def test_metrics_emits_nan_post_guardrail_when_silver_missing_columns() -> None:
+    out = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon(
+        _quantile_contract_dim_run(),
+        _quantile_contract_oos(include_post_guardrail=False),
+    )
+
+    row = out.iloc[0]
+    assert float(row["mpiw_raw"]) == -2.0
+    assert float(row["picp_raw"]) == 0.0
+    assert pd.isna(row["mpiw_post_guardrail"])
+    assert pd.isna(row["picp_post_guardrail"])
+    assert pd.isna(row["mean_pinball_post_guardrail"])
+
+
+def test_primary_quantile_contract_default_is_post_guardrail(tmp_path) -> None:
+    use_case = RefreshAnalyticsStoreUseCase(
+        analytics_silver_dir=tmp_path / "silver",
+        analytics_gold_dir=tmp_path / "gold",
+    )
+
+    assert use_case.primary_quantile_contract == "post_guardrail"
+
+
+def test_primary_quantile_contract_rejects_invalid_value(tmp_path) -> None:
+    with pytest.raises(ValueError, match="primary_quantile_contract"):
+        RefreshAnalyticsStoreUseCase(
+            analytics_silver_dir=tmp_path / "silver",
+            analytics_gold_dir=tmp_path / "gold",
+            primary_quantile_contract="invalid",  # type: ignore[arg-type]
+        )
+
+
+def test_model_decision_final_uses_primary_contract() -> None:
+    metrics_by_config = pd.DataFrame(
+        [
+            {
+                "asset": "AAPL",
+                "feature_set_name": "BT",
+                "config_signature": "cfg1",
+                "split": "test",
+                "horizon": 1,
+                "n_runs": 1,
+                "mean_rmse": 0.1,
+                "mean_mae": 0.1,
+                "mean_directional_accuracy": 0.6,
+                "mean_mean_pinball_raw": 9.0,
+                "mean_mean_pinball_post_guardrail": 1.0,
+                "mean_picp_raw": 0.1,
+                "mean_picp_post_guardrail": 0.8,
+                "mean_mpiw_raw": -3.0,
+                "mean_mpiw_post_guardrail": 2.0,
+            }
+        ]
+    )
+
+    raw = RefreshAnalyticsStoreUseCase._build_gold_model_decision_final(
+        metrics_by_config=metrics_by_config,
+        robustness_by_horizon=pd.DataFrame(),
+        generalization_gap=pd.DataFrame(),
+        dm_results=pd.DataFrame(),
+        mcs_results=pd.DataFrame(),
+        win_rate_results=pd.DataFrame(),
+        paired_intersection=pd.DataFrame(),
+        primary_quantile_contract="raw",
+    )
+    post = RefreshAnalyticsStoreUseCase._build_gold_model_decision_final(
+        metrics_by_config=metrics_by_config,
+        robustness_by_horizon=pd.DataFrame(),
+        generalization_gap=pd.DataFrame(),
+        dm_results=pd.DataFrame(),
+        mcs_results=pd.DataFrame(),
+        win_rate_results=pd.DataFrame(),
+        paired_intersection=pd.DataFrame(),
+        primary_quantile_contract="post_guardrail",
+    )
+
+    assert float(raw.iloc[0]["mean_mean_pinball"]) == 9.0
+    assert float(raw.iloc[0]["mean_picp"]) == 0.1
+    assert float(raw.iloc[0]["mean_mpiw"]) == -3.0
+    assert raw.iloc[0]["primary_quantile_contract"] == "raw"
+    assert float(post.iloc[0]["mean_mean_pinball"]) == 1.0
+    assert float(post.iloc[0]["mean_picp"]) == 0.8
+    assert float(post.iloc[0]["mean_mpiw"]) == 2.0
+    assert post.iloc[0]["primary_quantile_contract"] == "post_guardrail"
+
+
 def _write_two_sweep_refresh_fixture(silver) -> None:
     dim_rows = []
     split_rows = []
@@ -789,20 +950,20 @@ def test_refresh_analytics_store_builds_gold_tables(tmp_path) -> None:
     assert abs(float(h1["bias"]) - 0.02) < 1e-12
     assert abs(float(h1["rmse"]) - 0.02) < 1e-12
     assert abs(float(h1["mae"]) - 0.02) < 1e-12
-    assert abs(float(h1["pinball_q10"]) - 0.005) < 1e-12
-    assert abs(float(h1["pinball_q50"]) - 0.01) < 1e-12
-    assert abs(float(h1["pinball_q90"]) - 0.01) < 1e-12
-    assert abs(float(h1["mean_pinball"]) - ((0.005 + 0.01 + 0.01) / 3.0)) < 1e-12
-    assert abs(float(h1["picp"]) - 1.0) < 1e-12
-    assert abs(float(h1["mpiw"]) - 0.15) < 1e-12
-    assert abs(float(h1["pred_interval_width"]) - 0.15) < 1e-12
-    assert abs(float(h1["coverage_error"]) - 0.2) < 1e-12
+    assert abs(float(h1["pinball_q10_raw"]) - 0.005) < 1e-12
+    assert abs(float(h1["pinball_q50_raw"]) - 0.01) < 1e-12
+    assert abs(float(h1["pinball_q90_raw"]) - 0.01) < 1e-12
+    assert abs(float(h1["mean_pinball_raw"]) - ((0.005 + 0.01 + 0.01) / 3.0)) < 1e-12
+    assert abs(float(h1["picp_raw"]) - 1.0) < 1e-12
+    assert abs(float(h1["mpiw_raw"]) - 0.15) < 1e-12
+    assert abs(float(h1["pred_interval_width_raw"]) - 0.15) < 1e-12
+    assert abs(float(h1["coverage_error_raw"]) - 0.2) < 1e-12
     assert abs(float(h1["prob_down"]) - 0.0) < 1e-12
-    assert float(h1["confidence_calibrated"]) > 0.0
+    assert float(h1["confidence_calibrated_post_guardrail"]) > 0.0
 
     by_cfg = pd.read_parquet(gold / "gold_prediction_metrics_by_config.parquet")
     assert not by_cfg.empty
-    assert {"parent_sweep_id", "n_oos", "mean_bias", "mean_mean_pinball", "mean_picp", "mean_mpiw", "mean_coverage_error", "mean_prob_down", "mean_confidence_calibrated", "iqr_rmse"}.issubset(set(by_cfg.columns))
+    assert {"parent_sweep_id", "n_oos", "mean_bias", "mean_mean_pinball_raw", "mean_mean_pinball_post_guardrail", "mean_picp_raw", "mean_picp_post_guardrail", "mean_mpiw_raw", "mean_mpiw_post_guardrail", "mean_coverage_error_raw", "mean_coverage_error_post_guardrail", "mean_prob_down", "mean_confidence_calibrated_post_guardrail", "iqr_rmse"}.issubset(set(by_cfg.columns))
     assert set(by_cfg["parent_sweep_id"].dropna()) == {"sw1"}
     assert int((pd.to_numeric(by_cfg["n_oos"], errors="coerce") <= 0).sum()) == 0
 
@@ -827,7 +988,7 @@ def test_refresh_analytics_store_builds_gold_tables(tmp_path) -> None:
 
     cal = pd.read_parquet(gold / "gold_prediction_calibration.parquet")
     assert not cal.empty
-    assert {"run_id", "parent_sweep_id", "horizon", "pinball_q10", "pinball_q50", "pinball_q90", "mean_pinball", "picp", "mpiw", "coverage_error"}.issubset(set(cal.columns))
+    assert {"run_id", "parent_sweep_id", "horizon", "pinball_q10_raw", "pinball_q10_post_guardrail", "pinball_q50_raw", "pinball_q50_post_guardrail", "pinball_q90_raw", "pinball_q90_post_guardrail", "mean_pinball_raw", "mean_pinball_post_guardrail", "picp_raw", "picp_post_guardrail", "mpiw_raw", "mpiw_post_guardrail", "coverage_error_raw", "coverage_error_post_guardrail"}.issubset(set(cal.columns))
     assert set(cal["parent_sweep_id"].dropna()) == {"sw1"}
     qaudit = pd.read_parquet(gold / "gold_quantile_guardrail_audit.parquet")
     assert not qaudit.empty

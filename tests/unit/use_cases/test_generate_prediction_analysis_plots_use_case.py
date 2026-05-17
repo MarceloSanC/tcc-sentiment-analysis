@@ -25,6 +25,55 @@ def _write_partitioned(base: Path, table_name: str, rows: list[dict], parts: dic
     pd.DataFrame(rows).to_parquet(table_dir / f"{table_name}.parquet", index=False)
 
 
+def test_prediction_plots_use_primary_quantile_contract_columns(tmp_path: Path) -> None:
+    gold = tmp_path / "gold"
+    silver = tmp_path / "silver"
+    out = tmp_path / "out"
+    metrics = pd.DataFrame(
+        [
+            {
+                "split": "test",
+                "horizon": 1,
+                "feature_set_name": "BT",
+                "config_signature": "cfg1",
+                "mean_mpiw_raw": -1.0,
+                "mean_picp_raw": 0.0,
+                "mean_mpiw_post_guardrail": 2.0,
+                "mean_picp_post_guardrail": 1.0,
+            }
+        ]
+    )
+
+    raw_uc = GeneratePredictionAnalysisPlotsUseCase(
+        analytics_gold_dir=gold,
+        analytics_silver_dir=silver,
+        output_dir=out / "raw",
+        primary_quantile_contract="raw",
+    )
+    post_uc = GeneratePredictionAnalysisPlotsUseCase(
+        analytics_gold_dir=gold,
+        analytics_silver_dir=silver,
+        output_dir=out / "post",
+        primary_quantile_contract="post_guardrail",
+    )
+
+    raw_path = out / "raw_interval.png"
+    post_path = out / "post_interval.png"
+    raw_uc._build_fig_interval_width_vs_coverage(
+        path=raw_path,
+        metrics_by_config=metrics.drop(columns=["mean_mpiw_post_guardrail", "mean_picp_post_guardrail"]),
+        horizons=[1],
+    )
+    post_uc._build_fig_interval_width_vs_coverage(
+        path=post_path,
+        metrics_by_config=metrics.drop(columns=["mean_mpiw_raw", "mean_picp_raw"]),
+        horizons=[1],
+    )
+
+    assert raw_path.exists()
+    assert post_path.exists()
+
+
 def test_generate_prediction_analysis_plots_use_case_generates_all_outputs(tmp_path: Path) -> None:
     gold = tmp_path / "gold"
     silver = tmp_path / "silver"
@@ -43,9 +92,9 @@ def test_generate_prediction_analysis_plots_use_case_generates_all_outputs(tmp_p
                 "mean_rmse": 0.1,
                 "mean_mae": 0.08,
                 "mean_directional_accuracy": 0.55,
-                "mean_mean_pinball": 0.03,
-                "mean_mpiw": 0.2,
-                "mean_picp": 0.85,
+                "mean_mean_pinball_post_guardrail": 0.03,
+                "mean_mpiw_post_guardrail": 0.2,
+                "mean_picp_post_guardrail": 0.85,
             },
             {
                 "asset": "AAPL",
@@ -56,9 +105,9 @@ def test_generate_prediction_analysis_plots_use_case_generates_all_outputs(tmp_p
                 "mean_rmse": 0.12,
                 "mean_mae": 0.09,
                 "mean_directional_accuracy": 0.53,
-                "mean_mean_pinball": 0.035,
-                "mean_mpiw": 0.25,
-                "mean_picp": 0.87,
+                "mean_mean_pinball_post_guardrail": 0.035,
+                "mean_mpiw_post_guardrail": 0.25,
+                "mean_picp_post_guardrail": 0.87,
             },
         ],
     )
@@ -115,7 +164,7 @@ def test_generate_prediction_analysis_plots_use_case_generates_all_outputs(tmp_p
                 "split": "test",
                 "horizon": 1,
                 "coverage_nominal": 0.8,
-                "picp": 0.78,
+                "picp_post_guardrail": 0.78,
             }
         ],
     )
@@ -250,9 +299,9 @@ def test_generate_prediction_analysis_plots_use_case_scope_csv_filters_candidate
                 "mean_rmse": 0.10,
                 "mean_mae": 0.08,
                 "mean_directional_accuracy": 0.55,
-                "mean_mean_pinball": 0.03,
-                "mean_mpiw": 0.2,
-                "mean_picp": 0.85,
+                "mean_mean_pinball_post_guardrail": 0.03,
+                "mean_mpiw_post_guardrail": 0.2,
+                "mean_picp_post_guardrail": 0.85,
             },
             {
                 "asset": "AAPL",
@@ -263,9 +312,9 @@ def test_generate_prediction_analysis_plots_use_case_scope_csv_filters_candidate
                 "mean_rmse": 0.12,
                 "mean_mae": 0.09,
                 "mean_directional_accuracy": 0.52,
-                "mean_mean_pinball": 0.04,
-                "mean_mpiw": 0.25,
-                "mean_picp": 0.80,
+                "mean_mean_pinball_post_guardrail": 0.04,
+                "mean_mpiw_post_guardrail": 0.25,
+                "mean_picp_post_guardrail": 0.80,
             },
         ],
     )
@@ -319,7 +368,7 @@ def test_generate_prediction_analysis_plots_use_case_scope_csv_filters_candidate
                 "split": "test",
                 "horizon": 1,
                 "coverage_nominal": 0.8,
-                "picp": 0.78,
+                "picp_post_guardrail": 0.78,
             }
         ],
     )
@@ -517,9 +566,9 @@ def test_generate_prediction_analysis_plots_use_case_scope_requested_without_mat
                 "mean_rmse": 0.1,
                 "mean_mae": 0.08,
                 "mean_directional_accuracy": 0.55,
-                "mean_mean_pinball": 0.03,
-                "mean_mpiw": 0.2,
-                "mean_picp": 0.85,
+                "mean_mean_pinball_post_guardrail": 0.03,
+                "mean_mpiw_post_guardrail": 0.2,
+                "mean_picp_post_guardrail": 0.85,
             }
         ],
     )

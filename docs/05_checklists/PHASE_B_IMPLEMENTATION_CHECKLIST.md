@@ -473,9 +473,37 @@ paralelas; pre-registro fixa qual eh primaria para o claim.
 
 ### Notas de revisao:
 
+- 2026-05-16: Stage 8 implementado em branch
+  `feat/analytics-store-stage8-raw-post-guardrail-dual` para enderecar
+  A_code_audit.md §M5-Q1 (RED) com metricas probabilisticas raw e
+  post-guardrail persistidas em paralelo.
+- Validacao local executada:
+  `.venv/bin/pytest tests/unit/use_cases/test_refresh_analytics_store_use_case.py -v`
+  (`25 passed, 30 warnings`);
+  `.venv/bin/pytest tests/unit/use_cases/test_generate_prediction_analysis_plots_use_case.py -v`
+  (`9 passed`);
+  `.venv/bin/pytest tests/unit/use_cases/ -v`
+  (`154 passed, 32 warnings`);
+  `.venv/bin/pytest tests/unit/ -v`
+  (`425 passed, 32 warnings`).
+- Decisao de implementacao 8.1: foi usada estrategia B (single-pass
+  public-contract com helper interno single-contract). O builder oficial calcula
+  metricas pontuais uma vez e emite colunas pareadas para as familias
+  probabilisticas; o helper single-contract preserva o comportamento legado de
+  `gold_quantile_guardrail_audit`.
+- Decisao sobre `confidence_calibrated`: duplicada como
+  `confidence_calibrated_raw` e `confidence_calibrated_post_guardrail`, porque
+  deriva de `coverage_error` e `pred_interval_width`. A coluna
+  `confidence_calibrated` permanece como alias de compatibilidade para o
+  contrato primario disponivel.
+- Compatibilidade: `gold_quantile_guardrail_audit` permanece materializada e
+  ativa como diagnostico secundario ate o fechamento da Phase B. Em silver
+  legado sem colunas `quantile_p*_post_guardrail`, as colunas
+  `*_post_guardrail` do gold ficam `NaN` e o refresh emite warning unico.
+
 ### Tasks
 
-- [ ] **8.1** Refatorar
+- [~] **8.1** Refatorar
       `_build_gold_prediction_metrics_by_run_split_horizon`
       ([:309-409](../../src/use_cases/refresh_analytics_store_use_case.py#L309-L409))
       para emitir colunas duplas: `picp_raw`/`picp_post_guardrail`,
@@ -486,18 +514,18 @@ paralelas; pre-registro fixa qual eh primaria para o claim.
       **Aceite:** output contem ambos os conjuntos; `gold_quantile_guardrail_audit`
       vira redundante (manter por compatibilidade ate Phase B fechar).
 
-- [ ] **8.2** Propagar dualidade para tabelas derivadas:
+- [~] **8.2** Propagar dualidade para tabelas derivadas:
       `gold_prediction_metrics_by_config`, `gold_prediction_calibration`,
       `gold_prediction_robustness_by_horizon`, `gold_prediction_generalization_gap`,
       `gold_prediction_metrics_by_horizon`.
       **Aceite:** todas as agregacoes preservam ambas as variantes.
 
-- [ ] **8.3** Atualizar `gold_model_decision_final` para selecionar a
+- [~] **8.3** Atualizar `gold_model_decision_final` para selecionar a
       variante primaria via flag de configuracao (default: `post_guardrail`,
       sobrepujavel via `--primary-quantile-contract`).
       **Aceite:** decisao explicita; flag persistida em log do refresh.
 
-- [ ] **8.4** Atualizar plot generators
+- [~] **8.4** Atualizar plot generators
       ([generate_prediction_analysis_plots_use_case.py](../../src/use_cases/generate_prediction_analysis_plots_use_case.py))
       para ler a variante primaria selecionada.
       **Aceite:** plots refletem o contrato escolhido.
