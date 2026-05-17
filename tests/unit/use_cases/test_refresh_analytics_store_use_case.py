@@ -2183,24 +2183,36 @@ def test_missing_fact_config_treats_as_non_quantile() -> None:
 
 
 def test_pred_interval_negative_unchanged_by_stage9_filter() -> None:
-    """Regression guard: gold_oos_quality_report._pred_interval_negative
-    eh Cat C raw-only e NAO depende do filtro Stage 9. Crossing em
-    quantis raw deve continuar sendo detectado mesmo em runs point/degenerados.
+    """Regression guard fortalecido (YELLOW #4): valida que os dois
+    caminhos coexistem para um mesmo run com crossing raw mas
+    NAO-degenerado (p10 != p90):
+
+    1) gold_oos_quality_report._pred_interval_negative (Cat C raw-only)
+       continua detectando o crossing (width raw < 0) -- Stage 9 NAO
+       toca esse builder.
+    2) gold_prediction_metrics_by_run_split_horizon mantem
+       is_quantile_genuine=True para esse run (porque mode=quantile e
+       p10 != p90), e as metricas probabilisticas raw sao numericas
+       -- prova que o filtro Stage 9 distingue crossing (apenas conta
+       width<0) de degeneracao (p10==p90).
     """
     fact = pd.DataFrame(
         [
             {
-                "run_id": "r_crossing_degenerate",
+                "run_id": "r_crossing_quantile",
                 "asset": "AAPL",
                 "feature_set_name": "BT",
                 "config_signature": "cfg1",
                 "split": "test",
+                "fold": "wf_1",
+                "seed": 1,
                 "horizon": 1,
                 "timestamp_utc": "2026-01-01T00:00:00Z",
                 "target_timestamp_utc": "2026-01-02T00:00:00Z",
                 "y_true": 0.0,
                 "y_pred": 0.0,
-                # Crossing real em raw (p10 > p90 -> width < 0).
+                # Crossing real em raw: p10 > p90 -> width raw < 0;
+                # mas p10 != p90 -> non-degenerate -> Stage 9 deixa passar.
                 "quantile_p10": 1.0,
                 "quantile_p50": 0.0,
                 "quantile_p90": -1.0,
@@ -2213,7 +2225,7 @@ def test_pred_interval_negative_unchanged_by_stage9_filter() -> None:
     dim_run = pd.DataFrame(
         [
             {
-                "run_id": "r_crossing_degenerate",
+                "run_id": "r_crossing_quantile",
                 "model_version": "v1",
                 "feature_set_hash": "fh1",
                 "parent_sweep_id": "sw1",
@@ -2222,8 +2234,26 @@ def test_pred_interval_negative_unchanged_by_stage9_filter() -> None:
             }
         ]
     )
+    fact_config = pd.DataFrame(
+        [{"run_id": "r_crossing_quantile", "prediction_mode": "quantile"}]
+    )
 
-    out = RefreshAnalyticsStoreUseCase._build_gold_oos_quality_report(dim_run, fact)
-    run_row = out[out["scope"] == "run_split_horizon"].iloc[0]
-    # Crossing detectado independentemente do filtro Stage 9.
+    # Caminho 1: quality_report -- Cat C raw-only, conta crossing.
+    out_q = RefreshAnalyticsStoreUseCase._build_gold_oos_quality_report(dim_run, fact)
+    run_row = out_q[out_q["scope"] == "run_split_horizon"].iloc[0]
     assert int(run_row["n_negative_interval_width"]) == 1
+
+    # Caminho 2: metrics_by_run_split_horizon -- Stage 9 filter mantem
+    # esse run (mode=quantile, p10 != p90) como elegivel.
+    out_m = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon(
+        dim_run, fact, fact_config
+    )
+    metrics_row = out_m.iloc[0]
+    assert bool(metrics_row["is_quantile_genuine"]) is True
+    assert int(metrics_row["n_probabilistic_samples"]) == 1
+    # Probabilisticas raw numericas (Stage 9 nao mascarou).
+    assert not pd.isna(metrics_row["picp_raw"])
+    assert not pd.isna(metrics_row["mpiw_raw"])
+    assert not pd.isna(metrics_row["mean_pinball_raw"])
+    # Os dois caminhos coexistem: crossing contado no quality_report
+    # E probabilisticas mantidas em metrics_by_run -- comportamento esperado.
