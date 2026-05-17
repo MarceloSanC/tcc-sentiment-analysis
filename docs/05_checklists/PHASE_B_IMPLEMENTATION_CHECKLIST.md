@@ -690,15 +690,44 @@ genuinamente quantilicos e nao-degenerados.
 ### Notas de revisao:
 
 - **Data:** 2026-05-17 (branch `feat/analytics-store-stage9-probabilistic-mode-filter`).
-- **Pytest executado:**
-  - `.venv/bin/pytest tests/unit/use_cases/test_refresh_analytics_store_use_case.py -v` -> **39 passed**
-    (33 baseline + 6 novos Stage 9).
-  - `.venv/bin/pytest tests/unit/use_cases/ -v` -> **168 passed** (162 baseline + 6 novos).
-  - `.venv/bin/pytest tests/unit/ -v` -> **439 passed** (>= 432 baseline + 6 novos = 438, +1
-    teste pre-existente nao quantificado no plano original; zero regressoes).
+- **Pytest executado (pos correcoes RED/YELLOW da revisao):**
+  - `.venv/bin/pytest tests/unit/use_cases/test_refresh_analytics_store_use_case.py -v`
+    -> **39 passed, 36 warnings** (33 baseline + 6 novos Stage 9).
+  - `.venv/bin/pytest tests/unit/ -q` -> **439 passed, 38 warnings**
+    (zero regressoes). Warnings residuais sao FutureWarning de pandas em
+    codigo nao relacionado ao Stage 9 (idem baseline pre-Stage 9).
   - `.venv/bin/ruff check src/use_cases/refresh_analytics_store_use_case.py` -> 1 erro
     `I001` em import order **pre-existente** ao Stage 9 (confirmado via `git stash`);
     nao introduzido por este stage. Fica como follow-up housekeeping.
+- **Findings da revisao (4) tratados neste mesmo PR:**
+  - **[RED #1] `gold_quantile_guardrail_audit` semanticamente neutralizado**:
+    audit chamava `_build_gold_prediction_metrics_by_run_split_horizon_single_contract`
+    sem `fact_config` -> todas as probabilisticas before/after viravam NaN
+    em producao. Corrigido propagando `fact_config` (Opcao A): audit recebe
+    o filtro Cat C; runs elegiveis voltam a expor mean_pinball/picp/mpiw
+    before/after/delta numericos; runs point/degenerate continuam NaN
+    (consistente com upstream). Commit `718d825`.
+  - **[YELLOW #2] integration test mascarava regressao silenciosa**:
+    `test_refresh_analytics_store_builds_gold_tables` so checava colunas
+    sem assertar conteudo. Fortalecido: r1/r2 (ambos `prediction_mode='quantile'`
+    com p10!=p90) devem expor `mean_pinball_before/after` e
+    `delta_mean_pinball_after_minus_before` numericos. Commit `718d825`.
+  - **[YELLOW #3] 762 RuntimeWarning all-NaN slice**: emergiram com
+    Stage 9 (mascaramento criou slices all-NaN em grupos point/degenerate
+    consumidos por `np.nanpercentile` nas lambdas IQR em
+    `_build_gold_prediction_metrics_by_config:885` e `_by_horizon:917`).
+    Solucao: helper `_safe_iqr` que faz `dropna()` upstream + `np.percentile`
+    direto (resultado identico, sem warning). Sem `warnings.filterwarnings`
+    global. Contagem cai de 762 -> 36 (igual baseline pre-Stage 9).
+    Commit `afdbb70`.
+  - **[YELLOW #4] regression guard fraco**:
+    `test_pred_interval_negative_unchanged_by_stage9_filter` so chamava
+    `_build_gold_oos_quality_report` (builder nao tocado por Stage 9).
+    Fortalecido para chamar tambem `_build_gold_prediction_metrics_by_run_split_horizon`
+    e provar que crossing (p10>p90, mas p10!=p90) coexiste com
+    `is_quantile_genuine=True` -- Stage 9 distingue crossing de degeneracao.
+    Fixture renomeada: `r_crossing_quantile` (mais preciso semanticamente).
+    Commit `33347b1`.
 - **Decisao sobre `is_quantile_genuine`:** definicao **permissiva** adotada
   (`is_quantile_genuine = n_probabilistic_samples > 0`, i.e. >=1 row elegivel).
   Stage 11 implementara o gate **estrito** (% rows com p10==p90 >= 5% bloqueia)
@@ -713,6 +742,16 @@ genuinamente quantilicos e nao-degenerados.
   apenas sobre rows elegiveis via NaN-propagation nos agregados pandas.
   Propagar explicitamente fica como **follow-up YELLOW** caso consumidores
   precisem do predicado per-config/per-horizon.
+- **Decisao sobre `gold_quantile_guardrail_audit` (pos-RED #1):** audit recebe
+  o mesmo filtro Cat C via `fact_config` (Opcao A do plano de revisao). Justificativa:
+  o comentario do dual builder declara audit como "materializada por compatibilidade
+  ate Phase B fechar"; manter as colunas `mean_pinball_*/picp_*/mpiw_*/delta_*`
+  semanticamente vivas para runs elegiveis preserva valor diagnostico do delta
+  raw-vs-post para os consumidores legados, enquanto runs point/degenerate ficam
+  NaN nessas colunas (consistente com a filosofia "essas metricas nao fazem
+  sentido fora de runs quantilicos genuinos"). `crossing_*_count`,
+  `negative_width_*_count`, `guardrail_applied_count` continuam computados sobre
+  todas as rows (sao raw-only counters, nao dependem de eligibilidade).
 - **`gold_prediction_risk` NAO foi tocado** (confirmado): risk metrics ja sao
   Categoria B post-guardrail por construcao (Stage 8.5). O filtro Cat C raw
   do Stage 9 nao se aplica.
