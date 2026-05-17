@@ -430,6 +430,48 @@ class RunBaselinesUseCase:
         ]
         self.analytics_run_repository.append_bridge_run_features(rows, overwrite=overwrite)
 
+    @staticmethod
+    def _resolve_effective_specs(
+        *,
+        baselines: list[str],
+        baseline_windows: dict[str, int] | None,
+    ) -> dict[str, BaselineSpec]:
+        """Compute the effective BaselineSpec per requested baseline, applying
+        window overrides from `baseline_windows`. Pre-registration friendly:
+        the runner does not need a code change to swap a window."""
+        overrides = dict(baseline_windows or {})
+        if not overrides:
+            return {name: BASELINE_SPECS[name] for name in baselines}
+
+        unknown_overrides = sorted(set(overrides) - set(BASELINE_SPECS))
+        if unknown_overrides:
+            raise ValueError(
+                f"baseline_windows references unsupported baselines: {unknown_overrides}"
+            )
+
+        resolved: dict[str, BaselineSpec] = {}
+        for name in baselines:
+            spec = BASELINE_SPECS[name]
+            if name not in overrides:
+                resolved[name] = spec
+                continue
+            requested = overrides[name]
+            if spec.window is None:
+                raise ValueError(
+                    f"{name} does not accept window override (no rolling window applies)"
+                )
+            window_int = int(requested)
+            if window_int < 1:
+                raise ValueError(
+                    f"baseline_windows[{name}]={requested}: window must be >= 1"
+                )
+            resolved[name] = BaselineSpec(
+                name=spec.name,
+                prediction_mode=spec.prediction_mode,
+                window=window_int,
+            )
+        return resolved
+
     def execute(
         self,
         *,
@@ -441,6 +483,7 @@ class RunBaselinesUseCase:
         baselines: list[str],
         seed: int | None = None,
         overwrite_on_collision: bool = False,
+        baseline_windows: dict[str, int] | None = None,
     ) -> RunBaselinesResult:
         if not parent_sweep_id or not str(parent_sweep_id).strip():
             raise ValueError(
@@ -463,6 +506,11 @@ class RunBaselinesUseCase:
         if not horizons_sorted:
             raise ValueError("horizons must contain at least one positive integer")
 
+        effective_specs = self._resolve_effective_specs(
+            baselines=baselines,
+            baseline_windows=baseline_windows,
+        )
+
         splits = self._validate_splits(split_definitions=split_definitions)
         df = self._load_dataset(ds_path)
         created_at_utc = datetime.now(UTC).isoformat()
@@ -481,7 +529,7 @@ class RunBaselinesUseCase:
         persisted: list[str] = []
 
         for baseline_name in baselines:
-            spec = BASELINE_SPECS[baseline_name]
+            spec = effective_specs[baseline_name]
             feature_set_name = "baseline"
             feature_set_hash = _sha256_text(f"baseline|{baseline_name}|window={spec.window}")
             config_signature = _sha256_text(

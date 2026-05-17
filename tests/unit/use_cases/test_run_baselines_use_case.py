@@ -274,3 +274,122 @@ def test_supported_baselines_specs_complete() -> None:
         "historical_mean_rolling",
         "historical_quantiles_rolling",
     }
+
+
+def _write_deterministic_dataset(path: Path, *, n_days: int = 100) -> None:
+    timestamps = pd.date_range("2024-01-01", periods=n_days, freq="D", tz="UTC")
+    returns = np.arange(1, n_days + 1, dtype="float64")
+    df = pd.DataFrame(
+        {
+            "timestamp": timestamps,
+            "asset_id": ["AAPL"] * n_days,
+            "time_idx": np.arange(n_days, dtype="int64"),
+            "target_return": returns,
+        }
+    )
+    df.to_parquet(path, index=False)
+
+
+def test_baseline_window_override_changes_run_id_and_predictions(tmp_path: Path) -> None:
+    silver_a = tmp_path / "silver_a"
+    silver_b = tmp_path / "silver_b"
+    ds = tmp_path / "ds.parquet"
+    _write_deterministic_dataset(ds, n_days=100)
+
+    common = {
+        "asset": "AAPL",
+        "dataset_path": ds,
+        "parent_sweep_id": "sw_f4",
+        "split_definitions": {"train": ("2024-01-01", "2024-04-09")},
+        "horizons": [1],
+        "baselines": ["historical_mean_rolling"],
+    }
+    # Default window=30.
+    repo_a = ParquetAnalyticsRunRepository(silver_a)
+    res_a = RunBaselinesUseCase(analytics_run_repository=repo_a).execute(**common)
+    # Override window=10 via baseline_windows.
+    repo_b = ParquetAnalyticsRunRepository(silver_b)
+    res_b = RunBaselinesUseCase(analytics_run_repository=repo_b).execute(
+        **common,
+        baseline_windows={"historical_mean_rolling": 10},
+    )
+
+    # Different effective window -> different run_id.
+    assert res_a.run_ids["historical_mean_rolling"] != res_b.run_ids["historical_mean_rolling"]
+
+    # Default window=30 skips first 30 rows of warmup; override=10 skips first 10.
+    n_a = res_a.n_rows_per_baseline["historical_mean_rolling"]
+    n_b = res_b.n_rows_per_baseline["historical_mean_rolling"]
+    assert n_b > n_a
+    # Confirm predictions differ numerically: at i=30 (only point both windows cover),
+    # default mean = mean(1..30) = 15.5; override window=10 mean = mean(21..30) = 25.5.
+    oos_a = _load_oos(silver_a).sort_values("timestamp_utc").reset_index(drop=True)
+    oos_b = _load_oos(silver_b).sort_values("timestamp_utc").reset_index(drop=True)
+    a_first = float(oos_a.iloc[0]["y_pred"])
+    # First eligible row in a (window=30) is index 30; mean of target_returns[0:30] = 15.5.
+    assert a_first == pytest.approx(15.5)
+    # First eligible row in b (window=10) is index 10; mean of target_returns[0:10] = 5.5.
+    b_first = float(oos_b.iloc[0]["y_pred"])
+    assert b_first == pytest.approx(5.5)
+
+
+def test_baseline_window_override_same_value_keeps_run_id_deterministic(tmp_path: Path) -> None:
+    silver_a = tmp_path / "silver_a"
+    silver_b = tmp_path / "silver_b"
+    ds = tmp_path / "ds.parquet"
+    _write_deterministic_dataset(ds)
+
+    common = {
+        "asset": "AAPL",
+        "dataset_path": ds,
+        "parent_sweep_id": "sw_f4_det",
+        "split_definitions": {"train": ("2024-01-01", "2024-04-09")},
+        "horizons": [1],
+        "baselines": ["historical_mean_rolling"],
+        "baseline_windows": {"historical_mean_rolling": 15},
+    }
+    res_a = RunBaselinesUseCase(
+        analytics_run_repository=ParquetAnalyticsRunRepository(silver_a)
+    ).execute(**common)
+    res_b = RunBaselinesUseCase(
+        analytics_run_repository=ParquetAnalyticsRunRepository(silver_b)
+    ).execute(**common)
+    assert res_a.run_ids["historical_mean_rolling"] == res_b.run_ids["historical_mean_rolling"]
+
+
+def test_baseline_window_override_invalid_window(tmp_path: Path) -> None:
+    silver = tmp_path / "silver"
+    ds = tmp_path / "ds.parquet"
+    _write_deterministic_dataset(ds)
+    use_case = RunBaselinesUseCase(
+        analytics_run_repository=ParquetAnalyticsRunRepository(silver)
+    )
+    with pytest.raises(ValueError, match="window must be >= 1"):
+        use_case.execute(
+            asset="AAPL",
+            dataset_path=ds,
+            parent_sweep_id="sw_f4",
+            split_definitions={"train": ("2024-01-01", "2024-04-09")},
+            horizons=[1],
+            baselines=["historical_mean_rolling"],
+            baseline_windows={"historical_mean_rolling": 0},
+        )
+
+
+def test_baseline_window_override_rejected_on_pointless_baseline(tmp_path: Path) -> None:
+    silver = tmp_path / "silver"
+    ds = tmp_path / "ds.parquet"
+    _write_deterministic_dataset(ds)
+    use_case = RunBaselinesUseCase(
+        analytics_run_repository=ParquetAnalyticsRunRepository(silver)
+    )
+    with pytest.raises(ValueError, match="zero_return does not accept window"):
+        use_case.execute(
+            asset="AAPL",
+            dataset_path=ds,
+            parent_sweep_id="sw_f4",
+            split_definitions={"train": ("2024-01-01", "2024-04-09")},
+            horizons=[1],
+            baselines=["zero_return"],
+            baseline_windows={"zero_return": 30},
+        )
