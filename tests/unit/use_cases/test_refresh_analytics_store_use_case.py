@@ -316,6 +316,99 @@ def test_gold_prediction_risk_emits_nan_when_post_guardrail_missing() -> None:
     assert pd.isna(row["es_10_approx"])
 
 
+def _write_legacy_silver_without_post_guardrail(silver) -> None:
+    dim_rows = [
+        {
+            "schema_version": 1,
+            "run_id": "lr1",
+            "asset": "AAPL",
+            "feature_set_name": "B",
+            "feature_set_hash": "fh1",
+            "config_signature": "cfg",
+            "model_version": "v1",
+            "parent_sweep_id": "sw1",
+            "trial_number": 1,
+            "fold": "wf_1",
+            "seed": 1,
+            "status": "ok",
+            "created_at_utc": "2026-01-01T00:00:00+00:00",
+            "feature_list_ordered_json": "[]",
+            "split_fingerprint": "sp1",
+            "pipeline_version": "0.1",
+            "checkpoint_path_final": "/tmp/final.pt",
+            "checkpoint_path_best": "/tmp/best.ckpt",
+            "git_commit": "abc",
+            "library_versions_json": "{}",
+            "hardware_info_json": "{}",
+            "duration_total_seconds": 1.0,
+            "eta_recorded_seconds": 0.0,
+            "retries": 0,
+        }
+    ]
+    oos_rows = [
+        {
+            "schema_version": 1,
+            "run_id": "lr1",
+            "asset": "AAPL",
+            "feature_set_name": "B",
+            "config_signature": "cfg",
+            "split": "test",
+            "fold": "wf_1",
+            "seed": 1,
+            "horizon": 1,
+            "timestamp_utc": "2026-01-01T00:00:00+00:00",
+            "target_timestamp_utc": "2026-01-01T00:00:00+00:00",
+            "y_true": 0.1,
+            "y_pred": 0.2,
+            "error": 0.1,
+            "abs_error": 0.1,
+            "sq_error": 0.01,
+            "quantile_p10": 0.0,
+            "quantile_p50": 0.2,
+            "quantile_p90": 0.5,
+            "year": 2026,
+        }
+    ]
+    _write_table(silver, "dim_run", dim_rows, {"asset": "AAPL"})
+    _write_table(silver, "fact_oos_predictions", oos_rows, {"asset": "AAPL", "year": "2026"})
+
+
+def test_post_guardrail_missing_warning_emits_once_per_refresh_not_per_process(
+    tmp_path, caplog
+) -> None:
+    import logging
+    from src.use_cases import refresh_analytics_store_use_case as mod
+
+    silver = tmp_path / "silver"
+    _write_legacy_silver_without_post_guardrail(silver)
+
+    use_case_1 = RefreshAnalyticsStoreUseCase(
+        analytics_silver_dir=silver,
+        analytics_gold_dir=tmp_path / "gold_1",
+    )
+    with caplog.at_level(logging.WARNING, logger=mod.__name__):
+        caplog.clear()
+        use_case_1.execute()
+        first_warnings = [
+            r for r in caplog.records
+            if "Post-guardrail quantile columns missing" in r.getMessage()
+        ]
+    assert len(first_warnings) >= 1
+
+    use_case_2 = RefreshAnalyticsStoreUseCase(
+        analytics_silver_dir=silver,
+        analytics_gold_dir=tmp_path / "gold_2",
+    )
+    with caplog.at_level(logging.WARNING, logger=mod.__name__):
+        caplog.clear()
+        use_case_2.execute()
+        second_warnings = [
+            r for r in caplog.records
+            if "Post-guardrail quantile columns missing" in r.getMessage()
+        ]
+    assert len(second_warnings) >= 1
+
+
 def test_primary_quantile_contract_default_is_post_guardrail(tmp_path) -> None:
     use_case = RefreshAnalyticsStoreUseCase(
         analytics_silver_dir=tmp_path / "silver",

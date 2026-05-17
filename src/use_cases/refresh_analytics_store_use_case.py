@@ -2215,6 +2215,12 @@ class RefreshAnalyticsStoreUseCase:
         return agg
 
     def execute(self, scope_spec: ScopeSpec | None = None) -> RefreshAnalyticsStoreResult:
+        # Resetar flag de warning por refresh: o aceite original do Stage 8.1
+        # e "warning unico por refresh", nao "por processo". Sem este reset,
+        # multiplos refreshes consecutivos no mesmo processo silenciariam
+        # diagnostico de silver legado permanentemente.
+        RefreshAnalyticsStoreUseCase._POST_GUARDRAIL_MISSING_WARNING_EMITTED = False
+
         effective_scope = validate_scope_spec(scope_spec) if scope_spec is not None else self.scope_spec
 
         dim_run = self._load_partitioned_table(self.analytics_silver_dir, "dim_run")
