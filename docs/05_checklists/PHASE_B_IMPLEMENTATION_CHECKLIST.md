@@ -802,16 +802,64 @@ de inferencia por FK explicita para o run de treino.
 
 ### Notas de revisao:
 
+- 2026-05-17: Stage 10 implementado na branch
+  `feat/analytics-store-stage10-inference-training-run-id-fk` e marcado como
+  em revisao. Validacao local:
+  `.venv/bin/pytest tests/unit/use_cases/test_run_tft_inference_use_case.py -v`
+  (`21 passed`),
+  `.venv/bin/pytest tests/unit/use_cases/test_train_tft_model_use_case.py -v`
+  (`28 passed`),
+  `.venv/bin/pytest tests/unit/adapters/test_local_tft_inference_model_loader.py -v`
+  (`6 passed`),
+  `.venv/bin/pytest tests/unit/infrastructure/schemas/test_analytics_store_schema.py -v`
+  (`23 passed`),
+  `.venv/bin/pytest tests/unit/scripts/test_backfill_inference_training_run_id.py -v`
+  (`3 passed`),
+  `.venv/bin/pytest tests/unit/use_cases/ -v`
+  (`173 passed, 38 warnings`),
+  `.venv/bin/pytest tests/unit/ -q`
+  (`451 passed, 38 warnings`) e
+  `.venv/bin/ruff check src/use_cases/run_tft_inference_use_case.py src/use_cases/train_tft_model_use_case.py src/adapters/local_tft_inference_model_loader.py src/infrastructure/schemas/ tests/unit/use_cases/test_run_tft_inference_use_case.py tests/unit/use_cases/test_train_tft_model_use_case.py tests/unit/adapters/test_local_tft_inference_model_loader.py tests/unit/adapters/repositories/test_parquet_analytics_run_repository.py tests/unit/scripts/test_backfill_inference_training_run_id.py scripts/backfill_inference_training_run_id.py`
+  (`All checks passed!`).
+- Decisoes registradas: `training_run_id` e nullable no schema de inferencia
+  por compatibilidade com rows legadas pre-Stage 10, mas passa a ser required
+  no fluxo pos-Stage 10; `run_id` em `fact_inference_*` recebe o valor de
+  `training_run_id` para preservar joins historicos com `dim_run`, enquanto a
+  coluna explicita `training_run_id` remove ambiguidade semantica da FK pela
+  Lei 3; metadata legado sem `training_run_id` gera warning unico no loader e
+  persiste `None`; backfill opera em dry-run por padrao, exige `--apply` para
+  escrever, e match ambiguo vira pendencia manual via `_backfill_status` sem
+  preenchimento silencioso.
+- Confirmado que `data/analytics_archive_pre_phase_b/` nao foi tocado. O
+  comando dry-run do backfill no silver atual retornou no-op:
+  `total_processed=0`, `total_backfilled=0`, `total_ambiguous=0`,
+  `total_no_match=0`.
+- Cross-link Stage 5.4: o gap "rows legadas de inferencia sem `run_id`
+  permanecem com `parent_sweep_id=None` ate Stage 10" fecha para runs novos
+  pos-Stage 10; legado pre-Stage 10 permanece documentado como pendencia
+  manual quando o backfill nao encontrar match unico.
+- 2026-05-17: Cenario nao coberto: se `data/analytics/silver/` for
+  reconstruido sem preservar `dim_run` historico, `fact_inference_*.run_id`
+  (= `training_run_id`) pode apontar para `dim_run.run_id` inexistente.
+  Resultado: join em `gold_feature_contrib_local_summary` retorna `NaN` ->
+  `parent_sweep_id=None`, mesmo comportamento que pre-Stage 10. Nao e
+  regressao; e limitacao conhecida do modelo append-only de `dim_run`.
+  Mitigacao futura: validacao no quality gate detectando `fact_inference_*.run_id`
+  sem match em `dim_run` (fora de escopo Stage 10).
+- 2026-05-17: Backfill e one-shot manual e nao deve rodar concorrentemente com
+  `refresh_analytics_store_use_case`; nao ha lock no Parquet e uma sobrescrita
+  pode perder writes intermediarios.
+
 ### Tasks
 
-- [ ] **10.1** Adicionar parametro `training_run_id` ao schema de
+- [~] **10.1** Adicionar parametro `training_run_id` ao schema de
       `fact_inference_runs`, `fact_inference_predictions` e
       `fact_feature_contrib_local`. Atualizar
       `src/infrastructure/schemas/analytics_store_schema.py`.
       **Aceite:** schema versao bumped; documentado em
       `ANALYTICS_STORE_ARCHITECTURE.md`.
 
-- [ ] **10.2** Eliminar dependencia ambigua de `model_version` isolado.
+- [~] **10.2** Eliminar dependencia ambigua de `model_version` isolado.
       Tres call sites coordenados:
       - **Treino — persistir `training_run_id` no metadata do artefato:**
         em [train_tft_model_use_case.py:1031-1091](../../src/use_cases/train_tft_model_use_case.py#L1031-L1091)
@@ -833,7 +881,7 @@ de inferencia por FK explicita para o run de treino.
       `fact_inference_predictions` e `fact_feature_contrib_local`; a FK
       eh deterministica, sem lookup heuristico por `model_version`.
 
-- [ ] **10.3** Migrar dados existentes (se nao foi feito reset no Stage 3,
+- [~] **10.3** Migrar dados existentes (se nao foi feito reset no Stage 3,
       ou se inferencia rodou em sweep limpo): script de backfill que
       preenche `training_run_id` retroativamente usando chaves compostas
       (ex.: `model_path` + `asset` + hash de config) e valida unicidade;
@@ -841,7 +889,7 @@ de inferencia por FK explicita para o run de treino.
       **Aceite:** zero linhas com `training_run_id` nulo em
       `fact_inference_*`.
 
-- [ ] **10.4** Testes unitarios e de integracao do fluxo de inferencia.
+- [~] **10.4** Testes unitarios e de integracao do fluxo de inferencia.
       **Aceite:** `pytest tests/unit/use_cases/test_run_tft_inference_use_case.py` passa.
 
 ---

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import pickle
 import sys
 import types
@@ -29,11 +30,19 @@ def _install_fake_pytorch_forecasting(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(sys.modules, "pytorch_forecasting", fake_module)
 
 
-def _write_valid_artifact_bundle(version_dir: Path, *, version: str) -> None:
+def _write_valid_artifact_bundle(
+    version_dir: Path,
+    *,
+    version: str,
+    training_run_id: str | None = None,
+) -> None:
     (version_dir / "checkpoints").mkdir(parents=True, exist_ok=True)
     (version_dir / "checkpoints" / "best.ckpt").write_bytes(b"ckpt")
+    metadata = {"asset_id": "AAPL", "version": version}
+    if training_run_id is not None:
+        metadata["training_run_id"] = training_run_id
     (version_dir / "metadata.json").write_text(
-        json.dumps({"asset_id": "AAPL", "version": version}),
+        json.dumps(metadata),
         encoding="utf-8",
     )
     (version_dir / "config.json").write_text(
@@ -87,6 +96,51 @@ def test_loader_loads_dataset_parameters_when_available(
     bundle = loader.load(version_dir)
     assert bundle.dataset_parameters.get("time_idx") == "time_idx"
     assert bundle.dataset_parameters.get("group_ids") == ["asset_id"]
+
+
+def test_inference_loader_reads_training_run_id_from_metadata(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _install_fake_pytorch_forecasting(monkeypatch)
+
+    version = "20260303_120000_B"
+    version_dir = tmp_path / version
+    _write_valid_artifact_bundle(
+        version_dir,
+        version=version,
+        training_run_id="train_run_abc",
+    )
+
+    loader = LocalTFTInferenceModelLoader()
+    bundle = loader.load(version_dir)
+
+    assert bundle.training_run_id == "train_run_abc"
+
+
+def test_inference_loader_returns_none_for_legacy_metadata_without_training_run_id(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    _install_fake_pytorch_forecasting(monkeypatch)
+    caplog.set_level(logging.WARNING)
+
+    version = "20260303_120000_B"
+    version_dir = tmp_path / version
+    _write_valid_artifact_bundle(version_dir, version=version)
+    LocalTFTInferenceModelLoader._warned_legacy_metadata_paths.clear()
+
+    loader = LocalTFTInferenceModelLoader()
+    bundle = loader.load(version_dir)
+    second_bundle = loader.load(version_dir)
+
+    assert bundle.training_run_id is None
+    assert second_bundle.training_run_id is None
+    warnings = [
+        r for r in caplog.records
+        if "missing training_run_id" in r.message
+    ]
+    assert len(warnings) == 1
 
 
 def test_loader_rejects_non_dict_dataset_parameters(

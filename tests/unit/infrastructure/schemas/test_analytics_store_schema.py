@@ -187,6 +187,10 @@ def test_all_tables_have_schema_version_required() -> None:
         assert schema.schema_version == ANALYTICS_SCHEMA_VERSION
 
 
+def test_schema_version_bumped_to_2() -> None:
+    assert ANALYTICS_SCHEMA_VERSION == 2
+
+
 def test_partitioning_and_pk_contracts() -> None:
     assert DIM_RUN_SCHEMA.partition_by == ("asset", "parent_sweep_id")
     assert FACT_RUN_SNAPSHOT_SCHEMA.partition_by == ("asset", "parent_sweep_id")
@@ -268,10 +272,22 @@ def test_fact_model_artifacts_requires_attention_and_importance() -> None:
     assert "attention_summary_json" in req
 
 
+def test_inference_schemas_declare_nullable_training_run_id() -> None:
+    inference_schemas = (
+        FACT_INFERENCE_RUNS_SCHEMA,
+        FACT_INFERENCE_PREDICTIONS_SCHEMA,
+        FACT_FEATURE_CONTRIB_LOCAL_SCHEMA,
+    )
+    for schema in inference_schemas:
+        assert "training_run_id" in schema.columns
+        assert "training_run_id" not in schema.required_columns
+
+    assert "training_run_id" in FACT_MODEL_ARTIFACTS_SCHEMA.columns
+
 
 def test_validate_table_payload_rejects_missing_required_column() -> None:
     row = {
-        "schema_version": 1,
+        "schema_version": ANALYTICS_SCHEMA_VERSION,
         "run_id": "r1",
         "asset": "AAPL",
         # missing feature_set_name
@@ -315,7 +331,7 @@ def test_validate_table_payload_rejects_schema_version_mismatch() -> None:
 
 def test_validate_table_payload_rejects_duplicate_pk() -> None:
     row = {
-        "schema_version": 1,
+        "schema_version": ANALYTICS_SCHEMA_VERSION,
         "run_id": "r1",
         "asset": "AAPL",
         "feature_set_name": "BASELINE_FEATURES",
@@ -337,7 +353,7 @@ def test_validate_table_payload_rejects_duplicate_pk() -> None:
 
 def test_validate_dim_run_requires_split_fingerprint() -> None:
     row = {
-        "schema_version": 1,
+        "schema_version": ANALYTICS_SCHEMA_VERSION,
         "run_id": "r1",
         "asset": "AAPL",
         "feature_set_name": "BASELINE_FEATURES",
@@ -358,7 +374,7 @@ def test_validate_dim_run_requires_split_fingerprint() -> None:
 
 def test_validate_table_payload_accepts_fact_inference_predictions_minimal_row() -> None:
     row = {
-        "schema_version": 1,
+        "schema_version": ANALYTICS_SCHEMA_VERSION,
         "inference_run_id": "inf_1",
         "run_id": None,
         "model_version": "20260308_010101_B",
@@ -386,7 +402,7 @@ def test_validate_table_payload_accepts_fact_inference_predictions_minimal_row()
 
 def test_validate_table_payload_accepts_fact_feature_contrib_local_minimal_row() -> None:
     row = {
-        "schema_version": 1,
+        "schema_version": ANALYTICS_SCHEMA_VERSION,
         "inference_run_id": "inf_1",
         "run_id": None,
         "model_version": "20260308_010101_B",

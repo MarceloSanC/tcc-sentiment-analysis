@@ -58,6 +58,7 @@ class RunTFTInferenceUseCase:
         *,
         asset: str,
         model_version: str,
+        training_run_id: str | None,
         inference_run_id: str,
         start_utc: datetime,
         end_utc: datetime,
@@ -74,7 +75,8 @@ class RunTFTInferenceUseCase:
             return
         row = {
             "schema_version": ANALYTICS_SCHEMA_VERSION,
-            "run_id": None,
+            "run_id": training_run_id,
+            "training_run_id": training_run_id,
             "inference_run_id": str(inference_run_id),
             "model_version": str(model_version),
             "asset": str(asset),
@@ -103,6 +105,7 @@ class RunTFTInferenceUseCase:
         features_used_csv: str,
         model_path: str,
         inference_run_id: str,
+        training_run_id: str | None,
         overwrite_on_collision: bool = False,
     ) -> None:
         if self.analytics_run_repository is None or not records:
@@ -122,7 +125,8 @@ class RunTFTInferenceUseCase:
                 {
                     "schema_version": ANALYTICS_SCHEMA_VERSION,
                     "inference_run_id": str(inference_run_id),
-                    "run_id": None,
+                    "run_id": training_run_id,
+                    "training_run_id": training_run_id,
                     "model_version": str(model_version),
                     "asset": str(asset),
                     "feature_set_name": str(feature_set_name),
@@ -163,6 +167,7 @@ class RunTFTInferenceUseCase:
         model_version: str,
         feature_set_name: str,
         inference_run_id: str,
+        training_run_id: str | None,
         top_k: int = 5,
         overwrite_on_collision: bool = False,
     ) -> None:
@@ -212,7 +217,8 @@ class RunTFTInferenceUseCase:
                     {
                         "schema_version": ANALYTICS_SCHEMA_VERSION,
                         "inference_run_id": str(inference_run_id),
-                        "run_id": None,
+                        "run_id": training_run_id,
+                        "training_run_id": training_run_id,
                         "model_version": str(model_version),
                         "asset": str(asset),
                         "feature_set_name": str(feature_set_name),
@@ -379,6 +385,7 @@ class RunTFTInferenceUseCase:
         silver_overwrite = bool(overwrite_on_collision)
 
         model_bundle = self.model_loader.load(model_path)
+        training_run_id = model_bundle.training_run_id
         model_asset = self._normalize_asset(model_bundle.asset_id)
         if model_asset != asset:
             raise ValueError(
@@ -668,6 +675,7 @@ class RunTFTInferenceUseCase:
             features_used_csv=features_used_csv,
             model_path=str(model_bundle.model_dir),
             inference_run_id=run_id,
+            training_run_id=training_run_id,
             overwrite_on_collision=silver_overwrite,
         )
         self._persist_fact_feature_contrib_local(
@@ -678,6 +686,7 @@ class RunTFTInferenceUseCase:
             model_version=model_bundle.version,
             feature_set_name=model_bundle.feature_set_name,
             inference_run_id=run_id,
+            training_run_id=training_run_id,
             top_k=min(5, max(1, len(model_bundle.feature_cols))),
             overwrite_on_collision=silver_overwrite,
         )
@@ -686,6 +695,7 @@ class RunTFTInferenceUseCase:
         self._persist_fact_inference_run(
             asset=asset,
             model_version=model_bundle.version,
+            training_run_id=training_run_id,
             inference_run_id=run_id,
             start_utc=start_utc,
             end_utc=end_utc,

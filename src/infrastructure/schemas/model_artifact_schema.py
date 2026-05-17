@@ -4,6 +4,7 @@ MODEL_METADATA_FIELDS = {
     "model_type",
     "asset_id",
     "created_at",
+    "training_run_id",
     "training_window",
     "features_used",
     "scaler_type",

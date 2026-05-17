@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
+
 from dataclasses import dataclass
+from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -823,6 +826,69 @@ def test_applies_split_normalization_for_technical_features_and_persists_scalers
     assert "scalers" in repo.last_dataset_parameters
     assert "volatility_20d" in repo.last_dataset_parameters["scalers"]
 
+
+def _artifact_dir(tmp_path: Path) -> Path:
+    version_dir = tmp_path / "20260303_120000_B"
+    version_dir.mkdir()
+    (version_dir / "metadata.json").write_text(
+        json.dumps({"asset_id": "AAPL", "version": "20260303_120000_B"}),
+        encoding="utf-8",
+    )
+    (version_dir / "config.json").write_text("{}", encoding="utf-8")
+    return version_dir
+
+
+def _training_result() -> TrainingResult:
+    return TrainingResult(
+        model=object(),
+        metrics={"rmse": 1.0},
+        history=[],
+        split_metrics={},
+        feature_importance=[{"feature": "close", "importance": 1.0}],
+    )
+
+
+def test_training_run_id_persisted_in_metadata_json(tmp_path: Path) -> None:
+    analytics = FakeAnalyticsRunRepo()
+    use_case = TrainTFTModelUseCase(
+        dataset_repository=FakeDatasetRepository(_df()),
+        model_trainer=FakeTrainer(),
+        model_repository=FakeModelRepo(),
+        analytics_run_repository=analytics,
+    )
+    version_dir = _artifact_dir(tmp_path)
+
+    use_case._persist_fact_model_artifacts(
+        run_id="train_run_abc",
+        asset_id="AAPL",
+        version="20260303_120000_B",
+        artifacts_dir=str(version_dir),
+        training_result=_training_result(),
+    )
+
+    metadata = json.loads((version_dir / "metadata.json").read_text(encoding="utf-8"))
+    assert metadata["training_run_id"] == "train_run_abc"
+
+
+def test_training_run_id_persisted_in_fact_model_artifacts_row(tmp_path: Path) -> None:
+    analytics = FakeAnalyticsRunRepo()
+    use_case = TrainTFTModelUseCase(
+        dataset_repository=FakeDatasetRepository(_df()),
+        model_trainer=FakeTrainer(),
+        model_repository=FakeModelRepo(),
+        analytics_run_repository=analytics,
+    )
+
+    use_case._persist_fact_model_artifacts(
+        run_id="train_run_abc",
+        asset_id="AAPL",
+        version="20260303_120000_B",
+        artifacts_dir=str(_artifact_dir(tmp_path)),
+        training_result=_training_result(),
+    )
+
+    assert analytics.model_artifacts_rows is not None
+    assert analytics.model_artifacts_rows[0]["training_run_id"] == "train_run_abc"
 
 
 def test_persists_dim_run_identity_fields_when_analytics_repo_is_enabled() -> None:
