@@ -57,8 +57,9 @@ class _FakeInferenceRepo:
 
 
 class _FakeModelLoader:
-    def __init__(self, asset_id: str = "AAPL") -> None:
+    def __init__(self, asset_id: str = "AAPL", training_run_id: str | None = "train_run_abc") -> None:
         self.asset_id = asset_id
+        self.training_run_id = training_run_id
 
     def load(self, model_dir: str | Path) -> LoadedTFTInferenceModel:
         return LoadedTFTInferenceModel(
@@ -70,6 +71,7 @@ class _FakeModelLoader:
             feature_set_name="BASELINE_FEATURES",
             feature_tokens=["BASELINE_FEATURES"],
             training_config={"max_encoder_length": 3, "max_prediction_length": 1},
+            training_run_id=self.training_run_id,
             scalers={},
         )
 
@@ -391,6 +393,81 @@ def test_persists_fact_inference_runs_when_analytics_repo_is_configured() -> Non
     assert len(analytics_repo.feature_contrib_rows) > 0
     assert all(r["method"] == "local_magnitude_signed_v1" for r in analytics_repo.feature_contrib_rows)
     assert all(r["feature_rank"] >= 1 for r in analytics_repo.feature_contrib_rows)
+
+
+def test_fact_inference_runs_persists_training_run_id_as_fk() -> None:
+    start = datetime(2025, 1, 1, tzinfo=UTC)
+    analytics_repo = _FakeAnalyticsRunRepo()
+    use_case = RunTFTInferenceUseCase(
+        dataset_repository=_FakeDatasetRepo(_dataset(start)),
+        inference_repository=_FakeInferenceRepo(),
+        model_loader=_FakeModelLoader(training_run_id="train_run_abc"),
+        inference_engine=_FakeEngine(),
+        analytics_run_repository=analytics_repo,
+    )
+
+    use_case.execute(
+        asset_id="AAPL",
+        model_path="/tmp/model",
+        start_date=start + timedelta(days=5),
+        end_date=start + timedelta(days=7),
+    )
+
+    row = analytics_repo.inference_rows[0]
+    assert row["run_id"] == "train_run_abc"
+    assert row["training_run_id"] == "train_run_abc"
+
+
+def test_fact_inference_predictions_persists_training_run_id_as_fk() -> None:
+    start = datetime(2025, 1, 1, tzinfo=UTC)
+    analytics_repo = _FakeAnalyticsRunRepo()
+    use_case = RunTFTInferenceUseCase(
+        dataset_repository=_FakeDatasetRepo(_dataset(start)),
+        inference_repository=_FakeInferenceRepo(),
+        model_loader=_FakeModelLoader(training_run_id="train_run_abc"),
+        inference_engine=_FakeEngine(),
+        analytics_run_repository=analytics_repo,
+    )
+
+    use_case.execute(
+        asset_id="AAPL",
+        model_path="/tmp/model",
+        start_date=start + timedelta(days=5),
+        end_date=start + timedelta(days=7),
+    )
+
+    assert analytics_repo.inference_prediction_rows
+    assert all(r["run_id"] == "train_run_abc" for r in analytics_repo.inference_prediction_rows)
+    assert all(
+        r["training_run_id"] == "train_run_abc"
+        for r in analytics_repo.inference_prediction_rows
+    )
+
+
+def test_fact_feature_contrib_local_persists_training_run_id_as_fk() -> None:
+    start = datetime(2025, 1, 1, tzinfo=UTC)
+    analytics_repo = _FakeAnalyticsRunRepo()
+    use_case = RunTFTInferenceUseCase(
+        dataset_repository=_FakeDatasetRepo(_dataset(start)),
+        inference_repository=_FakeInferenceRepo(),
+        model_loader=_FakeModelLoader(training_run_id="train_run_abc"),
+        inference_engine=_FakeEngine(),
+        analytics_run_repository=analytics_repo,
+    )
+
+    use_case.execute(
+        asset_id="AAPL",
+        model_path="/tmp/model",
+        start_date=start + timedelta(days=5),
+        end_date=start + timedelta(days=7),
+    )
+
+    assert analytics_repo.feature_contrib_rows
+    assert all(r["run_id"] == "train_run_abc" for r in analytics_repo.feature_contrib_rows)
+    assert all(
+        r["training_run_id"] == "train_run_abc"
+        for r in analytics_repo.feature_contrib_rows
+    )
 
 
 def test_overwrite_does_not_enable_analytics_silver_overwrite() -> None:

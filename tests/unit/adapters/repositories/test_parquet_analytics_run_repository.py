@@ -4,12 +4,13 @@ import pandas as pd
 import pytest
 
 from src.adapters.parquet_analytics_run_repository import ParquetAnalyticsRunRepository
+from src.infrastructure.schemas.analytics_store_schema import ANALYTICS_SCHEMA_VERSION
 from src.interfaces.analytics_run_repository import DuplicateKeyError
 
 
 def _row(run_id: str) -> dict:
     return {
-        "schema_version": 1,
+        "schema_version": ANALYTICS_SCHEMA_VERSION,
         "run_id": run_id,
         "execution_id": None,
         "parent_sweep_id": None,
@@ -39,7 +40,7 @@ def _row(run_id: str) -> dict:
 
 def _snapshot_row(run_id: str, *, n_samples_train: int = 3) -> dict:
     return {
-        "schema_version": 1,
+        "schema_version": ANALYTICS_SCHEMA_VERSION,
         "run_id": run_id,
         "asset": "AAPL",
         "parent_sweep_id": None,
@@ -72,7 +73,7 @@ def _oos_row(
     y_pred: float = 0.2,
 ) -> dict:
     return {
-        "schema_version": 1,
+        "schema_version": ANALYTICS_SCHEMA_VERSION,
         "run_id": run_id,
         "model_version": "v1",
         "asset": "AAPL",
@@ -173,7 +174,7 @@ def test_overwrite_policy_replaces_colliding_rows_when_enabled(tmp_path) -> None
 def test_overwrite_policy_only_checks_collisions_within_partition_path(tmp_path) -> None:
     repo = ParquetAnalyticsRunRepository(output_dir=tmp_path)
     base = {
-        "schema_version": 1,
+        "schema_version": ANALYTICS_SCHEMA_VERSION,
         "run_id": "r1",
         "asset": "AAPL",
         "parent_sweep_id": "swp",
@@ -200,7 +201,7 @@ def test_append_fact_run_snapshot_and_split_refs(tmp_path) -> None:
     repo = ParquetAnalyticsRunRepository(output_dir=tmp_path)
 
     snapshot = {
-        "schema_version": 1,
+        "schema_version": ANALYTICS_SCHEMA_VERSION,
         "run_id": "r1",
         "asset": "AAPL",
         "parent_sweep_id": None,
@@ -226,7 +227,7 @@ def test_append_fact_run_snapshot_and_split_refs(tmp_path) -> None:
 
     split_rows = [
         {
-            "schema_version": 1,
+            "schema_version": ANALYTICS_SCHEMA_VERSION,
             "run_id": "r1",
             "split": "train",
             "artifact_path": None,
@@ -234,7 +235,7 @@ def test_append_fact_run_snapshot_and_split_refs(tmp_path) -> None:
             "timestamps_compact_json": "[]",
         },
         {
-            "schema_version": 1,
+            "schema_version": ANALYTICS_SCHEMA_VERSION,
             "run_id": "r1",
             "split": "val",
             "artifact_path": None,
@@ -260,8 +261,9 @@ def test_append_fact_config(tmp_path) -> None:
     repo = ParquetAnalyticsRunRepository(output_dir=tmp_path)
 
     row = {
-        "schema_version": 1,
+        "schema_version": ANALYTICS_SCHEMA_VERSION,
         "run_id": "r1",
+        "training_run_id": "r1",
         "asset": "AAPL",
         "parent_sweep_id": None,
         "prediction_mode": "quantile",
@@ -298,7 +300,7 @@ def test_append_fact_failures(tmp_path) -> None:
     repo = ParquetAnalyticsRunRepository(output_dir=tmp_path)
 
     row = {
-        "schema_version": 1,
+        "schema_version": ANALYTICS_SCHEMA_VERSION,
         "run_id": "r1",
         "execution_id": None,
         "asset": "AAPL",
@@ -327,7 +329,7 @@ def test_append_fact_epoch_metrics(tmp_path) -> None:
 
     rows = [
         {
-            "schema_version": 1,
+            "schema_version": ANALYTICS_SCHEMA_VERSION,
             "run_id": "r1",
             "asset": "AAPL",
             "parent_sweep_id": "swp",
@@ -341,7 +343,7 @@ def test_append_fact_epoch_metrics(tmp_path) -> None:
             "early_stop_reason": "max_epochs",
         },
         {
-            "schema_version": 1,
+            "schema_version": ANALYTICS_SCHEMA_VERSION,
             "run_id": "r1",
             "asset": "AAPL",
             "parent_sweep_id": "swp",
@@ -368,7 +370,7 @@ def test_append_fact_oos_predictions(tmp_path) -> None:
 
     rows = [
         {
-            "schema_version": 1,
+            "schema_version": ANALYTICS_SCHEMA_VERSION,
             "run_id": "r1",
             "model_version": "v1",
             "asset": "AAPL",
@@ -405,7 +407,7 @@ def test_append_fact_model_artifacts(tmp_path) -> None:
     repo = ParquetAnalyticsRunRepository(output_dir=tmp_path)
 
     row = {
-        "schema_version": 1,
+        "schema_version": ANALYTICS_SCHEMA_VERSION,
         "run_id": "r1",
         "asset": "AAPL",
         "model_version": "v1",
@@ -436,7 +438,7 @@ def test_append_fact_split_metrics(tmp_path) -> None:
 
     rows = [
         {
-            "schema_version": 1,
+            "schema_version": ANALYTICS_SCHEMA_VERSION,
             "run_id": "r1",
             "asset": "AAPL",
             "parent_sweep_id": "swp",
@@ -449,7 +451,7 @@ def test_append_fact_split_metrics(tmp_path) -> None:
             "n_samples": 10,
         },
         {
-            "schema_version": 1,
+            "schema_version": ANALYTICS_SCHEMA_VERSION,
             "run_id": "r1",
             "asset": "AAPL",
             "parent_sweep_id": "swp",
@@ -475,13 +477,13 @@ def test_append_bridge_run_features_and_fact_inference_runs(tmp_path) -> None:
 
     bridge_rows = [
         {
-            "schema_version": 1,
+            "schema_version": ANALYTICS_SCHEMA_VERSION,
             "run_id": "r1",
             "feature_order": 0,
             "feature_name": "close",
         },
         {
-            "schema_version": 1,
+            "schema_version": ANALYTICS_SCHEMA_VERSION,
             "run_id": "r1",
             "feature_order": 1,
             "feature_name": "volume",
@@ -490,8 +492,9 @@ def test_append_bridge_run_features_and_fact_inference_runs(tmp_path) -> None:
     repo.append_bridge_run_features(bridge_rows)
 
     inf_row = {
-        "schema_version": 1,
-        "run_id": None,
+        "schema_version": ANALYTICS_SCHEMA_VERSION,
+        "run_id": "r1",
+        "training_run_id": "r1",
         "inference_run_id": "inf_1",
         "model_version": "20260308_010101_B",
         "asset": "AAPL",
@@ -523,9 +526,10 @@ def test_append_fact_inference_predictions(tmp_path) -> None:
 
     rows = [
         {
-            "schema_version": 1,
+            "schema_version": ANALYTICS_SCHEMA_VERSION,
             "inference_run_id": "inf_1",
-            "run_id": None,
+            "run_id": "r1",
+            "training_run_id": "r1",
             "model_version": "20260308_010101_B",
             "asset": "AAPL",
             "feature_set_name": "BASELINE_FEATURES",
@@ -568,9 +572,10 @@ def test_append_fact_feature_contrib_local(tmp_path) -> None:
 
     rows = [
         {
-            "schema_version": 1,
+            "schema_version": ANALYTICS_SCHEMA_VERSION,
             "inference_run_id": "inf_1",
-            "run_id": None,
+            "run_id": "r1",
+            "training_run_id": "r1",
             "model_version": "20260308_010101_B",
             "asset": "AAPL",
             "feature_set_name": "BASELINE_FEATURES",
