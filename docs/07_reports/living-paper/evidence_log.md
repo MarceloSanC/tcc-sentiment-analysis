@@ -501,3 +501,34 @@ Hipoteses levantadas para explicar a causa raiz:
 **Interpretação:** o Analytics Store é legível e auditável, mas claims confirmatórios da Fase B exigem filtro de coorte explícito e não devem usar agregados gold globais sem `parent_sweep_id`.
 
 **Ação:** M6 marcado como `YELLOW` em `docs/07_reports/phase-gates/A_code_audit.md`; M5 deve decidir se as gold agregadas recebem `parent_sweep_id` ou se a Fase B usa artefatos scoped-only.
+
+## 2026-05-14 — Stage 3: reset silver/gold pré-Phase B
+
+**Escopo:** arquivamento do silver/gold histórico antes de abrir Phase B confirmatória.
+
+**Evidência:** `data/analytics/{silver,gold}` movidos para `data/analytics_archive_pre_phase_b/` e protegidos como read-only (`chmod -R a-w`). Snapshot histórico abrange runs `parent_sweep_id=NULL` (6.247 runs com 91,25% de degenerescência) e `0_2_3_*` (exploratórios pós-fix `f7901a4`).
+
+**Interpretação:** o archive é rollback/diagnóstico, não evidência confirmatória. Runs pós-2026-05-10 começam de silver vazio, com Stages 1-2 garantindo idempotência e invariante de `config_signature`.
+
+**Artefatos (paths):**
+- `data/analytics_archive_pre_phase_b/silver/**`
+- `data/analytics_archive_pre_phase_b/gold/**`
+- `docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md` §"Archive pre-Phase B"
+- `docs/05_checklists/PHASE_B_IMPLEMENTATION_CHECKLIST.md` §Stage 3
+
+**Uso no texto (TCC/Artigo/Ambos):** Ambos. Capítulo 4 (Método — política de archive) e Capítulo 6 (Limitações — fronteira temporal dos claims).
+
+## 2026-05-16 — Stage 8: política de variante quantilica (raw + post-guardrail; Cat A/B/C)
+
+**Escopo:** definição da policy metodológica raw vs post-guardrail por tabela gold, com categorização A (dual obrigatório), B (post-only) e C (raw-only), e flag `--primary-quantile-contract` (default `post_guardrail`).
+
+**Evidência:** Stages 8.1-8.8 mergeados; PR #21 (`8ab1d39`) propaga policy para `docs/04_evaluation/METRICS_DEFINITIONS.md` §"Variante quantilica", `docs/04_evaluation/CALIBRATION_AND_RISK.md`, `docs/00_overview/GLOSSARY.md` (entrada "variante quantilica") e `docs/07_reports/living-paper/20_method.md` §"Política de variante quantilica". Justificativa acadêmica: Chernozhukov, Fernández-Val & Galichon (2010); Gneiting & Raftery (2007); Jorion (2007); Acerbi & Tasche (2002).
+
+**Interpretação:** H1/H2a/H2b passam a usar `post_guardrail` como variante primária; H3 idem por conservadorismo. Métricas de risco (`var_10`, `es_10_approx`) são post-guardrail apenas. Checks de patologia (`_pred_interval_negative`, gate Stage 11) permanecem raw apenas.
+
+**Artefatos (paths):**
+- `docs/04_evaluation/METRICS_DEFINITIONS.md` §Variante quantilica
+- `docs/07_reports/living-paper/20_method.md` §Política de variante quantilica
+- `src/use_cases/refresh_analytics_store_use_case.py` (colunas `*_raw`/`*_post_guardrail`/`delta_*_post_minus_raw`)
+
+**Uso no texto (TCC/Artigo/Ambos):** Ambos. Capítulo 4 (Método) e Capítulo 5 (Resultados — Gate B).

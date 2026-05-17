@@ -141,6 +141,12 @@ homônima no output, com default `post_guardrail`. Plots herdam a mesma flag.
 Mudança de contrato primário entre versões do paper exige re-refresh com a
 flag alternativa — não retreina o modelo.
 
+A política assume silver pos-Stage 8 (colunas `quantile_p*_post_guardrail`
+materializadas no momento da escrita). Runs anteriores ao reset documentado
+em `docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md` §"Archive pre-Phase B"
+(2026-05-10) ficam com `*_post_guardrail = NaN` e não são elegíveis para
+claims confirmatórios.
+
 ## Critério de inclusão para inferências probabilísticas
 
 Métricas probabilísticas (PICP, MPIW, pinball, coverage_error, prob_up/down,

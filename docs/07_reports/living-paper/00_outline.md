@@ -87,6 +87,10 @@ Pergunta secundaria:
   alinhamento temporal estrito por `target_timestamp`.
 - Reprodutibilidade: rastreabilidade por `run_id`, configuracao, split e artefatos
   em Parquet/DuckDB; decisoes reproduziveis sem retrain.
+- Governança de coorte: toda comparação estatística confirmatória (DM, MCS,
+  win-rate, ranking de seleção) é restrita a runs com mesmo `parent_sweep_id`,
+  conforme `docs/03_modeling/SWEEPS_AND_SELECTION.md` e
+  `docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md`.
 - Fora de escopo: estrategia de trading em producao, otimizacao de carteira,
   inferencia intradiaria, generalizacao para ativos/periodos nao avaliados,
   inferencia causal, classificacao de regimes de mercado (future work).
@@ -158,6 +162,7 @@ Ver `docs/00_overview/STRATEGIC_DIRECTION.md` §5 (Fase A) para o roadmap comple
 
 Antes de escrever qualquer capitulo de Resultados:
 - [ ] `A_code_audit.md` concluido com M1-M7 GREEN ou YELLOW com acao concluida
+- [ ] Engenharia pré-Fase B concluída por `docs/05_checklists/PHASE_B_IMPLEMENTATION_CHECKLIST.md` (Stages 1-11 da Fase B).
 - [ ] Auditoria de leakage concluida (`docs/07_reports/external-reviews/leakage_audit_<date>.md`)
 - [ ] Baselines persistidos na coorte (`fact_oos_predictions` com mesmos grao)
 - [ ] Pre-registro versionado commitado (`docs/08_governance/preregistration_round1_<date>.md`)
