@@ -41,6 +41,8 @@ class RefreshAnalyticsStoreUseCase:
         "pred_interval_width",
         "coverage_error",
         "confidence_calibrated",
+        "prob_up",
+        "prob_down",
     )
     _POINT_METRIC_COLUMNS: ClassVar[tuple[str, ...]] = (
         "rmse",
@@ -49,8 +51,6 @@ class RefreshAnalyticsStoreUseCase:
         "smape",
         "directional_accuracy",
         "bias",
-        "prob_up",
-        "prob_down",
     )
     _POST_GUARDRAIL_MISSING_WARNING_EMITTED: ClassVar[bool] = False
 
@@ -626,6 +626,19 @@ class RefreshAnalyticsStoreUseCase:
                     frame[f"delta_{m}_post_minus_raw"] = frame[post_col] - frame[raw_col]
             return frame
 
+        def _set_alias_post_primary(frame: pd.DataFrame, base: str) -> None:
+            post_col = f"{base}_post_guardrail"
+            raw_col = f"{base}_raw"
+            if post_col in frame.columns:
+                frame[base] = frame[post_col]
+            elif raw_col in frame.columns:
+                frame[base] = frame[raw_col]
+
+        def _set_alias_raw_only(frame: pd.DataFrame, base: str) -> None:
+            raw_col = f"{base}_raw"
+            if raw_col in frame.columns:
+                frame[base] = frame[raw_col]
+
         missing_post = [
             c for c in RefreshAnalyticsStoreUseCase._POST_GUARDRAIL_QUANTILE_COLUMNS
             if c not in fact_oos_predictions.columns
@@ -639,8 +652,8 @@ class RefreshAnalyticsStoreUseCase:
                 RefreshAnalyticsStoreUseCase._POST_GUARDRAIL_MISSING_WARNING_EMITTED = True
             for m in probabilistic_cols:
                 out[f"{m}_post_guardrail"] = np.nan
-            if "confidence_calibrated_raw" in out.columns:
-                out["confidence_calibrated"] = out["confidence_calibrated_raw"]
+            for base in ("confidence_calibrated", "prob_up", "prob_down"):
+                _set_alias_raw_only(out, base)
             return _emit_deltas(out)
 
         post_metrics = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon_single_contract(
@@ -651,8 +664,8 @@ class RefreshAnalyticsStoreUseCase:
         if post_metrics.empty:
             for m in probabilistic_cols:
                 out[f"{m}_post_guardrail"] = np.nan
-            if "confidence_calibrated_raw" in out.columns:
-                out["confidence_calibrated"] = out["confidence_calibrated_raw"]
+            for base in ("confidence_calibrated", "prob_up", "prob_down"):
+                _set_alias_raw_only(out, base)
             return _emit_deltas(out)
 
         post_probabilistic_cols = [c for c in probabilistic_cols if c in post_metrics.columns]
@@ -664,10 +677,8 @@ class RefreshAnalyticsStoreUseCase:
             col = f"{m}_post_guardrail"
             if col not in out.columns:
                 out[col] = np.nan
-        if "confidence_calibrated_post_guardrail" in out.columns:
-            out["confidence_calibrated"] = out["confidence_calibrated_post_guardrail"]
-        elif "confidence_calibrated_raw" in out.columns:
-            out["confidence_calibrated"] = out["confidence_calibrated_raw"]
+        for base in ("confidence_calibrated", "prob_up", "prob_down"):
+            _set_alias_post_primary(out, base)
         # Categoria A: efeito do guardrail diretamente queryavel no contrato
         # primario. Substitui funcionalmente gold_quantile_guardrail_audit
         # (que segue materializada por compatibilidade ate Phase B fechar).
@@ -859,6 +870,8 @@ class RefreshAnalyticsStoreUseCase:
                 'mean_pinball_post_guardrail', 'picp_post_guardrail', 'mpiw_post_guardrail',
                 'pred_interval_width_post_guardrail', 'coverage_error_post_guardrail',
                 'confidence_calibrated_post_guardrail',
+                'prob_up_raw', 'prob_up_post_guardrail',
+                'prob_down_raw', 'prob_down_post_guardrail',
                 'coverage_nominal', 'prob_up', 'prob_down', 'confidence_calibrated'
             ] if c in metrics_run_split_h.columns
         ]
