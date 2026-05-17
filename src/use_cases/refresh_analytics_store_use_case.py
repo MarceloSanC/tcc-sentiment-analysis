@@ -618,6 +618,14 @@ class RefreshAnalyticsStoreUseCase:
         )
         out = out.merge(raw_renamed, on=key_cols, how='left')
 
+        def _emit_deltas(frame: pd.DataFrame) -> pd.DataFrame:
+            for m in probabilistic_cols:
+                raw_col = f"{m}_raw"
+                post_col = f"{m}_post_guardrail"
+                if raw_col in frame.columns and post_col in frame.columns:
+                    frame[f"delta_{m}_post_minus_raw"] = frame[post_col] - frame[raw_col]
+            return frame
+
         missing_post = [
             c for c in RefreshAnalyticsStoreUseCase._POST_GUARDRAIL_QUANTILE_COLUMNS
             if c not in fact_oos_predictions.columns
@@ -633,7 +641,7 @@ class RefreshAnalyticsStoreUseCase:
                 out[f"{m}_post_guardrail"] = np.nan
             if "confidence_calibrated_raw" in out.columns:
                 out["confidence_calibrated"] = out["confidence_calibrated_raw"]
-            return out
+            return _emit_deltas(out)
 
         post_metrics = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon_single_contract(
             dim_run,
@@ -645,7 +653,7 @@ class RefreshAnalyticsStoreUseCase:
                 out[f"{m}_post_guardrail"] = np.nan
             if "confidence_calibrated_raw" in out.columns:
                 out["confidence_calibrated"] = out["confidence_calibrated_raw"]
-            return out
+            return _emit_deltas(out)
 
         post_probabilistic_cols = [c for c in probabilistic_cols if c in post_metrics.columns]
         post_renamed = post_metrics[key_cols + post_probabilistic_cols].copy().rename(
@@ -660,7 +668,10 @@ class RefreshAnalyticsStoreUseCase:
             out["confidence_calibrated"] = out["confidence_calibrated_post_guardrail"]
         elif "confidence_calibrated_raw" in out.columns:
             out["confidence_calibrated"] = out["confidence_calibrated_raw"]
-        return out
+        # Categoria A: efeito do guardrail diretamente queryavel no contrato
+        # primario. Substitui funcionalmente gold_quantile_guardrail_audit
+        # (que segue materializada por compatibilidade ate Phase B fechar).
+        return _emit_deltas(out)
 
     @staticmethod
     def _build_gold_quantile_guardrail_audit(

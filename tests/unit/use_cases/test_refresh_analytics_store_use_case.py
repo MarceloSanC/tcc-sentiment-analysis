@@ -105,6 +105,64 @@ def test_metrics_emits_nan_post_guardrail_when_silver_missing_columns() -> None:
     assert pd.isna(row["mean_pinball_post_guardrail"])
 
 
+def test_delta_columns_equal_post_minus_raw_per_row() -> None:
+    out = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon(
+        _quantile_contract_dim_run(),
+        _quantile_contract_oos(),
+    )
+
+    expected_delta_cols = {
+        "delta_picp_post_minus_raw",
+        "delta_mpiw_post_minus_raw",
+        "delta_pred_interval_width_post_minus_raw",
+        "delta_coverage_error_post_minus_raw",
+        "delta_mean_pinball_post_minus_raw",
+        "delta_pinball_q10_post_minus_raw",
+        "delta_pinball_q50_post_minus_raw",
+        "delta_pinball_q90_post_minus_raw",
+        "delta_confidence_calibrated_post_minus_raw",
+    }
+    assert expected_delta_cols.issubset(set(out.columns))
+
+    row = out.iloc[0]
+    for base in [
+        "picp",
+        "mpiw",
+        "pred_interval_width",
+        "coverage_error",
+        "mean_pinball",
+        "pinball_q10",
+        "pinball_q50",
+        "pinball_q90",
+        "confidence_calibrated",
+    ]:
+        assert float(row[f"delta_{base}_post_minus_raw"]) == pytest.approx(
+            float(row[f"{base}_post_guardrail"]) - float(row[f"{base}_raw"]),
+            abs=1e-12,
+        )
+
+
+def test_delta_columns_are_nan_when_silver_missing_post_guardrail() -> None:
+    out = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon(
+        _quantile_contract_dim_run(),
+        _quantile_contract_oos(include_post_guardrail=False),
+    )
+
+    row = out.iloc[0]
+    for base in [
+        "picp",
+        "mpiw",
+        "pred_interval_width",
+        "coverage_error",
+        "mean_pinball",
+        "pinball_q10",
+        "pinball_q50",
+        "pinball_q90",
+        "confidence_calibrated",
+    ]:
+        assert pd.isna(row[f"delta_{base}_post_minus_raw"])
+
+
 def test_gold_prediction_risk_uses_post_guardrail_quantiles() -> None:
     # Fixture: crossing em raw (p10 > p50), monotonico em post-guardrail.
     fact = pd.DataFrame(
