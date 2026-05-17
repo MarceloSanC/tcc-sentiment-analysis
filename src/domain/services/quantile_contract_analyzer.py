@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import warnings
+
 from dataclasses import dataclass
 
 import pandas as pd
@@ -33,6 +35,32 @@ class QuantileBlockAEvaluation:
     metrics: QuantileContractMetrics
 
 
+@dataclass(frozen=True)
+class QuantileDegeneracyThresholds:
+    min_rows_for_gate: int = 1000
+    max_p10_eq_p90_rate: float = 0.05
+
+
+@dataclass(frozen=True)
+class QuantileDegeneracyMetrics:
+    parent_sweep_id: str | None
+    split: str | None
+    horizon: int | None
+    prediction_mode: str | None
+    n_rows: int
+    p10_eq_p90_count: int
+    p10_eq_p90_rate: float
+    p10_eq_p50_eq_p90_count: int
+    p10_eq_p50_eq_p90_rate: float
+
+
+@dataclass(frozen=True)
+class QuantileDegeneracyEvaluation:
+    passed: bool
+    detail: str
+    metrics_per_group: list[QuantileDegeneracyMetrics]
+
+
 class QuantileContractAnalyzer:
     """Compute reusable quantile contract metrics and Block A acceptance checks."""
 
@@ -48,6 +76,17 @@ class QuantileContractAnalyzer:
             return None
         out = [str(v).strip() for v in values if str(v).strip()]
         return out or None
+
+    @staticmethod
+    def _normalize_parent_sweep_value(value: object) -> str | None:
+        if pd.isna(value):
+            return None
+        text = str(value).strip()
+        if not text or text.lower() in {"nan", "none", "null", "<na>"}:
+            return None
+        if text.endswith(".0") and text[:-2].isdigit():
+            return text[:-2]
+        return text
 
     @staticmethod
     def filter_scope(
@@ -188,4 +227,187 @@ class QuantileContractAnalyzer:
             passed=len(issues) == 0,
             detail=", ".join(detail_parts),
             metrics=metrics,
+        )
+
+    @staticmethod
+    def analyze_degeneracy(
+        fact_oos_predictions: pd.DataFrame,
+        fact_config: pd.DataFrame,
+        *,
+        group_cols: tuple[str, ...] = ("parent_sweep_id", "split", "horizon"),
+    ) -> list[QuantileDegeneracyMetrics]:
+        required_prediction_cols = {
+            "run_id",
+            "quantile_p10",
+            "quantile_p50",
+            "quantile_p90",
+        }
+        if fact_oos_predictions.empty or not required_prediction_cols.issubset(set(fact_oos_predictions.columns)):
+            return []
+
+        df = fact_oos_predictions.copy()
+        if "horizon" in df.columns:
+            df["horizon"] = pd.to_numeric(df["horizon"], errors="coerce")
+
+        if not fact_config.empty and "run_id" in fact_config.columns:
+            cfg_cols = [c for c in ["run_id", "prediction_mode", "parent_sweep_id"] if c in fact_config.columns]
+            cfg = fact_config[cfg_cols].drop_duplicates("run_id").copy()
+            merged = df.merge(cfg, on="run_id", how="left", suffixes=("", "_config"))
+            if "parent_sweep_id_config" in merged.columns:
+                config_parent = merged["parent_sweep_id_config"].map(
+                    QuantileContractAnalyzer._normalize_parent_sweep_value
+                )
+                if "parent_sweep_id" in merged.columns:
+                    source_parent = merged["parent_sweep_id"].map(
+                        QuantileContractAnalyzer._normalize_parent_sweep_value
+                    )
+                    merged["parent_sweep_id"] = config_parent.combine_first(source_parent)
+                else:
+                    merged["parent_sweep_id"] = config_parent
+                merged = merged.drop(columns=["parent_sweep_id_config"])
+            elif "parent_sweep_id" in merged.columns:
+                merged["parent_sweep_id"] = merged["parent_sweep_id"].map(
+                    QuantileContractAnalyzer._normalize_parent_sweep_value
+                )
+            df = merged
+        else:
+            if "prediction_mode" not in df.columns:
+                df["prediction_mode"] = None
+            if "parent_sweep_id" in df.columns:
+                df["parent_sweep_id"] = df["parent_sweep_id"].map(
+                    QuantileContractAnalyzer._normalize_parent_sweep_value
+                )
+
+        for col in group_cols:
+            if col not in df.columns:
+                df[col] = None
+
+        q10 = pd.to_numeric(df["quantile_p10"], errors="coerce")
+        q50 = pd.to_numeric(df["quantile_p50"], errors="coerce")
+        q90 = pd.to_numeric(df["quantile_p90"], errors="coerce")
+        valid_width = q10.notna() & q90.notna()
+        valid_triplet = valid_width & q50.notna()
+
+        df = df.loc[valid_width].copy()
+        if df.empty:
+            return []
+        df["_p10_eq_p90"] = (q10.loc[df.index] == q90.loc[df.index]).astype(int)
+        df["_p10_eq_p50_eq_p90"] = (
+            valid_triplet.loc[df.index]
+            & (q10.loc[df.index] == q50.loc[df.index])
+            & (q50.loc[df.index] == q90.loc[df.index])
+        ).astype(int)
+
+        out: list[QuantileDegeneracyMetrics] = []
+        for keys, group in df.groupby(list(group_cols), dropna=False):
+            if not isinstance(keys, tuple):
+                keys = (keys,)
+            key_map = dict(zip(group_cols, keys, strict=True))
+            modes = sorted(
+                {
+                    str(v).strip().lower()
+                    for v in group.get("prediction_mode", pd.Series(index=group.index, dtype=object)).dropna()
+                    if str(v).strip()
+                }
+            )
+            if len(modes) > 1:
+                warnings.warn(
+                    "Mixed prediction_mode values in quantile degeneracy group: "
+                    + ",".join(modes),
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+            prediction_mode = modes[0] if len(modes) == 1 else (",".join(modes) if modes else None)
+            n_rows = int(len(group))
+            p10_eq_p90_count = int(group["_p10_eq_p90"].sum())
+            p10_eq_p50_eq_p90_count = int(group["_p10_eq_p50_eq_p90"].sum())
+            horizon_value = key_map.get("horizon")
+            horizon = None if pd.isna(horizon_value) else int(horizon_value)
+            parent_value = key_map.get("parent_sweep_id")
+            parent_sweep_id = None if pd.isna(parent_value) else str(parent_value)
+            split_value = key_map.get("split")
+            split = None if pd.isna(split_value) else str(split_value)
+            out.append(
+                QuantileDegeneracyMetrics(
+                    parent_sweep_id=parent_sweep_id,
+                    split=split,
+                    horizon=horizon,
+                    prediction_mode=prediction_mode,
+                    n_rows=n_rows,
+                    p10_eq_p90_count=p10_eq_p90_count,
+                    p10_eq_p90_rate=float(p10_eq_p90_count / n_rows) if n_rows > 0 else 0.0,
+                    p10_eq_p50_eq_p90_count=p10_eq_p50_eq_p90_count,
+                    p10_eq_p50_eq_p90_rate=float(p10_eq_p50_eq_p90_count / n_rows) if n_rows > 0 else 0.0,
+                )
+            )
+
+        return out
+
+    @staticmethod
+    def evaluate_degeneracy(
+        metrics_per_group: list[QuantileDegeneracyMetrics],
+        *,
+        thresholds: QuantileDegeneracyThresholds,
+    ) -> QuantileDegeneracyEvaluation:
+        issues: list[str] = []
+        diagnostic_only = 0
+        quantile_groups = 0
+        point_groups = 0
+        unknown_mode_groups = 0
+
+        for metrics in metrics_per_group:
+            mode = (metrics.prediction_mode or "").strip().lower()
+            if mode == "point":
+                point_groups += 1
+                continue
+            if mode != "quantile":
+                unknown_mode_groups += 1
+                continue
+
+            quantile_groups += 1
+            group_ref = (
+                f"parent_sweep_id={metrics.parent_sweep_id},split={metrics.split},horizon={metrics.horizon}"
+            )
+            if metrics.n_rows < int(thresholds.min_rows_for_gate):
+                diagnostic_only += 1
+                continue
+            if metrics.p10_eq_p90_rate >= float(thresholds.max_p10_eq_p90_rate):
+                issues.append(
+                    f"{group_ref}:n_rows={metrics.n_rows},p10_eq_p90_rate={metrics.p10_eq_p90_rate:.8f}"
+                )
+
+        detail_parts = [
+            f"groups={len(metrics_per_group)}",
+            f"quantile_groups={quantile_groups}",
+            f"point_groups_ignored={point_groups}",
+            f"unknown_mode_groups_diagnostic_only={unknown_mode_groups}",
+            f"small_quantile_groups_diagnostic_only={diagnostic_only}",
+            f"min_rows_for_gate={int(thresholds.min_rows_for_gate)}",
+            f"max_p10_eq_p90_rate={float(thresholds.max_p10_eq_p90_rate):.8f}",
+        ]
+        if metrics_per_group:
+            sample = sorted(
+                metrics_per_group,
+                key=lambda m: (m.p10_eq_p90_rate, m.n_rows),
+                reverse=True,
+            )[:5]
+            detail_parts.append(
+                "top_groups="
+                + "|".join(
+                    (
+                        f"parent_sweep_id={m.parent_sweep_id},split={m.split},horizon={m.horizon},"
+                        f"prediction_mode={m.prediction_mode},n_rows={m.n_rows},"
+                        f"p10_eq_p90_rate={m.p10_eq_p90_rate:.8f},"
+                        f"p10_eq_p50_eq_p90_rate={m.p10_eq_p50_eq_p90_rate:.8f}"
+                    )
+                    for m in sample
+                )
+            )
+        if issues:
+            detail_parts.append("issues=" + "|".join(issues))
+
+        return QuantileDegeneracyEvaluation(
+            passed=len(issues) == 0,
+            detail=", ".join(detail_parts),
+            metrics_per_group=metrics_per_group,
         )

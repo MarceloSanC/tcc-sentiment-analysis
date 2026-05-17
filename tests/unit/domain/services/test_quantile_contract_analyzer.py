@@ -5,6 +5,7 @@ import pandas as pd
 from src.domain.services.quantile_contract_analyzer import (
     QuantileBlockAThresholds,
     QuantileContractAnalyzer,
+    QuantileDegeneracyThresholds,
 )
 
 
@@ -72,3 +73,128 @@ def test_filter_scope_by_parent_sweep_split_and_horizon() -> None:
     assert len(scoped) == 1
     assert set(scoped["run_id"].astype(str)) == {"r1"}
     assert set(scoped["split"].astype(str)) == {"test"}
+
+
+def test_analyze_degeneracy_prefers_fact_config_parent_sweep_and_reports_rates() -> None:
+    oos = pd.DataFrame(
+        [
+            {
+                "run_id": "r1",
+                "parent_sweep_id": "stale",
+                "split": "test",
+                "horizon": 1,
+                "quantile_p10": 0.5,
+                "quantile_p50": 0.5,
+                "quantile_p90": 0.5,
+            },
+            {
+                "run_id": "r1",
+                "parent_sweep_id": "stale",
+                "split": "test",
+                "horizon": 1,
+                "quantile_p10": 0.4,
+                "quantile_p50": 0.5,
+                "quantile_p90": 0.6,
+            },
+        ]
+    )
+    fact_config = pd.DataFrame(
+        [{"run_id": "r1", "prediction_mode": "quantile", "parent_sweep_id": "sw_cfg"}]
+    )
+
+    metrics = QuantileContractAnalyzer.analyze_degeneracy(oos, fact_config)
+
+    assert len(metrics) == 1
+    assert metrics[0].parent_sweep_id == "sw_cfg"
+    assert metrics[0].prediction_mode == "quantile"
+    assert metrics[0].n_rows == 2
+    assert metrics[0].p10_eq_p90_count == 1
+    assert metrics[0].p10_eq_p90_rate == 0.5
+    assert metrics[0].p10_eq_p50_eq_p90_count == 1
+    assert metrics[0].p10_eq_p50_eq_p90_rate == 0.5
+
+
+def test_evaluate_degeneracy_fails_quantile_group_with_91_25_percent_degeneracy() -> None:
+    rows = []
+    for idx in range(1600):
+        degenerate = idx < 1460
+        rows.append(
+            {
+                "run_id": "r1",
+                "split": "test",
+                "horizon": 1,
+                "quantile_p10": 0.5 if degenerate else 0.4,
+                "quantile_p50": 0.5,
+                "quantile_p90": 0.5 if degenerate else 0.6,
+            }
+        )
+    fact_config = pd.DataFrame(
+        [{"run_id": "r1", "prediction_mode": "quantile", "parent_sweep_id": "sw1"}]
+    )
+
+    metrics = QuantileContractAnalyzer.analyze_degeneracy(pd.DataFrame(rows), fact_config)
+    evaluation = QuantileContractAnalyzer.evaluate_degeneracy(
+        metrics,
+        thresholds=QuantileDegeneracyThresholds(
+            min_rows_for_gate=1000,
+            max_p10_eq_p90_rate=0.05,
+        ),
+    )
+
+    assert metrics[0].p10_eq_p90_rate == 0.9125
+    assert evaluation.passed is False
+    assert "p10_eq_p90_rate=0.91250000" in evaluation.detail
+
+
+def test_evaluate_degeneracy_ignores_point_mode_even_when_collapsed() -> None:
+    oos = pd.DataFrame(
+        [
+            {
+                "run_id": "r1",
+                "split": "test",
+                "horizon": 1,
+                "quantile_p10": 0.5,
+                "quantile_p50": 0.5,
+                "quantile_p90": 0.5,
+            }
+            for _ in range(1000)
+        ]
+    )
+    fact_config = pd.DataFrame(
+        [{"run_id": "r1", "prediction_mode": "point", "parent_sweep_id": "sw1"}]
+    )
+
+    evaluation = QuantileContractAnalyzer.evaluate_degeneracy(
+        QuantileContractAnalyzer.analyze_degeneracy(oos, fact_config),
+        thresholds=QuantileDegeneracyThresholds(min_rows_for_gate=1000, max_p10_eq_p90_rate=0.05),
+    )
+
+    assert evaluation.passed is True
+    assert "point_groups_ignored=1" in evaluation.detail
+
+
+def test_evaluate_degeneracy_treats_small_quantile_group_as_diagnostic_only() -> None:
+    oos = pd.DataFrame(
+        [
+            {
+                "run_id": "r1",
+                "split": "test",
+                "horizon": 1,
+                "quantile_p10": 0.5,
+                "quantile_p50": 0.5,
+                "quantile_p90": 0.5,
+            }
+            for _ in range(999)
+        ]
+    )
+    fact_config = pd.DataFrame(
+        [{"run_id": "r1", "prediction_mode": "quantile", "parent_sweep_id": "sw1"}]
+    )
+
+    evaluation = QuantileContractAnalyzer.evaluate_degeneracy(
+        QuantileContractAnalyzer.analyze_degeneracy(oos, fact_config),
+        thresholds=QuantileDegeneracyThresholds(min_rows_for_gate=1000, max_p10_eq_p90_rate=0.05),
+    )
+
+    assert evaluation.passed is True
+    assert "small_quantile_groups_diagnostic_only=1" in evaluation.detail

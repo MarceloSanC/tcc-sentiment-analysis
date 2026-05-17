@@ -18,6 +18,43 @@ def _write_table(base, table_name: str, rows: list[dict], parts: dict[str, str] 
     pd.DataFrame(rows).to_parquet(table_dir / f"{table_name}.parquet", index=False)
 
 
+def _oos_row(
+    *,
+    idx: int,
+    run_id: str = "r1",
+    split: str = "test",
+    horizon: int = 1,
+    q10: float = 0.1,
+    q50: float = 0.2,
+    q90: float = 0.3,
+) -> dict:
+    ts = pd.Timestamp("2026-01-09T00:00:00+00:00") + pd.Timedelta(hours=idx)
+    return {
+        "schema_version": 1,
+        "run_id": run_id,
+        "model_version": "v1",
+        "asset": "AAPL",
+        "feature_set_name": "B",
+        "parent_sweep_id": "sw1",
+        "config_signature": "cfg1",
+        "split": split,
+        "fold": "none",
+        "seed": 0,
+        "horizon": horizon,
+        "timestamp_utc": ts.isoformat(),
+        "target_timestamp_utc": ts.isoformat(),
+        "y_true": 0.1,
+        "y_pred": 0.2,
+        "error": 0.1,
+        "abs_error": 0.1,
+        "sq_error": 0.01,
+        "quantile_p10": q10,
+        "quantile_p50": q50,
+        "quantile_p90": q90,
+        "year": 2026,
+    }
+
+
 def _seed_minimal_valid_silver(silver) -> None:
     _write_table(
         silver,
@@ -270,6 +307,84 @@ def test_validate_analytics_quality_fails_when_quantile_contract_is_broken(tmp_p
         (item["check"] == "official_contract_quantile_attention" and not bool(item["passed"]))
         for item in result.checks
     )
+
+
+def test_validate_analytics_quality_blocks_quantile_degeneracy_gate(tmp_path) -> None:
+    silver = tmp_path / "silver"
+    _seed_minimal_valid_silver(silver)
+    rows = []
+    for idx in range(1600):
+        degenerate = idx < 1460
+        rows.append(
+            _oos_row(
+                idx=idx,
+                q10=0.5 if degenerate else 0.4,
+                q50=0.5,
+                q90=0.5 if degenerate else 0.6,
+            )
+        )
+    _write_table(
+        silver,
+        "fact_oos_predictions",
+        rows,
+        {"asset": "AAPL", "feature_set_name": "B", "year": "2026"},
+    )
+
+    result = ValidateAnalyticsQualityUseCase(analytics_silver_dir=silver).execute()
+
+    gate = next(item for item in result.checks if item["check"] == "block_quantile_degeneracy_gate")
+    assert result.passed is False
+    assert gate["passed"] is False
+    assert "p10_eq_p90_rate=0.91250000" in str(gate["detail"])
+
+
+def test_validate_analytics_quality_does_not_block_point_mode_degeneracy(tmp_path) -> None:
+    silver = tmp_path / "silver"
+    _seed_minimal_valid_silver(silver)
+    _write_table(
+        silver,
+        "fact_config",
+        [
+            {
+                "schema_version": 1,
+                "run_id": "r1",
+                "asset": "AAPL",
+                "parent_sweep_id": "sw1",
+                "prediction_mode": "point",
+                "loss_name": "MSE",
+                "max_encoder_length": 3,
+                "max_prediction_length": 1,
+                "batch_size": 8,
+                "max_epochs": 2,
+                "learning_rate": 0.001,
+                "hidden_size": 8,
+                "attention_head_size": 2,
+                "dropout": 0.1,
+                "hidden_continuous_size": 4,
+                "early_stopping_patience": 2,
+                "early_stopping_min_delta": 0.0,
+                "scaler_type": "none",
+                "training_config_json": "{}",
+                "dataset_parameters_json": "{}",
+                "search_space_json": "{}",
+                "objective_name": "val_loss",
+                "objective_direction": "minimize",
+            }
+        ],
+        {"asset": "AAPL", "sweep_id": "sw1"},
+    )
+    _write_table(
+        silver,
+        "fact_oos_predictions",
+        [_oos_row(idx=idx, q10=0.5, q50=0.5, q90=0.5) for idx in range(1000)],
+        {"asset": "AAPL", "feature_set_name": "B", "year": "2026"},
+    )
+
+    result = ValidateAnalyticsQualityUseCase(analytics_silver_dir=silver).execute()
+
+    gate = next(item for item in result.checks if item["check"] == "block_quantile_degeneracy_gate")
+    assert gate["passed"] is True
+    assert "point_groups_ignored=1" in str(gate["detail"])
 
 
 def test_validate_analytics_quality_fails_on_oos_duplicate_key(tmp_path) -> None:
