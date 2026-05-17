@@ -1066,6 +1066,46 @@ no mesmo contrato de grao do TFT para comparacao pareada valida.
   preservada por nao tocar `fact_model_artifacts`); Stage 11 (gate de
   degeneracao convive com baselines pontuais via `prediction_mode='point'`).
 
+- 2026-05-17 (follow-up review), branch idem. Findings YELLOW do review
+  inicial resolvidos:
+  - **F1 (y_true multi-horizon): case (b)**. Investigacao em
+    [`src/adapters/pytorch_forecasting_tft_trainer.py:480-544`](../../src/adapters/pytorch_forecasting_tft_trainer.py#L480-L544)
+    confirmou que `actuals_matrix[i, h-1]` vem do dataloader
+    pytorch-forecasting como o target_return no passo futuro (h-1 ahead);
+    [`src/use_cases/train_tft_model_use_case.py:790`](../../src/use_cases/train_tft_model_use_case.py#L790)
+    lê `y_true = y_true_m[i][h_idx]`. Baseline ajustado em
+    [`src/use_cases/run_baselines_use_case.py`](../../src/use_cases/run_baselines_use_case.py)
+    `_emit_oos_rows` para usar `y_true = target_returns[i + h - 1]` com skip
+    quando `i + h - 1 >= len(df)` (sem ground truth futuro disponivel) ou
+    quando o valor nao for finito.
+  - **F2 (no-lookahead literal)**: teste deterministico
+    `test_historical_mean_rolling_uses_only_strictly_past_history` (serie
+    1..100, window=10, assert literal `y_pred == 25.5` em i=30 + assert
+    negativo contra off-by-one).
+  - **F3 (win_rate pairwise)**: cobertura adicionada em
+    `test_refresh_win_rate_pairwise_includes_candidate_vs_baseline_when_shared_parent_sweep_id`.
+  - **F4 (janelas parametrizaveis)**: parametro `baseline_windows: dict[str, int] | None`
+    em `RunBaselinesUseCase.execute`. Janela efetiva entra em `run_id`,
+    `feature_set_hash`, `config_signature`, `fact_config.max_encoder_length`
+    e `training_config_json` — determinismo preservado (mesma override ->
+    mesmo run_id; override diferente -> run_id distinto, sem colidir).
+  - **F5 (asserts fracos quantis)**: cobertura literal
+    `test_historical_quantiles_rolling_uses_only_strictly_past_history`
+    bate p10/p50/p90 contra `np.percentile(target_returns[i-w:i], q)`.
+  - **G3 (janela no pre-registro)**: janelas sao parametros de runtime via
+    `baseline_windows`; defaults registrados nas Notas servem para reprodu-
+    cao do MVP, override permitido para sweeps futuros sem code change.
+  - **G10 (DataFrame vazio)**: `test_baseline_empty_list_returns_noop_result`
+    confirma `baselines=[]` retorna noop sem escrever silver.
+  - Renomeacao para clareza: `test_baseline_no_lookahead_invariant` ->
+    `test_baseline_target_timestamp_ordering` (o teste original so cobria
+    ordenacao temporal; literal no-lookahead passa aos novos testes
+    deterministicos).
+  Pytest: 492 passed (vs 482 baseline + 10 testes novos -- 9 em
+  `test_run_baselines_use_case.py` (5 F2/F5/G10/F1-pairwise + 4 F4) e
+  1 em `test_refresh_analytics_store_use_case.py` (F3 win_rate)).
+  Ruff limpo nas areas tocadas.
+
 ### Tasks
 
 - [~] **12.1** Implementar runner de baselines persistindo em
