@@ -16,6 +16,7 @@ class LoadedTFTInferenceModel:
     feature_set_name: str
     feature_tokens: list[str]
     training_config: dict[str, Any]
+    training_run_id: str | None = None
     scalers: dict[str, Any] = field(default_factory=dict)
     dataset_parameters: dict[str, Any] = field(default_factory=dict)
 

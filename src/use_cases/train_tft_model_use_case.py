@@ -1084,10 +1084,20 @@ class TrainTFTModelUseCase:
             "metadata_json": to_project_relative(metadata_path) if metadata_path.exists() else None,
             "loss_curve_png": to_project_relative(loss_curve_path) if loss_curve_path.exists() else None,
         }
+        if metadata_path.exists():
+            metadata_payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+            if not isinstance(metadata_payload, dict):
+                raise ValueError(f"metadata.json root must be an object: {metadata_path}")
+            metadata_payload["training_run_id"] = run_id
+            metadata_path.write_text(
+                json.dumps(metadata_payload, indent=2),
+                encoding="utf-8",
+            )
 
         row = {
             "schema_version": ANALYTICS_SCHEMA_VERSION,
             "run_id": run_id,
+            "training_run_id": run_id,
             "asset": str(asset_id),
             "model_version": str(version),
             "checkpoint_path_final": to_project_relative(checkpoint_final),

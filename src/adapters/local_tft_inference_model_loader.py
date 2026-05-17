@@ -7,7 +7,7 @@ import re
 import warnings
 
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from src.interfaces.tft_inference_model_loader import (
     LoadedTFTInferenceModel,
@@ -23,6 +23,7 @@ class LocalTFTInferenceModelLoader(TFTInferenceModelLoader):
     _MODEL_VERSION_PATTERN = re.compile(r"^\d{8}_\d{6}_[A-Z0-9]+$")
     _GPU_DESERIALIZE_TOKENS = ("No HIP GPUs are available", "CUDA", "cuda")
     _logger = logging.getLogger(__name__)
+    _warned_legacy_metadata_paths: ClassVar[set[str]] = set()
 
     @staticmethod
     def _load_checkpoint_on_cpu_fallback(
@@ -184,6 +185,21 @@ class LocalTFTInferenceModelLoader(TFTInferenceModelLoader):
                 "Model directory name must match metadata.json `version` for traceability "
                 f"(dir={model_path.name}, metadata={version})."
             )
+        raw_training_run_id = metadata.get("training_run_id")
+        training_run_id = (
+            str(raw_training_run_id).strip()
+            if raw_training_run_id is not None and str(raw_training_run_id).strip()
+            else None
+        )
+        if training_run_id is None:
+            metadata_key = str((model_path / "metadata.json").resolve())
+            if metadata_key not in self._warned_legacy_metadata_paths:
+                self._warned_legacy_metadata_paths.add(metadata_key)
+                self._logger.warning(
+                    "Model metadata is missing training_run_id; treating artifact as pre-Stage 10 legacy "
+                    "and persisting inference silver run_id as None.",
+                    extra={"metadata_path": metadata_key},
+                )
 
         training_config = config.get("training_config")
         if not isinstance(training_config, dict):
@@ -210,6 +226,7 @@ class LocalTFTInferenceModelLoader(TFTInferenceModelLoader):
             feature_set_name=feature_set_name,
             feature_tokens=feature_tokens,
             training_config=training_config,
+            training_run_id=training_run_id,
             scalers=scalers,
             dataset_parameters=dataset_parameters,
         )
