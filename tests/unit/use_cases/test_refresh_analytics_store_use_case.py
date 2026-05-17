@@ -3,6 +3,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
+from src.domain.services.quantile_contract_analyzer import QuantileDegeneracyThresholds
 from src.domain.services.scope_spec import ScopeSpec
 from src.use_cases.refresh_analytics_store_use_case import RefreshAnalyticsStoreUseCase
 
@@ -176,6 +177,7 @@ def test_quantile_degeneracy_report_materializes_group_metrics_and_gate_status()
     out = RefreshAnalyticsStoreUseCase._build_gold_quantile_degeneracy_report(
         pd.DataFrame(rows),
         fact_config,
+        thresholds=QuantileDegeneracyThresholds(),
     )
 
     assert list(out.columns) == [
@@ -199,6 +201,46 @@ def test_quantile_degeneracy_report_materializes_group_metrics_and_gate_status()
     assert int(row["p10_eq_p90_count"]) == 1460
     assert float(row["p10_eq_p90_rate"]) == pytest.approx(0.9125)
     assert bool(row["gate_passed"]) is False
+
+
+def test_quantile_degeneracy_report_honors_custom_thresholds() -> None:
+    rows = []
+    for idx in range(200):
+        degenerate = idx < 60
+        rows.append(
+            {
+                "run_id": "r1",
+                "split": "test",
+                "horizon": 1,
+                "quantile_p10": 0.5 if degenerate else 0.4,
+                "quantile_p50": 0.5,
+                "quantile_p90": 0.5 if degenerate else 0.6,
+            }
+        )
+    fact_config = pd.DataFrame(
+        [{"run_id": "r1", "prediction_mode": "quantile", "parent_sweep_id": "sw1"}]
+    )
+
+    permissive = RefreshAnalyticsStoreUseCase._build_gold_quantile_degeneracy_report(
+        pd.DataFrame(rows),
+        fact_config,
+        thresholds=QuantileDegeneracyThresholds(
+            min_rows_for_gate=100,
+            max_p10_eq_p90_rate=0.50,
+        ),
+    )
+    strict = RefreshAnalyticsStoreUseCase._build_gold_quantile_degeneracy_report(
+        pd.DataFrame(rows),
+        fact_config,
+        thresholds=QuantileDegeneracyThresholds(
+            min_rows_for_gate=100,
+            max_p10_eq_p90_rate=0.10,
+        ),
+    )
+
+    assert float(permissive.iloc[0]["p10_eq_p90_rate"]) == pytest.approx(0.30)
+    assert bool(permissive.iloc[0]["gate_passed"]) is True
+    assert bool(strict.iloc[0]["gate_passed"]) is False
 
 
 def test_prob_up_emits_dual_variants() -> None:

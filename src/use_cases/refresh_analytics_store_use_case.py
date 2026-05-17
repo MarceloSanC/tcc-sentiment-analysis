@@ -76,6 +76,7 @@ class RefreshAnalyticsStoreUseCase:
         analytics_gold_dir: str | Path,
         scope_spec: ScopeSpec | None = None,
         primary_quantile_contract: Literal["raw", "post_guardrail"] = "post_guardrail",
+        degeneracy_thresholds: QuantileDegeneracyThresholds | None = None,
     ) -> None:
         if primary_quantile_contract not in {"raw", "post_guardrail"}:
             raise ValueError(
@@ -86,6 +87,9 @@ class RefreshAnalyticsStoreUseCase:
         self.analytics_gold_dir.mkdir(parents=True, exist_ok=True)
         self.scope_spec = validate_scope_spec(scope_spec) if scope_spec is not None else None
         self.primary_quantile_contract = primary_quantile_contract
+        self.degeneracy_thresholds = (
+            degeneracy_thresholds if degeneracy_thresholds is not None else QuantileDegeneracyThresholds()
+        )
 
     @staticmethod
     def _scope_loaded_table(
@@ -876,6 +880,8 @@ class RefreshAnalyticsStoreUseCase:
     def _build_gold_quantile_degeneracy_report(
         fact_oos_predictions: pd.DataFrame,
         fact_config: pd.DataFrame,
+        *,
+        thresholds: QuantileDegeneracyThresholds,
     ) -> pd.DataFrame:
         columns = [
             "parent_sweep_id",
@@ -896,7 +902,6 @@ class RefreshAnalyticsStoreUseCase:
         if not metrics:
             return pd.DataFrame(columns=columns)
 
-        thresholds = QuantileDegeneracyThresholds()
         rows = []
         for item in metrics:
             mode = (item.prediction_mode or "").strip().lower()
@@ -2452,7 +2457,11 @@ class RefreshAnalyticsStoreUseCase:
             self.analytics_gold_dir / "gold_quantile_guardrail_audit.parquet",
         )
         outputs["gold_quantile_degeneracy_report"] = self._safe_write(
-            self._build_gold_quantile_degeneracy_report(fact_oos_predictions, fact_config),
+            self._build_gold_quantile_degeneracy_report(
+                fact_oos_predictions,
+                fact_config,
+                thresholds=self.degeneracy_thresholds,
+            ),
             self.analytics_gold_dir / "gold_quantile_degeneracy_report.parquet",
         )
         outputs["gold_prediction_metrics_by_config"] = self._safe_write(

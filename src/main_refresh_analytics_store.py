@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import logging
 
+from src.domain.services.quantile_contract_analyzer import QuantileDegeneracyThresholds
 from src.domain.services.scope_spec import ScopeSpec
 from src.use_cases.generate_prediction_analysis_plots_use_case import (
     GeneratePredictionAnalysisPlotsUseCase,
@@ -187,6 +188,10 @@ def main() -> None:
     args = parse_args()
     paths = load_data_paths()
     primary_quantile_contract = getattr(args, "primary_quantile_contract", "post_guardrail")
+    degeneracy_thresholds = QuantileDegeneracyThresholds(
+        min_rows_for_gate=int(getattr(args, "degeneracy_min_rows_for_gate", 1000)),
+        max_p10_eq_p90_rate=float(getattr(args, "degeneracy_max_p10_eq_p90_rate", 0.05)),
+    )
 
     scope_spec = None
     if args.scope_mode or args.scope_sweep_prefixes or args.scope_splits or args.scope_horizons:
@@ -202,6 +207,7 @@ def main() -> None:
         analytics_gold_dir=paths["analytics_gold"],
         scope_spec=scope_spec,
         primary_quantile_contract=primary_quantile_contract,
+        degeneracy_thresholds=degeneracy_thresholds,
     )
     logger.info(
         "Analytics gold refresh scope resolved",
