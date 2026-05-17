@@ -1331,6 +1331,15 @@ def test_refresh_analytics_store_builds_gold_tables(tmp_path) -> None:
     qaudit = pd.read_parquet(gold / "gold_quantile_guardrail_audit.parquet")
     assert not qaudit.empty
     assert {"mean_pinball_before", "mean_pinball_after", "crossing_before_count", "crossing_after_count"}.issubset(set(qaudit.columns))
+    # Stage 9: r1/r2 sao prediction_mode='quantile' com p10 != p90 em raw,
+    # entao audit DEVE expor numericos em before/after/delta -- garantia de
+    # que fact_config foi propagado ao audit builder. Antes de RED #1
+    # essas colunas vinham todas NaN.
+    eligible_audit = qaudit[qaudit["run_id"].isin({"r1", "r2"})]
+    assert not eligible_audit.empty
+    assert eligible_audit["mean_pinball_before"].notna().any()
+    assert eligible_audit["mean_pinball_after"].notna().any()
+    assert eligible_audit["delta_mean_pinball_after_minus_before"].notna().any()
 
     quality = pd.read_parquet(gold / "gold_oos_quality_report.parquet")
     assert not quality.empty

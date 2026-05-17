@@ -748,6 +748,7 @@ class RefreshAnalyticsStoreUseCase:
     def _build_gold_quantile_guardrail_audit(
         dim_run: pd.DataFrame,
         fact_oos_predictions: pd.DataFrame,
+        fact_config: pd.DataFrame | None = None,
     ) -> pd.DataFrame:
         required = {
             'run_id', 'split', 'horizon',
@@ -757,14 +758,21 @@ class RefreshAnalyticsStoreUseCase:
         if fact_oos_predictions.empty or not required.issubset(set(fact_oos_predictions.columns)):
             return pd.DataFrame()
 
+        # Stage 9: audit recebe o mesmo filtro Cat C (mode-gate + non-degeneracy
+        # raw) do builder primario. Sem propagacao, runs point/degenerados
+        # produziriam NaN em mean_pinball_before/after/etc.; com propagacao,
+        # apenas runs elegiveis mostram delta numerico — semanticamente
+        # consistente com o filtro upstream.
         base_metrics = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon_single_contract(
             dim_run,
             fact_oos_predictions,
+            fact_config,
             quantile_columns=('quantile_p10', 'quantile_p50', 'quantile_p90'),
         )
         post_metrics = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon_single_contract(
             dim_run,
             fact_oos_predictions,
+            fact_config,
             quantile_columns=(
                 'quantile_p10_post_guardrail',
                 'quantile_p50_post_guardrail',
@@ -2371,7 +2379,7 @@ class RefreshAnalyticsStoreUseCase:
             self.analytics_gold_dir / "gold_prediction_metrics_by_run_split_horizon.parquet",
         )
         outputs["gold_quantile_guardrail_audit"] = self._safe_write(
-            self._build_gold_quantile_guardrail_audit(dim_run, fact_oos_predictions),
+            self._build_gold_quantile_guardrail_audit(dim_run, fact_oos_predictions, fact_config),
             self.analytics_gold_dir / "gold_quantile_guardrail_audit.parquet",
         )
         outputs["gold_prediction_metrics_by_config"] = self._safe_write(
