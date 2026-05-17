@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import logging
 
+from src.domain.services.quantile_contract_analyzer import QuantileDegeneracyThresholds
 from src.domain.services.scope_spec import ScopeSpec
 from src.use_cases.generate_prediction_analysis_plots_use_case import (
     GeneratePredictionAnalysisPlotsUseCase,
@@ -158,6 +159,18 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Require post-guardrail quantile columns for Block A acceptance.",
     )
+    parser.add_argument(
+        "--degeneracy-min-rows-for-gate",
+        type=int,
+        default=1000,
+        help="Minimum group rows before the quantile degeneracy gate becomes blocking (default: 1000).",
+    )
+    parser.add_argument(
+        "--degeneracy-max-p10-eq-p90-rate",
+        type=float,
+        default=0.05,
+        help="Maximum allowed raw p10==p90 rate for quantile groups (default: 0.05 = 5%).",
+    )
     args = parser.parse_args()
     scope_flags_used = bool(
         args.scope_mode
@@ -175,6 +188,10 @@ def main() -> None:
     args = parse_args()
     paths = load_data_paths()
     primary_quantile_contract = getattr(args, "primary_quantile_contract", "post_guardrail")
+    degeneracy_thresholds = QuantileDegeneracyThresholds(
+        min_rows_for_gate=int(getattr(args, "degeneracy_min_rows_for_gate", 1000)),
+        max_p10_eq_p90_rate=float(getattr(args, "degeneracy_max_p10_eq_p90_rate", 0.05)),
+    )
 
     scope_spec = None
     if args.scope_mode or args.scope_sweep_prefixes or args.scope_splits or args.scope_horizons:
@@ -190,6 +207,7 @@ def main() -> None:
         analytics_gold_dir=paths["analytics_gold"],
         scope_spec=scope_spec,
         primary_quantile_contract=primary_quantile_contract,
+        degeneracy_thresholds=degeneracy_thresholds,
     )
     logger.info(
         "Analytics gold refresh scope resolved",
@@ -249,6 +267,8 @@ def main() -> None:
         block_a_max_negative_interval_width_count=args.block_a_max_negative_interval_width_count,
         block_a_max_crossing_post_guardrail_rate=args.block_a_max_crossing_post_guardrail_rate,
         block_a_require_post_guardrail=args.block_a_require_post_guardrail,
+        degeneracy_min_rows_for_gate=getattr(args, "degeneracy_min_rows_for_gate", 1000),
+        degeneracy_max_p10_eq_p90_rate=getattr(args, "degeneracy_max_p10_eq_p90_rate", 0.05),
     ).execute()
     failed_checks = [c for c in quality_result.checks if not bool(c["passed"])]
     logger.info(
@@ -260,6 +280,8 @@ def main() -> None:
             "block_a_scope_sweep_prefixes": args.block_a_scope_sweep_prefixes,
             "block_a_splits": args.block_a_splits,
             "block_a_horizons": args.block_a_horizons,
+            "degeneracy_min_rows_for_gate": getattr(args, "degeneracy_min_rows_for_gate", 1000),
+            "degeneracy_max_p10_eq_p90_rate": getattr(args, "degeneracy_max_p10_eq_p90_rate", 0.05),
         },
     )
 

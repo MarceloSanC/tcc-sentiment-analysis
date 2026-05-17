@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import math
 import logging
+import math
 
 from dataclasses import dataclass
 from itertools import combinations
@@ -11,9 +11,16 @@ from typing import ClassVar, Literal
 import numpy as np
 import pandas as pd
 
-from src.domain.services.scope_spec import ScopeSpec, filter_dataframe_by_scope, validate_scope_spec
+from src.domain.services.quantile_contract_analyzer import (
+    QuantileContractAnalyzer,
+    QuantileDegeneracyThresholds,
+)
+from src.domain.services.scope_spec import (
+    ScopeSpec,
+    filter_dataframe_by_scope,
+    validate_scope_spec,
+)
 from src.utils.path_policy import to_project_relative
-
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +76,7 @@ class RefreshAnalyticsStoreUseCase:
         analytics_gold_dir: str | Path,
         scope_spec: ScopeSpec | None = None,
         primary_quantile_contract: Literal["raw", "post_guardrail"] = "post_guardrail",
+        degeneracy_thresholds: QuantileDegeneracyThresholds | None = None,
     ) -> None:
         if primary_quantile_contract not in {"raw", "post_guardrail"}:
             raise ValueError(
@@ -79,6 +87,9 @@ class RefreshAnalyticsStoreUseCase:
         self.analytics_gold_dir.mkdir(parents=True, exist_ok=True)
         self.scope_spec = validate_scope_spec(scope_spec) if scope_spec is not None else None
         self.primary_quantile_contract = primary_quantile_contract
+        self.degeneracy_thresholds = (
+            degeneracy_thresholds if degeneracy_thresholds is not None else QuantileDegeneracyThresholds()
+        )
 
     @staticmethod
     def _scope_loaded_table(
@@ -864,6 +875,59 @@ class RefreshAnalyticsStoreUseCase:
 
         out = out.merge(crossing, on=['run_id', 'split', 'horizon'], how='left')
         return out
+
+    @staticmethod
+    def _build_gold_quantile_degeneracy_report(
+        fact_oos_predictions: pd.DataFrame,
+        fact_config: pd.DataFrame,
+        *,
+        thresholds: QuantileDegeneracyThresholds,
+    ) -> pd.DataFrame:
+        columns = [
+            "parent_sweep_id",
+            "split",
+            "horizon",
+            "prediction_mode",
+            "n_rows",
+            "p10_eq_p90_count",
+            "p10_eq_p90_rate",
+            "p10_eq_p50_eq_p90_count",
+            "p10_eq_p50_eq_p90_rate",
+            "gate_passed",
+        ]
+        metrics = QuantileContractAnalyzer.analyze_degeneracy(
+            fact_oos_predictions,
+            fact_config,
+        )
+        if not metrics:
+            return pd.DataFrame(columns=columns)
+
+        rows = []
+        for item in metrics:
+            mode = (item.prediction_mode or "").strip().lower()
+            gate_failed = (
+                mode == "quantile"
+                and item.n_rows >= thresholds.min_rows_for_gate
+                and item.p10_eq_p90_rate >= thresholds.max_p10_eq_p90_rate
+            )
+            rows.append(
+                {
+                    "parent_sweep_id": item.parent_sweep_id,
+                    "split": item.split,
+                    "horizon": item.horizon,
+                    "prediction_mode": item.prediction_mode,
+                    "n_rows": item.n_rows,
+                    "p10_eq_p90_count": item.p10_eq_p90_count,
+                    "p10_eq_p90_rate": item.p10_eq_p90_rate,
+                    "p10_eq_p50_eq_p90_count": item.p10_eq_p50_eq_p90_count,
+                    "p10_eq_p50_eq_p90_rate": item.p10_eq_p50_eq_p90_rate,
+                    "gate_passed": not gate_failed,
+                }
+            )
+        return pd.DataFrame(rows, columns=columns).sort_values(
+            ["parent_sweep_id", "split", "horizon", "prediction_mode"],
+            na_position="last",
+        ).reset_index(drop=True)
 
     @staticmethod
     def _build_gold_prediction_metrics_by_config(metrics_run_split_h: pd.DataFrame) -> pd.DataFrame:
@@ -2391,6 +2455,14 @@ class RefreshAnalyticsStoreUseCase:
         outputs["gold_quantile_guardrail_audit"] = self._safe_write(
             self._build_gold_quantile_guardrail_audit(dim_run, fact_oos_predictions, fact_config),
             self.analytics_gold_dir / "gold_quantile_guardrail_audit.parquet",
+        )
+        outputs["gold_quantile_degeneracy_report"] = self._safe_write(
+            self._build_gold_quantile_degeneracy_report(
+                fact_oos_predictions,
+                fact_config,
+                thresholds=self.degeneracy_thresholds,
+            ),
+            self.analytics_gold_dir / "gold_quantile_degeneracy_report.parquet",
         )
         outputs["gold_prediction_metrics_by_config"] = self._safe_write(
             self._build_gold_prediction_metrics_by_config(gold_prediction_metrics_by_run_split_horizon),

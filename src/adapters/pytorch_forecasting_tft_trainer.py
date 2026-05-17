@@ -104,6 +104,82 @@ class PytorchForecastingTFTTrainer(ModelTrainer):
         filtered["prediction_mode"] = str(filtered.get("prediction_mode", "quantile")).strip().lower()
         return TFTTrainingConfig(**filtered)
 
+    @staticmethod
+    def _manual_forward_quantiles_and_actuals(
+        *,
+        best_model: Any,
+        dataloader: Any,
+        torch_module: Any,
+    ) -> tuple[np.ndarray | None, np.ndarray | None, np.ndarray | None, np.ndarray | None]:
+        quantiles = getattr(getattr(best_model, "loss", None), "quantiles", None)
+        if not isinstance(quantiles, (list, tuple)):
+            return None, None, None, None
+        q_arr = np.asarray([float(q) for q in quantiles], dtype=float)
+
+        def _idx(target: float) -> int:
+            return int(np.argmin(np.abs(q_arr - target)))
+
+        q10_batches: list[np.ndarray] = []
+        q50_batches: list[np.ndarray] = []
+        q90_batches: list[np.ndarray] = []
+        actual_batches: list[np.ndarray] = []
+
+        for x, y in iter(dataloader):
+            with torch_module.no_grad():
+                out = best_model(x)
+            if isinstance(out, dict):
+                pred = out.get("prediction", out.get("output", out))
+            elif hasattr(out, "prediction"):
+                pred = out.prediction
+            elif hasattr(out, "output"):
+                pred = out.output
+            else:
+                pred = out
+
+            if hasattr(pred, "detach"):
+                pred_np = pred.detach().cpu().numpy()
+            else:
+                pred_np = np.asarray(pred)
+
+            qcube: np.ndarray | None
+            if pred_np.ndim == 3:
+                if pred_np.shape[2] == len(q_arr):
+                    qcube = pred_np
+                elif pred_np.shape[1] == len(q_arr):
+                    qcube = np.swapaxes(pred_np, 1, 2)
+                else:
+                    qcube = None
+            elif pred_np.ndim == 2 and pred_np.shape[1] == len(q_arr):
+                qcube = pred_np[:, np.newaxis, :]
+            else:
+                qcube = None
+
+            if qcube is None:
+                return None, None, None, None
+
+            q10_batches.append(qcube[:, :, _idx(0.1)])
+            q50_batches.append(qcube[:, :, _idx(0.5)])
+            q90_batches.append(qcube[:, :, _idx(0.9)])
+
+            act = y[0]
+            if hasattr(act, "detach"):
+                act_np = act.detach().cpu().numpy()
+            else:
+                act_np = np.asarray(act)
+            if act_np.ndim == 1:
+                act_np = act_np.reshape(-1, 1)
+            actual_batches.append(act_np)
+
+        if len(q10_batches) == 0:
+            return None, None, None, None
+
+        return (
+            np.concatenate(q10_batches, axis=0),
+            np.concatenate(q50_batches, axis=0),
+            np.concatenate(q90_batches, axis=0),
+            np.concatenate(actual_batches, axis=0),
+        )
+
     def train(
         self,
         train_df: pd.DataFrame,
@@ -361,73 +437,10 @@ class PytorchForecastingTFTTrainer(ModelTrainer):
         def _manual_forward_quantiles_and_actuals(
             dataloader, split_name: str
         ) -> tuple[np.ndarray | None, np.ndarray | None, np.ndarray | None, np.ndarray | None]:
-            quantiles = getattr(getattr(best_model, "loss", None), "quantiles", None)
-            if not isinstance(quantiles, (list, tuple)):
-                return None, None, None, None
-            q_arr = np.asarray([float(q) for q in quantiles], dtype=float)
-
-            def _idx(target: float) -> int:
-                return int(np.argmin(np.abs(q_arr - target)))
-
-            q10_batches: list[np.ndarray] = []
-            q50_batches: list[np.ndarray] = []
-            q90_batches: list[np.ndarray] = []
-            actual_batches: list[np.ndarray] = []
-
-            for x, y in iter(dataloader):
-                with torch.no_grad():
-                    out = best_model(x)
-                if isinstance(out, dict):
-                    pred = out.get("prediction", out.get("output", out))
-                elif hasattr(out, "prediction"):
-                    pred = out.prediction
-                elif hasattr(out, "output"):
-                    pred = out.output
-                else:
-                    pred = out
-
-                if hasattr(pred, "detach"):
-                    pred_np = pred.detach().cpu().numpy()
-                else:
-                    pred_np = np.asarray(pred)
-
-                qcube: np.ndarray | None
-                if pred_np.ndim == 3:
-                    if pred_np.shape[2] == len(q_arr):
-                        qcube = pred_np
-                    elif pred_np.shape[1] == len(q_arr):
-                        qcube = np.swapaxes(pred_np, 1, 2)
-                    else:
-                        qcube = None
-                elif pred_np.ndim == 2 and pred_np.shape[1] == len(q_arr):
-                    qcube = pred_np[:, np.newaxis, :]
-                else:
-                    qcube = None
-
-                if qcube is None:
-                    return None, None, None, None
-
-                q10_batches.append(qcube[:, :, _idx(0.1)])
-                q50_batches.append(qcube[:, :, _idx(0.5)])
-                q90_batches.append(qcube[:, :, _idx(0.9)])
-
-                act = y[0]
-                if hasattr(act, "detach"):
-                    act_np = act.detach().cpu().numpy()
-                else:
-                    act_np = np.asarray(act)
-                if act_np.ndim == 1:
-                    act_np = act_np.reshape(-1, 1)
-                actual_batches.append(act_np)
-
-            if len(q10_batches) == 0:
-                return None, None, None, None
-
-            return (
-                np.concatenate(q10_batches, axis=0),
-                np.concatenate(q50_batches, axis=0),
-                np.concatenate(q90_batches, axis=0),
-                np.concatenate(actual_batches, axis=0),
+            return PytorchForecastingTFTTrainer._manual_forward_quantiles_and_actuals(
+                best_model=best_model,
+                dataloader=dataloader,
+                torch_module=torch,
             )
 
         def _extract_quantiles(

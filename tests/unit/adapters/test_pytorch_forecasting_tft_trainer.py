@@ -41,6 +41,43 @@ class _FakeTensor:
         return float(self.arr.reshape(-1)[0])
 
 
+class _FakeNoGrad:
+    def __enter__(self):
+        return None
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+
+class _FakeTorchModule:
+    @staticmethod
+    def no_grad():
+        return _FakeNoGrad()
+
+
+class _FakeQuantileForwardModel:
+    def __init__(self, prediction):
+        self.prediction = prediction
+        self.loss = types.SimpleNamespace(quantiles=[0.1, 0.5, 0.9])
+
+    def __call__(self, x):
+        return {"prediction": _FakeTensor(self.prediction)}
+
+
+def _manual_forward_case(prediction, *, actual_horizon: int = 3):
+    actuals = np.array(
+        [
+            [10.0 + h for h in range(actual_horizon)],
+            [20.0 + h for h in range(actual_horizon)],
+        ]
+    )
+    return PytorchForecastingTFTTrainer._manual_forward_quantiles_and_actuals(
+        best_model=_FakeQuantileForwardModel(prediction),
+        dataloader=[(_FakeTensor(np.zeros((2, 3))), (_FakeTensor(actuals), None))],
+        torch_module=_FakeTorchModule,
+    )
+
+
 def _install_fake_training_modules(
     monkeypatch,
     tmp_path: Path,
@@ -221,6 +258,85 @@ def _install_fake_training_modules(
     monkeypatch.setitem(sys.modules, "lightning.pytorch", fake_lightning_pytorch)
     monkeypatch.setitem(sys.modules, "lightning.pytorch.callbacks", fake_lightning_pytorch_callbacks)
     return {"FakeTFT": _FakeTFT}
+
+
+def test_manual_forward_correct_indexing_layout_batch_horizon_quantile_H_gt_1() -> None:
+    prediction = np.array(
+        [
+            [[0.1, 0.5, 0.9], [0.2, 0.6, 1.0], [0.3, 0.7, 1.1]],
+            [[1.1, 1.5, 1.9], [1.2, 1.6, 2.0], [1.3, 1.7, 2.1]],
+        ]
+    )
+
+    q10, q50, q90, actuals = _manual_forward_case(prediction)
+
+    assert q10 is not None
+    assert q50 is not None
+    assert q90 is not None
+    assert actuals is not None
+    assert q10.shape == (2, 3)
+    assert q50.shape == (2, 3)
+    assert q90.shape == (2, 3)
+    assert actuals.shape == (2, 3)
+    assert q10[0, 0] == pytest.approx(0.1)
+    assert q50[0, 0] == pytest.approx(0.5)
+    assert q90[0, 0] == pytest.approx(0.9)
+    assert q10[0, 1] == pytest.approx(0.2)
+    assert q50[0, 1] == pytest.approx(0.6)
+    assert q90[0, 1] == pytest.approx(1.0)
+
+
+def test_manual_forward_correct_indexing_layout_batch_quantile_horizon_H_gt_1() -> None:
+    prediction = np.array(
+        [
+            [[0.1, 0.2, 0.3, 0.4], [0.5, 0.6, 0.7, 0.8], [0.9, 1.0, 1.1, 1.2]],
+            [[1.1, 1.2, 1.3, 1.4], [1.5, 1.6, 1.7, 1.8], [1.9, 2.0, 2.1, 2.2]],
+        ]
+    )
+
+    q10, q50, q90, actuals = _manual_forward_case(prediction, actual_horizon=4)
+
+    assert q10 is not None
+    assert q50 is not None
+    assert q90 is not None
+    assert actuals is not None
+    assert q10.shape == (2, 4)
+    assert q50.shape == (2, 4)
+    assert q90.shape == (2, 4)
+    assert actuals.shape == (2, 4)
+    assert q10[0, 0] == pytest.approx(0.1)
+    assert q50[0, 0] == pytest.approx(0.5)
+    assert q90[0, 0] == pytest.approx(0.9)
+    assert q10[0, 1] == pytest.approx(0.2)
+    assert q50[0, 1] == pytest.approx(0.6)
+    assert q90[0, 1] == pytest.approx(1.0)
+
+
+def test_manual_forward_documents_ambiguous_shape_when_H_eq_Q() -> None:
+    prediction = np.array(
+        [
+            [[0.1, 0.2, 0.3], [0.5, 0.6, 0.7], [0.9, 1.0, 1.1]],
+            [[1.1, 1.2, 1.3], [1.5, 1.6, 1.7], [1.9, 2.0, 2.1]],
+        ]
+    )
+
+    q10, q50, q90, _ = _manual_forward_case(prediction)
+
+    assert q10 is not None
+    assert q50 is not None
+    assert q90 is not None
+    assert q10[0].tolist() == pytest.approx([0.1, 0.5, 0.9])
+    assert q50[0].tolist() == pytest.approx([0.2, 0.6, 1.0])
+    assert q90[0].tolist() == pytest.approx([0.3, 0.7, 1.1])
+
+
+def test_manual_forward_returns_none_for_unrecognized_shape() -> None:
+    q10, q50, q90, actuals = _manual_forward_case(np.zeros((2, 4, 5)))
+
+    assert q10 is None
+    assert q50 is None
+    assert q90 is None
+    assert actuals is None
 
 
 def test_trainer_flow_split_metrics_and_feature_importance(monkeypatch, tmp_path: Path) -> None:

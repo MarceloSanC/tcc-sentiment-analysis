@@ -3,6 +3,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
+from src.domain.services.quantile_contract_analyzer import QuantileDegeneracyThresholds
 from src.domain.services.scope_spec import ScopeSpec
 from src.use_cases.refresh_analytics_store_use_case import RefreshAnalyticsStoreUseCase
 
@@ -153,6 +154,93 @@ def test_pred_interval_negative_uses_raw_quantiles_not_post_guardrail() -> None:
     # Se alguem trocar por *_post_guardrail, este valor cairia para 0.
     run_row = out[out["scope"] == "run_split_horizon"].iloc[0]
     assert int(run_row["n_negative_interval_width"]) == 1
+
+
+def test_quantile_degeneracy_report_materializes_group_metrics_and_gate_status() -> None:
+    rows = []
+    for idx in range(1600):
+        degenerate = idx < 1460
+        rows.append(
+            {
+                "run_id": "r1",
+                "split": "test",
+                "horizon": 1,
+                "quantile_p10": 0.5 if degenerate else 0.4,
+                "quantile_p50": 0.5,
+                "quantile_p90": 0.5 if degenerate else 0.6,
+            }
+        )
+    fact_config = pd.DataFrame(
+        [{"run_id": "r1", "prediction_mode": "quantile", "parent_sweep_id": "sw1"}]
+    )
+
+    out = RefreshAnalyticsStoreUseCase._build_gold_quantile_degeneracy_report(
+        pd.DataFrame(rows),
+        fact_config,
+        thresholds=QuantileDegeneracyThresholds(),
+    )
+
+    assert list(out.columns) == [
+        "parent_sweep_id",
+        "split",
+        "horizon",
+        "prediction_mode",
+        "n_rows",
+        "p10_eq_p90_count",
+        "p10_eq_p90_rate",
+        "p10_eq_p50_eq_p90_count",
+        "p10_eq_p50_eq_p90_rate",
+        "gate_passed",
+    ]
+    row = out.iloc[0]
+    assert row["parent_sweep_id"] == "sw1"
+    assert row["split"] == "test"
+    assert int(row["horizon"]) == 1
+    assert row["prediction_mode"] == "quantile"
+    assert int(row["n_rows"]) == 1600
+    assert int(row["p10_eq_p90_count"]) == 1460
+    assert float(row["p10_eq_p90_rate"]) == pytest.approx(0.9125)
+    assert bool(row["gate_passed"]) is False
+
+
+def test_quantile_degeneracy_report_honors_custom_thresholds() -> None:
+    rows = []
+    for idx in range(200):
+        degenerate = idx < 60
+        rows.append(
+            {
+                "run_id": "r1",
+                "split": "test",
+                "horizon": 1,
+                "quantile_p10": 0.5 if degenerate else 0.4,
+                "quantile_p50": 0.5,
+                "quantile_p90": 0.5 if degenerate else 0.6,
+            }
+        )
+    fact_config = pd.DataFrame(
+        [{"run_id": "r1", "prediction_mode": "quantile", "parent_sweep_id": "sw1"}]
+    )
+
+    permissive = RefreshAnalyticsStoreUseCase._build_gold_quantile_degeneracy_report(
+        pd.DataFrame(rows),
+        fact_config,
+        thresholds=QuantileDegeneracyThresholds(
+            min_rows_for_gate=100,
+            max_p10_eq_p90_rate=0.50,
+        ),
+    )
+    strict = RefreshAnalyticsStoreUseCase._build_gold_quantile_degeneracy_report(
+        pd.DataFrame(rows),
+        fact_config,
+        thresholds=QuantileDegeneracyThresholds(
+            min_rows_for_gate=100,
+            max_p10_eq_p90_rate=0.10,
+        ),
+    )
+
+    assert float(permissive.iloc[0]["p10_eq_p90_rate"]) == pytest.approx(0.30)
+    assert bool(permissive.iloc[0]["gate_passed"]) is True
+    assert bool(strict.iloc[0]["gate_passed"]) is False
 
 
 def test_prob_up_emits_dual_variants() -> None:
@@ -389,6 +477,7 @@ def test_post_guardrail_missing_warning_emits_once_per_refresh_not_per_process(
     tmp_path, caplog
 ) -> None:
     import logging
+
     from src.use_cases import refresh_analytics_store_use_case as mod
 
     silver = tmp_path / "silver"
@@ -1246,6 +1335,7 @@ def test_refresh_analytics_store_builds_gold_tables(tmp_path) -> None:
     assert "gold_feature_set_impact" in result.outputs
     assert "gold_prediction_metrics_by_run_split_horizon" in result.outputs
     assert "gold_quantile_guardrail_audit" in result.outputs
+    assert "gold_quantile_degeneracy_report" in result.outputs
     assert "gold_prediction_metrics_by_config" in result.outputs
     assert "gold_prediction_metrics_by_horizon" in result.outputs
     assert "gold_prediction_calibration" in result.outputs
@@ -1298,6 +1388,11 @@ def test_refresh_analytics_store_builds_gold_tables(tmp_path) -> None:
     assert abs(float(h1["coverage_error_raw"]) - 0.2) < 1e-12
     assert abs(float(h1["prob_down"]) - 0.0) < 1e-12
     assert float(h1["confidence_calibrated_post_guardrail"]) > 0.0
+
+    degeneracy = pd.read_parquet(gold / "gold_quantile_degeneracy_report.parquet")
+    assert {"parent_sweep_id", "split", "horizon", "prediction_mode", "gate_passed"}.issubset(
+        set(degeneracy.columns)
+    )
 
     by_cfg = pd.read_parquet(gold / "gold_prediction_metrics_by_config.parquet")
     assert not by_cfg.empty

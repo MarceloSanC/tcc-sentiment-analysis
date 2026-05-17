@@ -11,6 +11,7 @@ import pandas as pd
 from src.domain.services.quantile_contract_analyzer import (
     QuantileBlockAThresholds,
     QuantileContractAnalyzer,
+    QuantileDegeneracyThresholds,
 )
 from src.domain.services.scope_spec import ScopeSpec, validate_scope_spec
 
@@ -38,6 +39,8 @@ class ValidateAnalyticsQualityUseCase:
         block_a_max_negative_interval_width_count: int = 0,
         block_a_max_crossing_post_guardrail_rate: float = 0.0,
         block_a_require_post_guardrail: bool = False,
+        degeneracy_min_rows_for_gate: int = 1000,
+        degeneracy_max_p10_eq_p90_rate: float = 0.05,
     ) -> None:
         self.analytics_silver_dir = Path(analytics_silver_dir)
         self.analytics_gold_dir = Path(analytics_gold_dir) if analytics_gold_dir is not None else None
@@ -56,6 +59,10 @@ class ValidateAnalyticsQualityUseCase:
             max_negative_interval_width_count=int(block_a_max_negative_interval_width_count),
             max_crossing_post_guardrail_rate=float(block_a_max_crossing_post_guardrail_rate),
             require_post_guardrail=bool(block_a_require_post_guardrail),
+        )
+        self.degeneracy_thresholds = QuantileDegeneracyThresholds(
+            min_rows_for_gate=int(degeneracy_min_rows_for_gate),
+            max_p10_eq_p90_rate=float(degeneracy_max_p10_eq_p90_rate),
         )
 
     @staticmethod
@@ -608,6 +615,20 @@ class ValidateAnalyticsQualityUseCase:
             "oos_quantile_block_a_acceptance",
             block_a_eval.passed,
             block_a_eval.detail,
+        )
+        degeneracy_metrics = QuantileContractAnalyzer.analyze_degeneracy(
+            fact_oos_predictions,
+            fact_config,
+        )
+        degeneracy_eval = QuantileContractAnalyzer.evaluate_degeneracy(
+            degeneracy_metrics,
+            thresholds=self.degeneracy_thresholds,
+        )
+        self._record(
+            checks,
+            "block_quantile_degeneracy_gate",
+            degeneracy_eval.passed,
+            degeneracy_eval.detail,
         )
         self._record(
             checks,
