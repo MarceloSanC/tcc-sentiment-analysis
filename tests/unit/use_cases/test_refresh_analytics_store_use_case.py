@@ -2471,3 +2471,17 @@ def test_refresh_mcs_includes_candidate_and_baseline_configs_when_shared_parent_
     # Ambos configs (tft + baseline) devem aparecer.
     cfg_labels = set(mcs.get("config_label", pd.Series(dtype=str)).astype(str))
     assert any("BT|cfg_tft" in label for label in cfg_labels) or any("baseline" in label for label in cfg_labels)
+
+
+def test_refresh_win_rate_pairwise_includes_candidate_vs_baseline_when_shared_parent_sweep_id() -> None:
+    dim_run, fact_oos, _ = _stage12_candidate_baseline_oos()
+    win_rate = RefreshAnalyticsStoreUseCase._build_gold_win_rate_pairwise_results(dim_run, fact_oos)
+    assert not win_rate.empty, "win_rate pairwise must contain candidate vs baseline pair when sharing parent_sweep_id"
+    assert (win_rate["parent_sweep_id"] == "sw_stage12").all()
+    # Sweep has exactly 2 configs -> exactly one pair (left, right) per group key.
+    assert len(win_rate) == 1
+    row = win_rate.iloc[0]
+    # left_wins + right_wins + ties == aligned_timestamps (n=10 timestamps in fixture).
+    n = int(row["aligned_timestamps"])
+    assert n == 10
+    assert int(row["left_wins"]) + int(row["right_wins"]) + int(row["ties"]) == n
