@@ -1364,3 +1364,167 @@ def test_validate_analytics_quality_scope_spec_overrides_legacy_scope_filters(tm
     block_a = next(item for item in result.checks if item["check"] == "oos_quantile_block_a_acceptance")
     assert block_a["passed"] is True
     assert "scope_mode=global_health" in str(block_a["detail"])
+
+
+def _dim_row(
+    *,
+    run_id: str,
+    parent_sweep_id: str,
+    feature_set_name: str,
+    model_version: str,
+) -> dict:
+    return {
+        "schema_version": 1,
+        "run_id": run_id,
+        "execution_id": None,
+        "asset": "AAPL",
+        "feature_set_name": feature_set_name,
+        "feature_set_hash": "fh",
+        "feature_list_ordered_json": "[]",
+        "config_signature": f"cfg_{run_id}",
+        "split_fingerprint": "sp1",
+        "model_version": model_version,
+        "parent_sweep_id": parent_sweep_id,
+        "checkpoint_path_final": "/tmp/final.pt",
+        "checkpoint_path_best": "/tmp/best.ckpt",
+        "git_commit": "abc",
+        "pipeline_version": "0.1",
+        "library_versions_json": "{}",
+        "hardware_info_json": "{}",
+        "status": "ok",
+        "duration_total_seconds": 1.0,
+        "eta_recorded_seconds": 0.0,
+        "retries": 0,
+        "created_at_utc": "2026-01-01T00:00:00+00:00",
+    }
+
+
+def test_baseline_gate_fails_when_cohort_decision_sweep_has_candidate_without_baseline(
+    tmp_path,
+) -> None:
+    silver = tmp_path / "silver"
+    _seed_minimal_valid_silver(silver)  # seeds candidate r1 in sw1
+
+    result = ValidateAnalyticsQualityUseCase(
+        analytics_silver_dir=silver,
+        scope_spec=ScopeSpec.create(
+            scope_mode="cohort_decision",
+            parent_sweep_prefixes=["sw1"],
+            splits=["test"],
+            horizons=[1],
+        ),
+    ).execute()
+
+    gate = next(
+        item
+        for item in result.checks
+        if item["check"] == "baselines_share_parent_sweep_id_with_candidates"
+    )
+    assert gate["passed"] is False
+    assert "sweep=sw1" in str(gate["detail"])
+    assert "baselines=0" in str(gate["detail"])
+
+
+def test_baseline_gate_passes_when_cohort_decision_sweep_has_candidate_and_baseline_shared_parent_sweep_id(
+    tmp_path,
+) -> None:
+    silver = tmp_path / "silver"
+    _seed_minimal_valid_silver(silver)  # candidate r1 in sw1
+
+    # Append a baseline run in the same sweep with OOS rows in scope so the
+    # cohort_decision scope filter retains it.
+    _write_table(
+        silver,
+        "dim_run",
+        [
+            _dim_row(
+                run_id="r_baseline",
+                parent_sweep_id="sw1",
+                feature_set_name="baseline",
+                model_version="baseline_zero_return_v1",
+            ),
+        ],
+        {"asset": "AAPL", "sweep_id": "sw1_baseline"},
+    )
+    _write_table(
+        silver,
+        "fact_oos_predictions",
+        [
+            {
+                "schema_version": 1,
+                "run_id": "r_baseline",
+                "model_version": "baseline_zero_return_v1",
+                "asset": "AAPL",
+                "feature_set_name": "baseline",
+                "parent_sweep_id": "sw1",
+                "config_signature": "cfg_baseline",
+                "split": "test",
+                "fold": "none",
+                "seed": 0,
+                "horizon": 1,
+                "timestamp_utc": "2026-01-09T01:00:00+00:00",
+                "target_timestamp_utc": "2026-01-09T01:00:00+00:00",
+                "y_true": 0.0,
+                "y_pred": 0.0,
+                "error": 0.0,
+                "abs_error": 0.0,
+                "sq_error": 0.0,
+                "quantile_p10": 0.0,
+                "quantile_p50": 0.0,
+                "quantile_p90": 0.0,
+                "year": 2026,
+            }
+        ],
+        {"asset": "AAPL", "feature_set_name": "baseline", "year": "2026"},
+    )
+
+    result = ValidateAnalyticsQualityUseCase(
+        analytics_silver_dir=silver,
+        scope_spec=ScopeSpec.create(
+            scope_mode="cohort_decision",
+            parent_sweep_prefixes=["sw1"],
+            splits=["test"],
+            horizons=[1],
+        ),
+    ).execute()
+
+    gate = next(
+        item
+        for item in result.checks
+        if item["check"] == "baselines_share_parent_sweep_id_with_candidates"
+    )
+    assert gate["passed"] is True
+    assert "ok" in str(gate["detail"])
+
+
+def test_baseline_gate_silenced_in_global_health_mode(tmp_path) -> None:
+    silver = tmp_path / "silver"
+    _seed_minimal_valid_silver(silver)  # candidate without baseline
+
+    result = ValidateAnalyticsQualityUseCase(
+        analytics_silver_dir=silver,
+        scope_spec=ScopeSpec.create(scope_mode="global_health"),
+    ).execute()
+
+    gate = next(
+        item
+        for item in result.checks
+        if item["check"] == "baselines_share_parent_sweep_id_with_candidates"
+    )
+    assert gate["passed"] is True
+    assert "skipped(not_cohort_decision)" in str(gate["detail"])
+
+
+def test_baseline_gate_does_not_fail_legacy_sweeps_under_global_health(tmp_path) -> None:
+    # Legacy sweeps (pre-Stage 12) are validated in global_health mode by default.
+    # The gate must not produce false positives on those.
+    silver = tmp_path / "silver"
+    _seed_minimal_valid_silver(silver)
+
+    result = ValidateAnalyticsQualityUseCase(analytics_silver_dir=silver).execute()
+    gate = next(
+        item
+        for item in result.checks
+        if item["check"] == "baselines_share_parent_sweep_id_with_candidates"
+    )
+    assert gate["passed"] is True

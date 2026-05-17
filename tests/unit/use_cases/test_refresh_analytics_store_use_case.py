@@ -2352,3 +2352,122 @@ def test_pred_interval_negative_unchanged_by_stage9_filter() -> None:
     assert not pd.isna(metrics_row["mean_pinball_raw"])
     # Os dois caminhos coexistem: crossing contado no quality_report
     # E probabilisticas mantidas em metrics_by_run -- comportamento esperado.
+
+
+def _stage12_candidate_baseline_oos(*, parent_sweep_id: str = "sw_stage12") -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Stage 12 integration fixture: candidate TFT + baseline persisted on
+    same parent_sweep_id, sharing target_timestamps so DM/MCS builders
+    produce pairwise rows. Returns (dim_run, fact_oos, fact_config).
+    """
+    n = 10
+    timestamps = pd.date_range("2026-01-01", periods=n, freq="D", tz="UTC")
+
+    dim_run = pd.DataFrame(
+        [
+            {
+                "run_id": "tft_cand",
+                "model_version": "tft_v1",
+                "feature_set_name": "BT",
+                "feature_set_hash": "fh_tft",
+                "config_signature": "cfg_tft",
+                "parent_sweep_id": parent_sweep_id,
+                "trial_number": 1,
+                "status": "ok",
+                "asset": "AAPL",
+                "split_fingerprint": "sp1",
+            },
+            {
+                "run_id": "baseline_zero",
+                "model_version": "baseline_zero_return_v1",
+                "feature_set_name": "baseline",
+                "feature_set_hash": "fh_baseline",
+                "config_signature": "cfg_baseline",
+                "parent_sweep_id": parent_sweep_id,
+                "trial_number": None,
+                "status": "ok",
+                "asset": "AAPL",
+                "split_fingerprint": "sp1",
+            },
+        ]
+    )
+
+    rows: list[dict] = []
+    for i, ts in enumerate(timestamps):
+        y_true = float(0.01 * ((-1) ** i))
+        rows.append(
+            {
+                "run_id": "tft_cand",
+                "asset": "AAPL",
+                "feature_set_name": "BT",
+                "config_signature": "cfg_tft",
+                "split": "test",
+                "fold": "none",
+                "seed": 42,
+                "horizon": 1,
+                "timestamp_utc": ts.isoformat(),
+                "target_timestamp_utc": ts.isoformat(),
+                "y_true": y_true,
+                "y_pred": y_true * 0.9,
+                "quantile_p10": -0.02,
+                "quantile_p50": y_true * 0.9,
+                "quantile_p90": 0.02,
+                "quantile_p10_post_guardrail": -0.02,
+                "quantile_p50_post_guardrail": y_true * 0.9,
+                "quantile_p90_post_guardrail": 0.02,
+            }
+        )
+        rows.append(
+            {
+                "run_id": "baseline_zero",
+                "asset": "AAPL",
+                "feature_set_name": "baseline",
+                "config_signature": "cfg_baseline",
+                "split": "test",
+                "fold": "none",
+                "seed": 0,
+                "horizon": 1,
+                "timestamp_utc": ts.isoformat(),
+                "target_timestamp_utc": ts.isoformat(),
+                "y_true": y_true,
+                "y_pred": 0.0,
+                "quantile_p10": 0.0,
+                "quantile_p50": 0.0,
+                "quantile_p90": 0.0,
+                "quantile_p10_post_guardrail": 0.0,
+                "quantile_p50_post_guardrail": 0.0,
+                "quantile_p90_post_guardrail": 0.0,
+            }
+        )
+
+    fact_oos = pd.DataFrame(rows)
+    fact_config = pd.DataFrame(
+        [
+            {"run_id": "tft_cand", "prediction_mode": "quantile"},
+            {"run_id": "baseline_zero", "prediction_mode": "point"},
+        ]
+    )
+    return dim_run, fact_oos, fact_config
+
+
+def test_refresh_dm_pairwise_includes_candidate_vs_baseline_when_shared_parent_sweep_id() -> None:
+    dim_run, fact_oos, _ = _stage12_candidate_baseline_oos()
+
+    dm = RefreshAnalyticsStoreUseCase._build_gold_dm_pairwise_results(dim_run, fact_oos)
+    assert not dm.empty, "DM pairwise must contain candidate vs baseline pair when sharing parent_sweep_id"
+    assert (dm["parent_sweep_id"] == "sw_stage12").all()
+    assert int(dm["n_configs"].iloc[0]) >= 2
+    # Sanity: tudo no mesmo (asset, split, horizon).
+    assert set(dm["asset"]) == {"AAPL"}
+    assert set(dm["split"]) == {"test"}
+    assert set(dm["horizon"]) == {1}
+
+
+def test_refresh_mcs_includes_candidate_and_baseline_configs_when_shared_parent_sweep_id() -> None:
+    dim_run, fact_oos, _ = _stage12_candidate_baseline_oos()
+
+    mcs = RefreshAnalyticsStoreUseCase._build_gold_mcs_results(dim_run, fact_oos)
+    assert not mcs.empty, "MCS must include the candidate+baseline pool"
+    assert (mcs["parent_sweep_id"] == "sw_stage12").all()
+    # Ambos configs (tft + baseline) devem aparecer.
+    cfg_labels = set(mcs.get("config_label", pd.Series(dtype=str)).astype(str))
+    assert any("BT|cfg_tft" in label for label in cfg_labels) or any("baseline" in label for label in cfg_labels)
