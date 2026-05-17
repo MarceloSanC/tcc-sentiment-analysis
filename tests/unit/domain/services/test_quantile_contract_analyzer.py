@@ -146,6 +146,41 @@ def test_evaluate_degeneracy_fails_quantile_group_with_91_25_percent_degeneracy(
     assert "p10_eq_p90_rate=0.91250000" in evaluation.detail
 
 
+def test_analyze_degeneracy_uses_raw_quantiles_not_post_guardrail() -> None:
+    oos = pd.DataFrame(
+        [
+            {
+                "run_id": "r1",
+                "split": "test",
+                "horizon": 1,
+                "quantile_p10": 0.5,
+                "quantile_p50": 0.5,
+                "quantile_p90": 0.5,
+                "quantile_p10_post_guardrail": 0.4,
+                "quantile_p50_post_guardrail": 0.5,
+                "quantile_p90_post_guardrail": 0.6,
+            }
+            for _ in range(10)
+        ]
+    )
+    fact_config = pd.DataFrame(
+        [{"run_id": "r1", "prediction_mode": "quantile", "parent_sweep_id": "sw1"}]
+    )
+
+    metrics = QuantileContractAnalyzer.analyze_degeneracy(oos, fact_config)
+    evaluation = QuantileContractAnalyzer.evaluate_degeneracy(
+        metrics,
+        thresholds=QuantileDegeneracyThresholds(
+            min_rows_for_gate=10,
+            max_p10_eq_p90_rate=0.05,
+        ),
+    )
+
+    assert metrics[0].p10_eq_p90_rate == 1.0
+    assert evaluation.passed is False
+    assert "p10_eq_p90_rate=1.00000000" in evaluation.detail
+
+
 def test_evaluate_degeneracy_ignores_point_mode_even_when_collapsed() -> None:
     oos = pd.DataFrame(
         [
