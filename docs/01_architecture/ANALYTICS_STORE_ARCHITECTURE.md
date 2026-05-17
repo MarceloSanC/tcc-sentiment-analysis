@@ -34,6 +34,10 @@ metricas (ver `04_evaluation/`) nem o fluxo end-to-end (ver `DATA_FLOW.md`).
   a FK inferencia -> treino exigida pela Lei 3. Em rows legadas pre-Stage 10,
   `training_run_id` pode permanecer `None` ate backfill resolvivel ou pendencia
   manual documentada.
+  Para consumidores gold, `inference_run_id` identifica o batch operacional de
+  inferencia, enquanto `training_run_id` identifica o `dim_run.run_id` do treino
+  que gerou o artefato carregado; nas tabelas `fact_inference_*`, `run_id`
+  replica `training_run_id` para preservar joins historicos.
 - **Fingerprints:** `dataset_fingerprint`, `split_fingerprint`,
   `feature_set_hash`, `config_signature` — hashes que garantem que dois runs
   com o mesmo `run_id` realmente usaram exatamente os mesmos dados/configs.

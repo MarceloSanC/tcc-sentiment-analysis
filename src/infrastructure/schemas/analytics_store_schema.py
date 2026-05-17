@@ -458,6 +458,7 @@ FACT_MODEL_ARTIFACTS_SCHEMA = AnalyticsTableSchema(
     schema_version=ANALYTICS_SCHEMA_VERSION,
     columns={
         "schema_version": "int64",
+        # run_id and training_run_id both point to the producing dim_run.run_id.
         "run_id": "string",
         "training_run_id": "string",
         "asset": "string",
@@ -490,6 +491,8 @@ FACT_INFERENCE_RUNS_SCHEMA = AnalyticsTableSchema(
     schema_version=ANALYTICS_SCHEMA_VERSION,
     columns={
         "schema_version": "int64",
+        # run_id/training_run_id: FK to dim_run.run_id for the loaded training artifact.
+        # inference_run_id: PK of the inference batch created by RunTFTInferenceUseCase.
         "run_id": "string",
         "training_run_id": "string",
         "inference_run_id": "string",
@@ -524,6 +527,7 @@ FACT_INFERENCE_PREDICTIONS_SCHEMA = AnalyticsTableSchema(
     schema_version=ANALYTICS_SCHEMA_VERSION,
     columns={
         "schema_version": "int64",
+        # inference_run_id: FK to the inference batch; run_id/training_run_id: FK to dim_run.run_id.
         "inference_run_id": "string",
         "run_id": "string",
         "training_run_id": "string",
@@ -577,6 +581,7 @@ FACT_FEATURE_CONTRIB_LOCAL_SCHEMA = AnalyticsTableSchema(
     schema_version=ANALYTICS_SCHEMA_VERSION,
     columns={
         "schema_version": "int64",
+        # inference_run_id: FK to the inference batch; run_id/training_run_id: FK to dim_run.run_id.
         "inference_run_id": "string",
         "run_id": "string",
         "training_run_id": "string",
