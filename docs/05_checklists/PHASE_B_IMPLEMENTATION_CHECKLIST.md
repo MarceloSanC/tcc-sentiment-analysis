@@ -533,6 +533,33 @@ Toda tabela gold cai em uma das tres categorias (criterio canonico em
   `_prob_up_from_quantiles`); (d) anotacao protetiva para Categoria C
   (`_pred_interval_negative`, gate Stage 11). Tasks 8.5-8.8 fecham esses
   gaps sem invalidar 8.1-8.4.
+- 2026-05-16: Tasks 8.5-8.8 implementadas (4 commits) na mesma branch.
+  Validacao local:
+  `.venv/bin/pytest tests/unit/use_cases/test_refresh_analytics_store_use_case.py -v`
+  (`32 passed, 30 warnings`);
+  `.venv/bin/pytest tests/unit/use_cases/ -v` (`160 passed, 32 warnings`);
+  `.venv/bin/pytest tests/unit/ -v` (`432 passed, 32 warnings` — zero regressao).
+- Decisao sobre alias `prob_up`/`prob_down` (8.7): **mantido alias=
+  post-guardrail** (com fallback para raw em silver legado). Mesmo
+  criterio aplicado a `confidence_calibrated` em 8.1. Helpers locais
+  `_set_alias_post_primary`/`_set_alias_raw_only` encapsulam a logica
+  nos 3 caminhos de retorno do dual builder.
+- Compatibilidade: `gold_quantile_guardrail_audit` segue materializada
+  como diagnostico secundario ate o fechamento da Phase B (mesmo apos
+  8.6 expor as deltas no contrato primario).
+- `_pred_interval_negative` (Stage 8.8) e gate de degeneracao quantilica
+  do Stage 11 permanecem **raw apenas** por design (Categoria C). Teste
+  de regressao protege a primeira invariante; o gate do Stage 11 sera
+  anotado quando implementado.
+- **Follow-up para PR de doc separado (nao bloqueante):**
+  (i) `CALIBRATION_AND_RISK.md` §Risk Method ainda lista
+  `var_10 = mean(quantile_p10)` raw; precisa ser atualizada para
+  `quantile_p10_post_guardrail` apos merge do 8.5;
+  (ii) `METRICS_DEFINITIONS.md` ainda nao contem secao explicita
+  "Variante quantilica" com categorizacao A/B/C — a referencia citada
+  no comentario inline de `_pred_interval_negative` (8.8) e na policy
+  canonica do Stage 8 ainda aponta a um pin nao publicado. Reportado
+  aqui como gap de doc; nao corrigido nesta PR.
 
 ### Tasks
 
@@ -569,7 +596,7 @@ Toda tabela gold cai em uma das tres categorias (criterio canonico em
       **Aceite:** plots refletem o contrato escolhido; titulos anotam
       qual variante esta sendo plotada.
 
-- [ ] **8.5** **Mover `gold_prediction_risk` para post-guardrail apenas
+- [~] **8.5** **Mover `gold_prediction_risk` para post-guardrail apenas
       (Categoria B).** Substituir `quantile_p10`/`quantile_p50` por
       `quantile_p10_post_guardrail`/`quantile_p50_post_guardrail` em
       [`refresh_analytics_store_use_case.py:1079,1082`](../../src/use_cases/refresh_analytics_store_use_case.py#L1079-L1082)
@@ -585,7 +612,7 @@ Toda tabela gold cai em uma das tres categorias (criterio canonico em
       `var_10 != mean(quantile_p10)` raw quando ha crossing; documentado
       em `CALIBRATION_AND_RISK.md` (sincronizado no PR doc).
 
-- [ ] **8.6** **Adicionar colunas `delta_<metrica>_post_minus_raw`** no
+- [~] **8.6** **Adicionar colunas `delta_<metrica>_post_minus_raw`** no
       `_build_gold_prediction_metrics_by_run_split_horizon` para todas as
       familias Categoria A duplicadas em 8.1. Substitui funcionalmente
       `gold_quantile_guardrail_audit` (que continua materializado por
@@ -600,7 +627,7 @@ Toda tabela gold cai em uma das tres categorias (criterio canonico em
       que `delta_picp_post_minus_raw == picp_post_guardrail - picp_raw`
       por linha.
 
-- [ ] **8.7** **Duplicar `prob_up`/`prob_down` como Categoria A.** Hoje
+- [~] **8.7** **Duplicar `prob_up`/`prob_down` como Categoria A.** Hoje
       `prob_up_row` em
       [`refresh_analytics_store_use_case.py:482-484`](../../src/use_cases/refresh_analytics_store_use_case.py#L482-L484)
       eh calculado via `_prob_up_from_quantiles(p10, p50, p90)` somente
@@ -613,7 +640,7 @@ Toda tabela gold cai em uma das tres categorias (criterio canonico em
       crossing demonstra divergencia entre `prob_up_raw` e
       `prob_up_post_guardrail`.
 
-- [ ] **8.8** **Anotacao protetiva Categoria C.** Adicionar comentarios
+- [~] **8.8** **Anotacao protetiva Categoria C.** Adicionar comentarios
       explicitos marcando que os seguintes checks **devem permanecer raw**
       por design (sob post-guardrail seriam tautologicamente satisfeitos
       e perderiam funcao diagnostica):
