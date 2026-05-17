@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+# Operacional: este script e one-shot manual. Nao rodar concorrentemente
+# com `refresh_analytics_store_use_case` - nao ha lock no Parquet e a
+# sobrescrita pode perder writes intermediarios.
+
 import argparse
 import json
 

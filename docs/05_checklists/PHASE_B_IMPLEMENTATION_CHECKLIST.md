@@ -838,6 +838,17 @@ de inferencia por FK explicita para o run de treino.
   permanecem com `parent_sweep_id=None` ate Stage 10" fecha para runs novos
   pos-Stage 10; legado pre-Stage 10 permanece documentado como pendencia
   manual quando o backfill nao encontrar match unico.
+- 2026-05-17: Cenario nao coberto: se `data/analytics/silver/` for
+  reconstruido sem preservar `dim_run` historico, `fact_inference_*.run_id`
+  (= `training_run_id`) pode apontar para `dim_run.run_id` inexistente.
+  Resultado: join em `gold_feature_contrib_local_summary` retorna `NaN` ->
+  `parent_sweep_id=None`, mesmo comportamento que pre-Stage 10. Nao e
+  regressao; e limitacao conhecida do modelo append-only de `dim_run`.
+  Mitigacao futura: validacao no quality gate detectando `fact_inference_*.run_id`
+  sem match em `dim_run` (fora de escopo Stage 10).
+- 2026-05-17: Backfill e one-shot manual e nao deve rodar concorrentemente com
+  `refresh_analytics_store_use_case`; nao ha lock no Parquet e uma sobrescrita
+  pode perder writes intermediarios.
 
 ### Tasks
 
