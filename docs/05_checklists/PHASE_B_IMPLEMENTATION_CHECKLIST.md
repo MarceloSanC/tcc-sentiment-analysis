@@ -466,69 +466,169 @@ coorte declarada em vez de ler o silver inteiro.
 
 ## Stage 8 — Raw + post-guardrail em paralelo (B+C)
 
-**Objetivo:** persistir metricas probabilisticas em duas variantes
-paralelas; pre-registro fixa qual eh primaria para o claim.
+**Objetivo:** persistir metricas probabilisticas em duas variantes paralelas
+**conforme categorizacao A/B/C** por tabela gold; pre-registro fixa
+variante primaria para H1/H2a/H2b (default `post_guardrail`). A
+categorizacao canonica vive em
+[`docs/04_evaluation/METRICS_DEFINITIONS.md`](../04_evaluation/METRICS_DEFINITIONS.md)
+§"Variante quantilica" e justificativa academica em
+[`docs/07_reports/living-paper/20_method.md`](../07_reports/living-paper/20_method.md)
+§"Politica de variante quantilica".
 
-**Cross-link:** A_code_audit.md §M5-Q1.
+**Cross-link:** A_code_audit.md §M5-Q1; external review 2026-04-09
+§Entregavel 2 / Gate 3; `METRICS_DEFINITIONS.md` §Variante quantilica
+(categorizacao A/B/C); `20_method.md` §Politica de variante quantilica
+(justificativa metodologica com Chernozhukov et al. 2010, Gneiting &
+Raftery 2007, Jorion 2007, Acerbi & Tasche 2002).
+
+### Categorias canonicas aplicadas a este Stage
+
+Toda tabela gold cai em uma das tres categorias (criterio canonico em
+`METRICS_DEFINITIONS.md`):
+
+- **Categoria A — dual obrigatorio** (raw + post-guardrail): metricas
+  onde as duas perguntas sao cientificamente legitimas e dao respostas
+  diferentes. Tasks 8.1, 8.2, 8.7.
+- **Categoria B — post-guardrail apenas**: metricas onde raw e
+  matematicamente computavel mas semanticamente quebrado (risk metrics,
+  selecao final, artefatos operacionais). Tasks 8.3, 8.4, 8.5.
+- **Categoria C — raw apenas**: checks de patologia onde post-guardrail
+  seria tautologicamente satisfeito e perderia funcao diagnostica. Task
+  8.8 (anotacao protetiva; sem mudanca de comportamento).
 
 ### Notas de revisao:
 
-- 2026-05-16: Stage 8 implementado em branch
+- 2026-05-16: Tasks 8.1-8.4 implementadas em branch
   `feat/analytics-store-stage8-raw-post-guardrail-dual` para enderecar
-  A_code_audit.md §M5-Q1 (RED) com metricas probabilisticas raw e
-  post-guardrail persistidas em paralelo.
-- Validacao local executada:
+  A_code_audit.md §M5-Q1 (RED). Validacao local:
   `.venv/bin/pytest tests/unit/use_cases/test_refresh_analytics_store_use_case.py -v`
   (`25 passed, 30 warnings`);
   `.venv/bin/pytest tests/unit/use_cases/test_generate_prediction_analysis_plots_use_case.py -v`
   (`9 passed`);
   `.venv/bin/pytest tests/unit/use_cases/ -v`
   (`154 passed, 32 warnings`);
-  `.venv/bin/pytest tests/unit/ -v`
-  (`425 passed, 32 warnings`).
-- Decisao de implementacao 8.1: foi usada estrategia B (single-pass
-  public-contract com helper interno single-contract). O builder oficial calcula
-  metricas pontuais uma vez e emite colunas pareadas para as familias
-  probabilisticas; o helper single-contract preserva o comportamento legado de
+  `.venv/bin/pytest tests/unit/ -v` (`425 passed, 32 warnings`).
+- Decisao de implementacao 8.1: estrategia B (single-pass public-contract
+  com helper interno single-contract). Builder oficial calcula metricas
+  pontuais uma vez e emite colunas pareadas para familias probabilisticas;
+  helper single-contract preserva comportamento legado de
   `gold_quantile_guardrail_audit`.
 - Decisao sobre `confidence_calibrated`: duplicada como
-  `confidence_calibrated_raw` e `confidence_calibrated_post_guardrail`, porque
-  deriva de `coverage_error` e `pred_interval_width`. A coluna
-  `confidence_calibrated` permanece como alias de compatibilidade para o
-  contrato primario disponivel.
-- Compatibilidade: `gold_quantile_guardrail_audit` permanece materializada e
-  ativa como diagnostico secundario ate o fechamento da Phase B. Em silver
+  `confidence_calibrated_raw`/`confidence_calibrated_post_guardrail`
+  (deriva de `coverage_error` e `pred_interval_width`, ambos Cat A);
+  coluna `confidence_calibrated` permanece como alias de compatibilidade
+  para o contrato primario disponivel.
+- Compatibilidade: `gold_quantile_guardrail_audit` permanece materializada
+  como diagnostico secundario ate o fechamento da Phase B. Em silver
   legado sem colunas `quantile_p*_post_guardrail`, as colunas
   `*_post_guardrail` do gold ficam `NaN` e o refresh emite warning unico.
+- 2026-05-16: Stage 8 **expandido** para 8.5-8.8 apos merge da policy
+  canonica em `METRICS_DEFINITIONS.md` §Variante quantilica e
+  `20_method.md` §Politica de variante quantilica. O checklist literal
+  original (8.1-8.4) cobria 5 familias de metricas mas omitia:
+  (a) `gold_prediction_risk` como Categoria B — `var_10`/`es_10_approx`
+  continuam silenciosamente raw; (b) coluna `delta_*_post_minus_raw` no
+  run-level para substituir funcionalmente `gold_quantile_guardrail_audit`;
+  (c) `prob_up`/`prob_down` como Categoria A (dependem de p10/p50/p90 via
+  `_prob_up_from_quantiles`); (d) anotacao protetiva para Categoria C
+  (`_pred_interval_negative`, gate Stage 11). Tasks 8.5-8.8 fecham esses
+  gaps sem invalidar 8.1-8.4.
 
 ### Tasks
 
 - [~] **8.1** Refatorar
       `_build_gold_prediction_metrics_by_run_split_horizon`
       ([:309-409](../../src/use_cases/refresh_analytics_store_use_case.py#L309-L409))
-      para emitir colunas duplas: `picp_raw`/`picp_post_guardrail`,
+      para emitir colunas duplas (Categoria A): `picp_raw`/`picp_post_guardrail`,
       `mpiw_raw`/`mpiw_post_guardrail`,
       `pinball_q*_raw`/`pinball_q*_post_guardrail`,
       `mean_pinball_raw`/`mean_pinball_post_guardrail`,
-      `coverage_error_raw`/`coverage_error_post_guardrail`.
+      `coverage_error_raw`/`coverage_error_post_guardrail`,
+      `pred_interval_width_raw`/`pred_interval_width_post_guardrail`,
+      `confidence_calibrated_raw`/`confidence_calibrated_post_guardrail`.
       **Aceite:** output contem ambos os conjuntos; `gold_quantile_guardrail_audit`
       vira redundante (manter por compatibilidade ate Phase B fechar).
 
-- [~] **8.2** Propagar dualidade para tabelas derivadas:
+- [~] **8.2** Propagar dualidade para tabelas derivadas (Categoria A):
       `gold_prediction_metrics_by_config`, `gold_prediction_calibration`,
       `gold_prediction_robustness_by_horizon`, `gold_prediction_generalization_gap`,
       `gold_prediction_metrics_by_horizon`.
       **Aceite:** todas as agregacoes preservam ambas as variantes.
 
-- [~] **8.3** Atualizar `gold_model_decision_final` para selecionar a
-      variante primaria via flag de configuracao (default: `post_guardrail`,
-      sobrepujavel via `--primary-quantile-contract`).
-      **Aceite:** decisao explicita; flag persistida em log do refresh.
+- [~] **8.3** Atualizar `gold_model_decision_final` (Categoria B — single
+      por definicao de "selecao") para selecionar a variante primaria via
+      flag de configuracao (default: `post_guardrail`, sobrepujavel via
+      `--primary-quantile-contract`).
+      **Aceite:** decisao explicita; flag persistida em log do refresh
+      e em coluna `primary_quantile_contract` no output.
 
-- [~] **8.4** Atualizar plot generators
+- [~] **8.4** Atualizar plot generators (Categoria B — single por design
+      operacional)
       ([generate_prediction_analysis_plots_use_case.py](../../src/use_cases/generate_prediction_analysis_plots_use_case.py))
-      para ler a variante primaria selecionada.
-      **Aceite:** plots refletem o contrato escolhido.
+      para ler a variante primaria selecionada via flag.
+      **Aceite:** plots refletem o contrato escolhido; titulos anotam
+      qual variante esta sendo plotada.
+
+- [ ] **8.5** **Mover `gold_prediction_risk` para post-guardrail apenas
+      (Categoria B).** Substituir `quantile_p10`/`quantile_p50` por
+      `quantile_p10_post_guardrail`/`quantile_p50_post_guardrail` em
+      [`refresh_analytics_store_use_case.py:1079,1082`](../../src/use_cases/refresh_analytics_store_use_case.py#L1079-L1082)
+      (`var_10`, `es_10_approx`). Fallback: se colunas post-guardrail nao
+      existem no silver legado, retornar `NaN` com warning unico (mesmo
+      padrao do 8.1).
+      **Justificativa:** VaR exige monotonicidade da funcao quantil por
+      definicao (Jorion 2007; Acerbi & Tasche 2002); raw produz numero
+      matematico sem interpretacao como risco. `expected_move` e
+      `downside_risk` (independentes de quantis) permanecem inalterados.
+      **Aceite:** `var_10` e `es_10_approx` calculados sobre post-guardrail
+      por construcao; teste unitario com fixture de crossing demonstra que
+      `var_10 != mean(quantile_p10)` raw quando ha crossing; documentado
+      em `CALIBRATION_AND_RISK.md` (sincronizado no PR doc).
+
+- [ ] **8.6** **Adicionar colunas `delta_<metrica>_post_minus_raw`** no
+      `_build_gold_prediction_metrics_by_run_split_horizon` para todas as
+      familias Categoria A duplicadas em 8.1. Substitui funcionalmente
+      `gold_quantile_guardrail_audit` (que continua materializado por
+      compatibilidade) tornando o efeito do guardrail diretamente queryavel
+      no contrato primario.
+      **Aceite:** colunas `delta_picp_post_minus_raw`,
+      `delta_mpiw_post_minus_raw`, `delta_mean_pinball_post_minus_raw`,
+      `delta_coverage_error_post_minus_raw`,
+      `delta_pred_interval_width_post_minus_raw`,
+      `delta_confidence_calibrated_post_minus_raw`,
+      `delta_pinball_q10/q50/q90_post_minus_raw` presentes; teste verifica
+      que `delta_picp_post_minus_raw == picp_post_guardrail - picp_raw`
+      por linha.
+
+- [ ] **8.7** **Duplicar `prob_up`/`prob_down` como Categoria A.** Hoje
+      `prob_up_row` em
+      [`refresh_analytics_store_use_case.py:482-484`](../../src/use_cases/refresh_analytics_store_use_case.py#L482-L484)
+      eh calculado via `_prob_up_from_quantiles(p10, p50, p90)` somente
+      sobre quantis raw. Computar `prob_up_raw`/`prob_up_post_guardrail` e
+      `prob_down_raw`/`prob_down_post_guardrail` (=`1 - prob_up_*`) no
+      mesmo padrao das demais metricas Cat A do 8.1.
+      **Aceite:** colunas pareadas presentes em
+      `gold_prediction_metrics_by_run_split_horizon` e propagadas nas
+      5 tabelas derivadas (Stage 8.2); teste unitario com fixture de
+      crossing demonstra divergencia entre `prob_up_raw` e
+      `prob_up_post_guardrail`.
+
+- [ ] **8.8** **Anotacao protetiva Categoria C.** Adicionar comentarios
+      explicitos marcando que os seguintes checks **devem permanecer raw**
+      por design (sob post-guardrail seriam tautologicamente satisfeitos
+      e perderiam funcao diagnostica):
+      - `_pred_interval_negative` em `_build_gold_oos_quality_report`
+        ([`refresh_analytics_store_use_case.py:1300-1302`](../../src/use_cases/refresh_analytics_store_use_case.py#L1300-L1302))
+        — calcula `(quantile_p90 - quantile_p10) < 0`; pertence ao quality
+        gate, nao a calibration acceptance (ver
+        `CALIBRATION_AND_RISK.md` §Checks complementares).
+      - Gate de degeneracao quantilica (a ser implementado no Stage 11
+        sobre `quantile_p10 == quantile_p90`) — detecta colapso do quantil
+        emitido pelo modelo antes do mascaramento por sort.
+      **Aceite:** comentario inline com referencia a
+      `METRICS_DEFINITIONS.md` §Variante quantilica - Categoria C nos
+      pontos citados; teste de regressao que falharia se alguem trocasse
+      por `*_post_guardrail` em qualquer dos dois checks.
 
 ---
 
