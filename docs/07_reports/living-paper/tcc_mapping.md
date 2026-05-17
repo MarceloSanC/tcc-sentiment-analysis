@@ -81,10 +81,10 @@ de literatura; a fonte primaria deve permanecer no living paper.
 | 4.3 Engenharia de features | `docs/02_data/FEATURE_SETS.md`, `docs/05_checklists/FEATURES_SET_CHECKLIST.md` | `src/infrastructure/schemas/feature_registry.py` | pronto | revisar all-features pruned |
 | 4.4 Configuracao do TFT | `docs/03_modeling/TRAINING_PIPELINE.md` | `src/adapters/pytorch_forecasting_tft_trainer.py` | pronto | v1 existe; revisar quantis |
 | 4.5 Protocolo experimental | `docs/00_overview/STRATEGIC_DIRECTION.md` secao 5, `docs/03_modeling/MULTI_HORIZON.md`, `docs/03_modeling/SWEEPS_AND_SELECTION.md` | `docs/07_reports/phase-gates/A_code_audit.md` | parcial | reescrever para Fase A/B/C |
-| 4.6 Baselines | `docs/04_evaluation/BASELINES.md` | `docs/04_evaluation/STATISTICAL_TESTS.md` | parcial | inserir secao/ajustar texto |
-| 4.7 Metricas e calibracao | `docs/04_evaluation/METRICS_DEFINITIONS.md`, `docs/04_evaluation/CALIBRATION_AND_RISK.md` | `docs/04_evaluation/STATISTICAL_TESTS.md` | pronto | revisar PICP/calibracao |
+| 4.6 Baselines | `docs/04_evaluation/BASELINES.md` | `docs/04_evaluation/STATISTICAL_TESTS.md` | parcial (runner pendente; ver `docs/07_reports/phase-gates/A_code_audit.md` §M7-Q2) | inserir secao/ajustar texto |
+| 4.7 Metricas e calibracao | `docs/04_evaluation/METRICS_DEFINITIONS.md`, `docs/04_evaluation/CALIBRATION_AND_RISK.md` | `docs/04_evaluation/STATISTICAL_TESTS.md` | pronto | revisar PICP/calibracao; propagar politica raw vs post-guardrail (Stage 8; ver `docs/07_reports/living-paper/20_method.md` §"Política de variante quantilica") |
 | 4.8 Explicabilidade e contribuicao | `docs/04_evaluation/EXPLAINABILITY.md` | `docs/00_overview/STRATEGIC_DIRECTION.md` secao 4.3 | parcial | inserir contrato local/global |
-| 4.9 Analytics Store e governanca | `docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md`, `docs/02_data/DATA_CONTRACTS.md` | `docs/01_architecture/decisions/ADR-0001-analytics-store.md`, `docs/05_checklists/ANALYTICS_STORE_CHECKLIST.md` | pronto | v1 existe; revisar se necessario |
+| 4.9 Analytics Store e governanca | `docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md`, `docs/02_data/DATA_CONTRACTS.md` | `docs/01_architecture/decisions/ADR-0001-analytics-store.md`, `docs/05_checklists/ANALYTICS_STORE_CHECKLIST.md` | pronto | propagar para `.tex`: refresh scoped via ScopeSpec (Stage 7) e cohort-aware groupby (Stages 4-6) |
 | 4.10 Criterios de qualidade | `docs/02_data/QUALITY_GATES.md`, `docs/05_checklists/PREDICTIONS_AND_METRICS_CHECKLIST.md` secao 6 | `src/use_cases/validate_analytics_quality_use_case.py` | pronto | v1 existe; revisar gates |
 
 Observacao: 4.5 e 4.6 so ficam `pronto` apos pre-registro e implementacao dos
