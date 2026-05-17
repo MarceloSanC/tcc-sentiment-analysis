@@ -31,6 +31,12 @@ def _quantile_contract_dim_run() -> pd.DataFrame:
     )
 
 
+def _quantile_contract_fact_config(run_ids: tuple[str, ...] = ("r1",), mode: str = "quantile") -> pd.DataFrame:
+    return pd.DataFrame(
+        [{"run_id": rid, "prediction_mode": mode} for rid in run_ids]
+    )
+
+
 def _quantile_contract_oos(*, include_post_guardrail: bool = True) -> pd.DataFrame:
     row = {
         "run_id": "r1",
@@ -62,6 +68,7 @@ def test_metrics_by_run_split_horizon_emits_raw_and_post_guardrail_pairs() -> No
     out = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon(
         _quantile_contract_dim_run(),
         _quantile_contract_oos(),
+        _quantile_contract_fact_config(),
     )
 
     expected = {
@@ -95,6 +102,7 @@ def test_metrics_emits_nan_post_guardrail_when_silver_missing_columns() -> None:
     out = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon(
         _quantile_contract_dim_run(),
         _quantile_contract_oos(include_post_guardrail=False),
+        _quantile_contract_fact_config(),
     )
 
     row = out.iloc[0]
@@ -151,6 +159,7 @@ def test_prob_up_emits_dual_variants() -> None:
     out = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon(
         _quantile_contract_dim_run(),
         _quantile_contract_oos(),
+        _quantile_contract_fact_config(),
     )
 
     expected = {
@@ -180,6 +189,7 @@ def test_prob_up_alias_falls_back_to_raw_when_post_guardrail_missing() -> None:
     out = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon(
         _quantile_contract_dim_run(),
         _quantile_contract_oos(include_post_guardrail=False),
+        _quantile_contract_fact_config(),
     )
 
     row = out.iloc[0]
@@ -193,6 +203,7 @@ def test_delta_columns_equal_post_minus_raw_per_row() -> None:
     out = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon(
         _quantile_contract_dim_run(),
         _quantile_contract_oos(),
+        _quantile_contract_fact_config(),
     )
 
     expected_delta_cols = {
@@ -230,6 +241,7 @@ def test_delta_columns_are_nan_when_silver_missing_post_guardrail() -> None:
     out = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon(
         _quantile_contract_dim_run(),
         _quantile_contract_oos(include_post_guardrail=False),
+        _quantile_contract_fact_config(),
     )
 
     row = out.iloc[0]
@@ -1072,6 +1084,28 @@ def test_refresh_analytics_store_builds_gold_tables(tmp_path) -> None:
             }
         ],
         {"asset": "AAPL", "feature_set_name": "B", "year": "2026"},
+    )
+
+    _write_table(
+        silver,
+        "fact_config",
+        [
+            {
+                "schema_version": 1,
+                "run_id": "r1",
+                "asset": "AAPL",
+                "parent_sweep_id": "sw1",
+                "prediction_mode": "quantile",
+            },
+            {
+                "schema_version": 1,
+                "run_id": "r2",
+                "asset": "AAPL",
+                "parent_sweep_id": "sw1",
+                "prediction_mode": "quantile",
+            },
+        ],
+        {"asset": "AAPL", "sweep_id": "sw1"},
     )
 
     _write_table(

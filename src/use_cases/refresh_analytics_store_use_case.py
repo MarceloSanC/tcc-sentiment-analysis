@@ -475,6 +475,7 @@ class RefreshAnalyticsStoreUseCase:
     def _build_gold_prediction_metrics_by_run_split_horizon_single_contract(
         dim_run: pd.DataFrame,
         fact_oos_predictions: pd.DataFrame,
+        fact_config: pd.DataFrame | None = None,
         *,
         quantile_columns: tuple[str, str, str],
     ) -> pd.DataFrame:
@@ -505,6 +506,35 @@ class RefreshAnalyticsStoreUseCase:
         if valid.empty:
             return pd.DataFrame()
 
+        # Stage 9: filtro Cat C — eligibilidade probabilistica per row.
+        # Mode-gate (quantile vs point) via fact_config + anti-degeneracao
+        # sobre quantis RAW (detectar colapso emitido pelo modelo antes do
+        # guardrail mascarar). Pontuais nao sofrem filtro.
+        if (
+            fact_config is not None
+            and not fact_config.empty
+            and 'prediction_mode' in fact_config.columns
+            and 'run_id' in fact_config.columns
+        ):
+            valid = valid.merge(
+                fact_config[['run_id', 'prediction_mode']].drop_duplicates('run_id'),
+                on='run_id',
+                how='left',
+            )
+        else:
+            valid['prediction_mode'] = None
+
+        q10_raw_col, _, q90_raw_col = RefreshAnalyticsStoreUseCase._RAW_QUANTILE_COLUMNS
+        if q10_raw_col in valid.columns and q90_raw_col in valid.columns:
+            p10_raw = pd.to_numeric(valid[q10_raw_col], errors='coerce')
+            p90_raw = pd.to_numeric(valid[q90_raw_col], errors='coerce')
+            is_non_degenerate = (p10_raw != p90_raw) & p10_raw.notna() & p90_raw.notna()
+        else:
+            is_non_degenerate = pd.Series(False, index=valid.index)
+        is_quantile_mode = valid['prediction_mode'].astype(str).str.lower() == 'quantile'
+        prob_eligible_mask = (is_quantile_mode & is_non_degenerate).astype(bool)
+        valid['_prob_eligible'] = prob_eligible_mask
+
         valid['horizon'] = valid['horizon'].astype(int)
         valid['error'] = valid['y_pred'] - valid['y_true']
         valid['abs_error'] = valid['error'].abs()
@@ -530,6 +560,22 @@ class RefreshAnalyticsStoreUseCase:
         valid['prob_up_row'] = RefreshAnalyticsStoreUseCase._prob_up_from_quantiles(
             valid[q10_col], valid[q50_col], valid[q90_col]
         )
+
+        # Mascara per-row aplicada APENAS a colunas probabilisticas. Pontuais
+        # (sq_error, abs_error, ape, smape_row, da_row, error) permanecem para
+        # todos os runs (point + quantile + degenerados).
+        prob_row_cols = (
+            'pinball_q10_row',
+            'pinball_q50_row',
+            'pinball_q90_row',
+            'pinball_mean_row',
+            'prob_up_row',
+            'covered_80',
+            'pred_interval_width',
+        )
+        for col in prob_row_cols:
+            if col in valid.columns:
+                valid.loc[~prob_eligible_mask, col] = np.nan
 
         group_cols = [
             c for c in [
@@ -578,6 +624,7 @@ class RefreshAnalyticsStoreUseCase:
     def _build_gold_prediction_metrics_by_run_split_horizon(
         dim_run: pd.DataFrame,
         fact_oos_predictions: pd.DataFrame,
+        fact_config: pd.DataFrame | None = None,
         *,
         quantile_columns: tuple[str, str, str] = _RAW_QUANTILE_COLUMNS,
     ) -> pd.DataFrame:
@@ -585,12 +632,14 @@ class RefreshAnalyticsStoreUseCase:
             return RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon_single_contract(
                 dim_run,
                 fact_oos_predictions,
+                fact_config,
                 quantile_columns=quantile_columns,
             )
 
         raw_metrics = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon_single_contract(
             dim_run,
             fact_oos_predictions,
+            fact_config,
             quantile_columns=RefreshAnalyticsStoreUseCase._RAW_QUANTILE_COLUMNS,
         )
         if raw_metrics.empty:
@@ -659,6 +708,7 @@ class RefreshAnalyticsStoreUseCase:
         post_metrics = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon_single_contract(
             dim_run,
             fact_oos_predictions,
+            fact_config,
             quantile_columns=RefreshAnalyticsStoreUseCase._POST_GUARDRAIL_QUANTILE_COLUMNS,
         )
         if post_metrics.empty:
@@ -2249,6 +2299,12 @@ class RefreshAnalyticsStoreUseCase:
             scope_spec=effective_scope,
             scoped_run_ids=scoped_run_ids,
         )
+        fact_config = self._load_partitioned_table(
+            self.analytics_silver_dir,
+            "fact_config",
+            scope_spec=effective_scope,
+            scoped_run_ids=scoped_run_ids,
+        )
         fact_model_artifacts = self._load_partitioned_table(
             self.analytics_silver_dir,
             "fact_model_artifacts",
@@ -2294,6 +2350,7 @@ class RefreshAnalyticsStoreUseCase:
         gold_prediction_metrics_by_run_split_horizon = self._build_gold_prediction_metrics_by_run_split_horizon(
             dim_run,
             fact_oos_predictions,
+            fact_config,
         )
         logger.info(
             "Analytics primary quantile contract resolved",
