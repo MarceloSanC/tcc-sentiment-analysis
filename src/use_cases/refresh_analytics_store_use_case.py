@@ -446,6 +446,16 @@ class RefreshAnalyticsStoreUseCase:
 
 
     @staticmethod
+    def _safe_iqr(series: pd.Series) -> float:
+        # Stage 9: filtro Cat C produz grupos all-NaN para runs point/degenerate.
+        # np.nanpercentile sobre all-NaN emite RuntimeWarning. Drop antes para
+        # suprimir o warning na origem mantendo o resultado (NaN).
+        cleaned = pd.to_numeric(series, errors='coerce').dropna()
+        if cleaned.empty:
+            return float('nan')
+        return float(np.percentile(cleaned, 75) - np.percentile(cleaned, 25))
+
+    @staticmethod
     def _pinball_loss(y_true: pd.Series, y_pred_q: pd.Series, quantile: float) -> pd.Series:
         q = float(quantile)
         diff = y_true - y_pred_q
@@ -882,7 +892,7 @@ class RefreshAnalyticsStoreUseCase:
         for m in available_metric_cols:
             g = grouped[m].agg(['mean', 'std']).reset_index().rename(columns={'mean': f'mean_{m}', 'std': f'std_{m}'})
             out = out.merge(g, on=cols, how='left')
-            iqr = grouped[m].agg(lambda s: float(np.nanpercentile(s, 75) - np.nanpercentile(s, 25))).reset_index().rename(columns={m: f'iqr_{m}'})
+            iqr = grouped[m].agg(RefreshAnalyticsStoreUseCase._safe_iqr).reset_index().rename(columns={m: f'iqr_{m}'})
             out = out.merge(iqr, on=cols, how='left')
 
         return out
@@ -914,7 +924,7 @@ class RefreshAnalyticsStoreUseCase:
         for m in available_metric_cols:
             g = grouped[m].agg(['mean', 'std']).reset_index().rename(columns={'mean': f'mean_{m}', 'std': f'std_{m}'})
             out = out.merge(g, on=cols, how='left')
-            iqr = grouped[m].agg(lambda s: float(np.nanpercentile(s, 75) - np.nanpercentile(s, 25))).reset_index().rename(columns={m: f'iqr_{m}'})
+            iqr = grouped[m].agg(RefreshAnalyticsStoreUseCase._safe_iqr).reset_index().rename(columns={m: f'iqr_{m}'})
             out = out.merge(iqr, on=cols, how='left')
 
         return out
