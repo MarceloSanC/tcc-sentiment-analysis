@@ -234,3 +234,41 @@ def test_evaluate_degeneracy_treats_small_quantile_group_as_diagnostic_only() ->
 
     assert evaluation.passed is True
     assert "small_quantile_groups_diagnostic_only=1" in evaluation.detail
+
+
+def test_analyze_degeneracy_splits_groups_by_prediction_mode() -> None:
+    rows = []
+    for run_id in ("r_quant", "r_point"):
+        rows.extend(
+            {
+                "run_id": run_id,
+                "split": "test",
+                "horizon": 1,
+                "quantile_p10": 0.5,
+                "quantile_p50": 0.5,
+                "quantile_p90": 0.5,
+            }
+            for _ in range(1200)
+        )
+    fact_config = pd.DataFrame(
+        [
+            {"run_id": "r_quant", "prediction_mode": "quantile", "parent_sweep_id": "sw1"},
+            {"run_id": "r_point", "prediction_mode": "point", "parent_sweep_id": "sw1"},
+        ]
+    )
+
+    metrics = QuantileContractAnalyzer.analyze_degeneracy(pd.DataFrame(rows), fact_config)
+    by_mode = {item.prediction_mode: item for item in metrics}
+    evaluation = QuantileContractAnalyzer.evaluate_degeneracy(
+        metrics,
+        thresholds=QuantileDegeneracyThresholds(),
+    )
+
+    assert len(metrics) == 2
+    assert by_mode["quantile"].p10_eq_p90_rate == 1.0
+    assert by_mode["point"].p10_eq_p90_rate == 1.0
+    assert evaluation.passed is False
+    assert "quantile_groups=1" in evaluation.detail
+    assert "point_groups_ignored=1" in evaluation.detail
+    assert "prediction_mode=quantile" in evaluation.detail
+    assert "prediction_mode=point:n_rows" not in evaluation.detail

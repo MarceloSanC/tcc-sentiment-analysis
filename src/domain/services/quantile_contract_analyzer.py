@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import warnings
-
 from dataclasses import dataclass
 
 import pandas as pd
@@ -298,26 +296,20 @@ class QuantileContractAnalyzer:
             & (q50.loc[df.index] == q90.loc[df.index])
         ).astype(int)
 
+        df["prediction_mode"] = (
+            df.get("prediction_mode", pd.Series(index=df.index, dtype=object))
+            .astype("object")
+            .map(lambda v: str(v).strip().lower() if pd.notna(v) and str(v).strip() else None)
+        )
+
+        group_keys = list(group_cols) + ["prediction_mode"]
         out: list[QuantileDegeneracyMetrics] = []
-        for keys, group in df.groupby(list(group_cols), dropna=False):
+        for keys, group in df.groupby(group_keys, dropna=False):
             if not isinstance(keys, tuple):
                 keys = (keys,)
-            key_map = dict(zip(group_cols, keys, strict=True))
-            modes = sorted(
-                {
-                    str(v).strip().lower()
-                    for v in group.get("prediction_mode", pd.Series(index=group.index, dtype=object)).dropna()
-                    if str(v).strip()
-                }
-            )
-            if len(modes) > 1:
-                warnings.warn(
-                    "Mixed prediction_mode values in quantile degeneracy group: "
-                    + ",".join(modes),
-                    RuntimeWarning,
-                    stacklevel=2,
-                )
-            prediction_mode = modes[0] if len(modes) == 1 else (",".join(modes) if modes else None)
+            key_map = dict(zip(group_keys, keys, strict=True))
+            prediction_mode_value = key_map.get("prediction_mode")
+            prediction_mode = None if pd.isna(prediction_mode_value) else str(prediction_mode_value)
             n_rows = int(len(group))
             p10_eq_p90_count = int(group["_p10_eq_p90"].sum())
             p10_eq_p50_eq_p90_count = int(group["_p10_eq_p50_eq_p90"].sum())
@@ -366,7 +358,8 @@ class QuantileContractAnalyzer:
 
             quantile_groups += 1
             group_ref = (
-                f"parent_sweep_id={metrics.parent_sweep_id},split={metrics.split},horizon={metrics.horizon}"
+                f"parent_sweep_id={metrics.parent_sweep_id},split={metrics.split},"
+                f"horizon={metrics.horizon},prediction_mode={metrics.prediction_mode}"
             )
             if metrics.n_rows < int(thresholds.min_rows_for_gate):
                 diagnostic_only += 1
