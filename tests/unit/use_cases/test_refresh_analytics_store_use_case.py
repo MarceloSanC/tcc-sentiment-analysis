@@ -1968,3 +1968,253 @@ def test_gold_model_decision_final_is_cohort_aware() -> None:
     assert sw2.sort_values("rank_da")["rank_da"].tolist() == [1.0, 2.0]
     assert sw1.iloc[0]["config_signature"] == "cfg_sw1_a"
     assert sw2.iloc[0]["config_signature"] == "cfg_sw2_b"
+
+
+# ---------------------------------------------------------------------------
+# Stage 9 -- filtro de metricas probabilisticas por modo + degeneracao raw.
+# Cross-link: PHASE_B_IMPLEMENTATION_CHECKLIST.md §Stage 9,
+# METRICS_DEFINITIONS.md §"Variante quantilica" (Cat C).
+# ---------------------------------------------------------------------------
+
+
+def _stage9_dim_run() -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "run_id": "r_quantile_genuine",
+                "model_version": "v1",
+                "feature_set_hash": "fh1",
+                "parent_sweep_id": "sw1",
+                "trial_number": 1,
+                "status": "ok",
+            },
+            {
+                "run_id": "r_point",
+                "model_version": "v1",
+                "feature_set_hash": "fh1",
+                "parent_sweep_id": "sw1",
+                "trial_number": 2,
+                "status": "ok",
+            },
+            {
+                "run_id": "r_quantile_degenerate",
+                "model_version": "v1",
+                "feature_set_hash": "fh1",
+                "parent_sweep_id": "sw1",
+                "trial_number": 3,
+                "status": "ok",
+            },
+        ]
+    )
+
+
+def _stage9_fact_config() -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {"run_id": "r_quantile_genuine", "prediction_mode": "quantile"},
+            {"run_id": "r_point", "prediction_mode": "point"},
+            {"run_id": "r_quantile_degenerate", "prediction_mode": "quantile"},
+        ]
+    )
+
+
+def _stage9_oos_row(run_id: str, *, q10: float, q50: float, q90: float, y_true: float = 0.2, y_pred: float = 0.2) -> dict:
+    return {
+        "run_id": run_id,
+        "asset": "AAPL",
+        "feature_set_name": "BT",
+        "config_signature": f"cfg_{run_id}",
+        "split": "test",
+        "fold": "wf_1",
+        "seed": 1,
+        "horizon": 1,
+        "y_true": y_true,
+        "y_pred": y_pred,
+        "quantile_p10": q10,
+        "quantile_p50": q50,
+        "quantile_p90": q90,
+        "quantile_p10_post_guardrail": q10,
+        "quantile_p50_post_guardrail": q50,
+        "quantile_p90_post_guardrail": q90,
+    }
+
+
+def _stage9_oos() -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            # Non-degenerate quantiles, y_true within interval -> covered_80=1.
+            _stage9_oos_row("r_quantile_genuine", q10=0.1, q50=0.2, q90=0.3, y_true=0.15, y_pred=0.22),
+            # Point mode -- quantiles colapsam (p10==p50==p90 por contrato).
+            _stage9_oos_row("r_point", q10=0.2, q50=0.2, q90=0.2, y_true=0.1, y_pred=0.18),
+            # Quantile mode mas degenerado (p10==p90).
+            _stage9_oos_row("r_quantile_degenerate", q10=0.2, q50=0.2, q90=0.2, y_true=0.1, y_pred=0.18),
+        ]
+    )
+
+
+_STAGE9_PROBABILISTIC_BASES = (
+    "picp",
+    "mpiw",
+    "pred_interval_width",
+    "coverage_error",
+    "mean_pinball",
+    "pinball_q10",
+    "pinball_q50",
+    "pinball_q90",
+    "confidence_calibrated",
+    "prob_up",
+    "prob_down",
+)
+
+
+def test_genuine_quantile_run_contributes_to_picp() -> None:
+    out = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon(
+        _stage9_dim_run(),
+        _stage9_oos(),
+        _stage9_fact_config(),
+    )
+
+    row = out[out["run_id"] == "r_quantile_genuine"].iloc[0]
+    assert bool(row["is_quantile_genuine"]) is True
+    assert int(row["n_probabilistic_samples"]) == 1
+    assert float(row["picp_raw"]) == pytest.approx(1.0)
+    assert float(row["picp_post_guardrail"]) == pytest.approx(1.0)
+    assert float(row["mpiw_raw"]) == pytest.approx(0.2)
+    assert not pd.isna(row["mean_pinball_raw"])
+    assert not pd.isna(row["mean_pinball_post_guardrail"])
+
+
+def test_point_run_excluded_from_probabilistic_metrics() -> None:
+    out = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon(
+        _stage9_dim_run(),
+        _stage9_oos(),
+        _stage9_fact_config(),
+    )
+
+    row = out[out["run_id"] == "r_point"].iloc[0]
+    assert bool(row["is_quantile_genuine"]) is False
+    assert int(row["n_probabilistic_samples"]) == 0
+    # Point metrics intactas.
+    assert not pd.isna(row["rmse"])
+    assert not pd.isna(row["mae"])
+    assert not pd.isna(row["directional_accuracy"])
+    assert not pd.isna(row["bias"])
+    # Probabilisticas (raw + post_guardrail) NaN.
+    for base in _STAGE9_PROBABILISTIC_BASES:
+        assert pd.isna(row[f"{base}_raw"]), f"{base}_raw esperado NaN"
+        assert pd.isna(row[f"{base}_post_guardrail"]), f"{base}_post_guardrail esperado NaN"
+
+
+def test_degenerate_quantile_run_excluded_from_probabilistic_metrics() -> None:
+    out = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon(
+        _stage9_dim_run(),
+        _stage9_oos(),
+        _stage9_fact_config(),
+    )
+
+    row = out[out["run_id"] == "r_quantile_degenerate"].iloc[0]
+    assert bool(row["is_quantile_genuine"]) is False
+    assert int(row["n_probabilistic_samples"]) == 0
+    assert not pd.isna(row["rmse"])
+    assert not pd.isna(row["mae"])
+    for base in _STAGE9_PROBABILISTIC_BASES:
+        assert pd.isna(row[f"{base}_raw"]), f"{base}_raw esperado NaN"
+        assert pd.isna(row[f"{base}_post_guardrail"]), f"{base}_post_guardrail esperado NaN"
+
+
+def test_n_probabilistic_samples_matches_eligible_rows() -> None:
+    # Run misto: duas rows com mesmo horizon, uma elegivel e uma degenerada.
+    oos = pd.DataFrame(
+        [
+            _stage9_oos_row("r_mixed", q10=0.1, q50=0.2, q90=0.3, y_true=0.15, y_pred=0.22),
+            _stage9_oos_row("r_mixed", q10=0.2, q50=0.2, q90=0.2, y_true=0.10, y_pred=0.18),
+        ]
+    )
+    dim_run = pd.DataFrame(
+        [
+            {
+                "run_id": "r_mixed",
+                "model_version": "v1",
+                "feature_set_hash": "fh1",
+                "parent_sweep_id": "sw1",
+                "trial_number": 1,
+                "status": "ok",
+            }
+        ]
+    )
+    fact_config = pd.DataFrame([{"run_id": "r_mixed", "prediction_mode": "quantile"}])
+
+    out = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon(
+        dim_run, oos, fact_config
+    )
+    row = out.iloc[0]
+    assert int(row["n_samples"]) == 2
+    assert int(row["n_probabilistic_samples"]) == 1
+    assert int(row["n_probabilistic_samples"]) < int(row["n_samples"])
+    assert bool(row["is_quantile_genuine"]) is True
+
+
+def test_missing_fact_config_treats_as_non_quantile() -> None:
+    out = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon(
+        _stage9_dim_run(),
+        _stage9_oos(),
+        pd.DataFrame(),  # fact_config vazio -> conservador: nenhum run elegivel.
+    )
+
+    assert not out.empty
+    for _, row in out.iterrows():
+        assert bool(row["is_quantile_genuine"]) is False
+        assert int(row["n_probabilistic_samples"]) == 0
+        for base in _STAGE9_PROBABILISTIC_BASES:
+            assert pd.isna(row[f"{base}_raw"])
+            assert pd.isna(row[f"{base}_post_guardrail"])
+        # Point metrics ainda calculados.
+        assert not pd.isna(row["rmse"])
+        assert not pd.isna(row["mae"])
+
+
+def test_pred_interval_negative_unchanged_by_stage9_filter() -> None:
+    """Regression guard: gold_oos_quality_report._pred_interval_negative
+    eh Cat C raw-only e NAO depende do filtro Stage 9. Crossing em
+    quantis raw deve continuar sendo detectado mesmo em runs point/degenerados.
+    """
+    fact = pd.DataFrame(
+        [
+            {
+                "run_id": "r_crossing_degenerate",
+                "asset": "AAPL",
+                "feature_set_name": "BT",
+                "config_signature": "cfg1",
+                "split": "test",
+                "horizon": 1,
+                "timestamp_utc": "2026-01-01T00:00:00Z",
+                "target_timestamp_utc": "2026-01-02T00:00:00Z",
+                "y_true": 0.0,
+                "y_pred": 0.0,
+                # Crossing real em raw (p10 > p90 -> width < 0).
+                "quantile_p10": 1.0,
+                "quantile_p50": 0.0,
+                "quantile_p90": -1.0,
+                "quantile_p10_post_guardrail": -1.0,
+                "quantile_p50_post_guardrail": 0.0,
+                "quantile_p90_post_guardrail": 1.0,
+            }
+        ]
+    )
+    dim_run = pd.DataFrame(
+        [
+            {
+                "run_id": "r_crossing_degenerate",
+                "model_version": "v1",
+                "feature_set_hash": "fh1",
+                "parent_sweep_id": "sw1",
+                "trial_number": 1,
+                "status": "ok",
+            }
+        ]
+    )
+
+    out = RefreshAnalyticsStoreUseCase._build_gold_oos_quality_report(dim_run, fact)
+    run_row = out[out["scope"] == "run_split_horizon"].iloc[0]
+    # Crossing detectado independentemente do filtro Stage 9.
+    assert int(run_row["n_negative_interval_width"]) == 1
