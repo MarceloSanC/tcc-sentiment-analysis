@@ -29,6 +29,11 @@ metricas (ver `04_evaluation/`) nem o fluxo end-to-end (ver `DATA_FLOW.md`).
   model_version, config_signature, split_signature, pipeline_version)`.
 - **`schema_version`:** coluna obrigatoria em toda `dim_*`/`fact_*` para
   evolucao de schema com retrocompatibilidade controlada.
+- **`schema_version=2` (2026-05-17):** adiciona `training_run_id` em
+  `fact_model_artifacts` e nas tabelas silver de inferencia para materializar
+  a FK inferencia -> treino exigida pela Lei 3. Em rows legadas pre-Stage 10,
+  `training_run_id` pode permanecer `None` ate backfill resolvivel ou pendencia
+  manual documentada.
 - **Fingerprints:** `dataset_fingerprint`, `split_fingerprint`,
   `feature_set_hash`, `config_signature` — hashes que garantem que dois runs
   com o mesmo `run_id` realmente usaram exatamente os mesmos dados/configs.
