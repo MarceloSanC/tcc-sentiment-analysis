@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import json
+import logging
 
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import pandas as pd
 import pytest
@@ -49,9 +50,23 @@ class _InferenceRepo:
 
 
 class _MetadataModelLoader:
+    _logger = logging.getLogger(__name__)
+    _warned_legacy_metadata_paths: ClassVar[set[str]] = set()
+
     def load(self, model_dir: str | Path) -> LoadedTFTInferenceModel:
         model_path = Path(model_dir)
-        metadata = json.loads((model_path / "metadata.json").read_text(encoding="utf-8"))
+        metadata_path = model_path / "metadata.json"
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        raw_training_run_id = metadata.get("training_run_id")
+        training_run_id = str(raw_training_run_id) if raw_training_run_id is not None else None
+        if training_run_id is None:
+            metadata_key = str(metadata_path.resolve())
+            if metadata_key not in self._warned_legacy_metadata_paths:
+                self._warned_legacy_metadata_paths.add(metadata_key)
+                self._logger.warning(
+                    "Model metadata is missing training_run_id; treating artifact as pre-Stage 10 legacy.",
+                    extra={"metadata_path": metadata_key},
+                )
         return LoadedTFTInferenceModel(
             asset_id=str(metadata["asset_id"]),
             version=str(metadata["version"]),
@@ -65,7 +80,7 @@ class _MetadataModelLoader:
                 "max_prediction_length": 1,
                 "prediction_mode": "quantile",
             },
-            training_run_id=str(metadata["training_run_id"]),
+            training_run_id=training_run_id,
             scalers={},
             dataset_parameters={},
         )
@@ -226,3 +241,105 @@ def test_inference_training_run_id_feeds_gold_parent_sweep_id(tmp_path: Path) ->
 
     assert not gold.empty
     assert gold["parent_sweep_id"].tolist() == ["S1"]
+
+
+@pytest.mark.integration
+def test_legacy_metadata_without_training_run_id_results_in_null_parent_sweep_id(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    silver_dir = tmp_path / "silver"
+    model_dir = tmp_path / "models" / "AAPL" / "runs" / "20260303_120000_B"
+    model_dir.mkdir(parents=True)
+    (model_dir / "metadata.json").write_text(
+        json.dumps(
+            {
+                "asset_id": "AAPL",
+                "version": "20260303_120000_B",
+            }
+        ),
+        encoding="utf-8",
+    )
+    _MetadataModelLoader._warned_legacy_metadata_paths.clear()
+    caplog.set_level(logging.WARNING)
+
+    analytics_repo = ParquetAnalyticsRunRepository(silver_dir)
+    analytics_repo.upsert_dim_run(
+        {
+            "schema_version": ANALYTICS_SCHEMA_VERSION,
+            "run_id": "R1",
+            "execution_id": None,
+            "parent_sweep_id": "S1",
+            "trial_number": 1,
+            "fold": "wf_1",
+            "seed": 7,
+            "asset": "AAPL",
+            "feature_set_name": "BASELINE_FEATURES",
+            "feature_set_hash": "feature_hash",
+            "feature_list_ordered_json": '["close"]',
+            "config_signature": "config_sig",
+            "split_fingerprint": "split_sig",
+            "model_version": "20260303_120000_B",
+            "checkpoint_path_final": str(model_dir / "model_state.pt"),
+            "checkpoint_path_best": None,
+            "git_commit": "test",
+            "pipeline_version": "0.1",
+            "library_versions_json": "{}",
+            "hardware_info_json": "{}",
+            "status": "ok",
+            "duration_total_seconds": 1.0,
+            "eta_recorded_seconds": 0.0,
+            "retries": 0,
+            "created_at_utc": "2026-05-17T00:00:00+00:00",
+        }
+    )
+    analytics_repo.append_fact_model_artifacts(
+        {
+            "schema_version": ANALYTICS_SCHEMA_VERSION,
+            "run_id": "R1",
+            "training_run_id": None,
+            "asset": "AAPL",
+            "model_version": "20260303_120000_B",
+            "checkpoint_path_final": str(model_dir / "model_state.pt"),
+            "checkpoint_path_best": None,
+            "config_path": str(model_dir / "config.json"),
+            "scaler_path": None,
+            "encoder_path": None,
+            "feature_importance_json": "[]",
+            "attention_summary_json": "{}",
+            "logs_ref_json": "{}",
+        }
+    )
+
+    start = datetime(2026, 1, 1, tzinfo=UTC)
+    use_case = RunTFTInferenceUseCase(
+        dataset_repository=_DatasetRepo(_dataset(start)),
+        inference_repository=_InferenceRepo(),
+        model_loader=_MetadataModelLoader(),
+        inference_engine=_Engine(),
+        analytics_run_repository=analytics_repo,
+    )
+    use_case.execute(
+        asset_id="AAPL",
+        model_path=str(model_dir),
+        start_date=start + timedelta(days=5),
+        end_date=start + timedelta(days=5),
+    )
+
+    warnings = [r for r in caplog.records if "missing training_run_id" in r.message]
+    assert len(warnings) == 1
+
+    fact_feature_contrib_local = _read_table(silver_dir, "fact_feature_contrib_local")
+    dim_run = _read_table(silver_dir, "dim_run")
+
+    assert not fact_feature_contrib_local.empty
+    assert fact_feature_contrib_local["run_id"].isna().all()
+    assert fact_feature_contrib_local["training_run_id"].isna().all()
+
+    gold = RefreshAnalyticsStoreUseCase._build_gold_feature_contrib_local_summary(
+        fact_feature_contrib_local,
+        dim_run,
+    )
+
+    assert not gold.empty
+    assert gold["parent_sweep_id"].isna().all()
