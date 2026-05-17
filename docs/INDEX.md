@@ -104,9 +104,12 @@ interpretabilidade usado no TCC deve estar definido aqui.
 
 - [`04_evaluation/METRICS_DEFINITIONS.md`](04_evaluation/METRICS_DEFINITIONS.md) : formulas e implementacao das
   metricas pontuais (RMSE, MAE, DA, bias) e probabilisticas (pinball, PICP, MPIW,
-  cobertura por quantil).
+  cobertura por quantil); **politica canonica de variante quantilica (raw vs
+  post-guardrail) por tabela gold** (categorizacao A/B/C, sufixos `_raw`/`_post_guardrail`).
 - [`04_evaluation/CALIBRATION_AND_RISK.md`](04_evaluation/CALIBRATION_AND_RISK.md) : calibracao marginal por quantil,
-  PICP intervalar, bandas de aceitacao, metricas de risco (VaR, ES).
+  PICP intervalar, bandas de aceitacao, metricas de risco (VaR, ES); calibracao
+  e risco usam **post-guardrail como variante primaria** (sincronizado com
+  METRICS_DEFINITIONS.md §Variante quantilica).
 - [`04_evaluation/STATISTICAL_TESTS.md`](04_evaluation/STATISTICAL_TESTS.md) : DM/MCS/win-rate, ajuste Holm,
   alinhamento OOS por `target_timestamp`.
 - [`04_evaluation/BASELINES.md`](04_evaluation/BASELINES.md) : contrato canonico de baselines admissiveis

@@ -59,7 +59,21 @@ negativo = under-coverage (intervalos otimistas). Usado como metrica de calibrac
 Violacao da ordenacao monotonica de quantis: ocorre quando p10 > p50 ou p50 > p90
 na saida do modelo. Causa: quantile regression aprendeu quantis que se cruzam em
 algumas amostras (H3 do evidence log suportada). Mitigado pelo guardrail monotono
-pos-inferencia.
+pos-inferencia (ver `variante quantilica`).
+
+**variante quantilica (raw vs post-guardrail)**
+Duas variantes paralelas dos quantis previstos persistidas em `fact_oos_predictions`:
+(a) **raw** = saida direta do modelo (`quantile_p10`, `quantile_p50`, `quantile_p90`),
+podendo violar monotonicidade; (b) **post-guardrail** = rearranjo monotono via
+`QuantileGuardrailService.enforce_monotonic_triplet` (sort por linha), garantindo
+`p10 <= p50 <= p90`. Toda metrica probabilistica e persistida em ambas variantes
+com sufixos `_raw` / `_post_guardrail`. **Variante primaria das hipoteses H1, H2a,
+H2b: `post_guardrail`** — declarada via flag `--primary-quantile-contract`
+(default `post_guardrail`) e persistida como coluna `primary_quantile_contract`
+em `gold_model_decision_final`. Justificativa metodologica em
+`docs/07_reports/living-paper/20_method.md` §Politica de variante quantilica.
+Categorizacao por tabela (A=dual, B=post-only, C=raw-only) em
+`docs/04_evaluation/METRICS_DEFINITIONS.md` §Variante quantilica.
 
 ---
 
@@ -125,7 +139,9 @@ Referencia: `docs/ai/AGENT_CORE.md`.
 **guardrail monotonico**
 Pos-processamento que reordena quantis para garantir p10 <= p50 <= p90. Aplicado
 na persistencia de predicoes. Auditado via `gold_quantile_guardrail_audit`:
-`delta_pinball`, `delta_picp`, `delta_mpiw` before/after.
+`delta_pinball`, `delta_picp`, `delta_mpiw` before/after. As metricas calculadas
+sobre quantis pos-guardrail sao primarias para H1/H2a/H2b — ver
+`variante quantilica` na secao C.
 
 **leakage temporal**
 Uso de informacoes futuras no treino ou estimacao de features. Formas comuns:
