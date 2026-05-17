@@ -140,3 +140,30 @@ A variante usada por `gold_model_decision_final` (tabela de seleção do paper)
 homônima no output, com default `post_guardrail`. Plots herdam a mesma flag.
 Mudança de contrato primário entre versões do paper exige re-refresh com a
 flag alternativa — não retreina o modelo.
+
+## Critério de inclusão para inferências probabilísticas
+
+Métricas probabilísticas (PICP, MPIW, pinball, coverage_error, prob_up/down,
+confidence_calibrated) são reportadas apenas sobre rows elegíveis:
+`prediction_mode == 'quantile'` em `fact_config` **e** `quantile_p10 ≠
+quantile_p90` no **quantil bruto** (Categoria C de
+`docs/04_evaluation/METRICS_DEFINITIONS.md` §"Variante quantilica": detectar
+colapso emitido pelo modelo antes do guardrail mascarar). Métricas pontuais
+(RMSE, MAE, MAPE, sMAPE, DA, viés) são calculadas sobre todas as rows
+independentemente — não dependem do objeto quantilico.
+
+Por grupo `(run_id, split, horizon)`, o predicado `is_quantile_genuine`
+(permissivo: ≥ 1 row elegível) marca contribuição para o caminho
+probabilístico; claims H1/H2a/H2b filtram por `is_quantile_genuine == True`
+antes da agregação. O **gate estrito** de degeneração (`% rows com p10==p90
+≥ 5%` bloqueia o run inteiro) é regra complementar de promoção (Stage 11 do
+`PHASE_B_IMPLEMENTATION_CHECKLIST.md`), não de inclusão.
+
+**Motivação empírica:** auditoria pré-Phase B
+(`docs/07_reports/phase-gates/A_code_audit.md` §M5-Q5) registrou **91,25%
+de degenerescência quantilica** em runs históricos com `parent_sweep_id=NULL`.
+Métricas probabilísticas agregadas sobre intervalos de largura zero são
+matematicamente sem interpretação. Esse achado justifica (a) o reset do
+silver/gold pré-Phase B (Stage 3) e (b) reportar `n_probabilistic_samples`
+junto a todo claim probabilístico do paper, distinguindo amostra avaliável
+de amostra total.
