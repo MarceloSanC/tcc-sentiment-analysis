@@ -50,6 +50,14 @@ da Fase B/C:
   pre-registrada.
 - Interpretabilidade local e ilustrativa; conclusoes de contribuicao devem vir
   de evidencia global/por horizonte e estabilidade entre seeds/folds.
+- Recorte temporal dos dados confirmatórios: claims H1/H2a/H2b/H3 são restritos
+  a runs gerados após o reset silver/gold de 2026-05-10 (ver
+  `docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md` §"Archive pre-Phase B").
+  O histórico anterior, com 91,25% de degenerescência quantilica em runs
+  `parent_sweep_id=NULL` (auditado em
+  `docs/07_reports/phase-gates/A_code_audit.md` §M5-Q5 e em
+  `docs/07_reports/living-paper/evidence_log.md` 2026-05-01), foi arquivado
+  como diagnóstico e não alimenta resultados do Capítulo 5.
 
 ## Resultados validos mesmo com hipoteses refutadas
 
