@@ -3,6 +3,8 @@ from __future__ import annotations
 import argparse
 import logging
 
+from typing import Literal, cast
+
 from src.domain.services.quantile_contract_analyzer import QuantileDegeneracyThresholds
 from src.domain.services.scope_spec import ScopeSpec
 from src.use_cases.generate_prediction_analysis_plots_use_case import (
@@ -187,7 +189,10 @@ def main() -> None:
     setup_logging(logging.INFO)
     args = parse_args()
     paths = load_data_paths()
-    primary_quantile_contract = getattr(args, "primary_quantile_contract", "post_guardrail")
+    primary_quantile_contract: Literal["raw", "post_guardrail"] = cast(
+        Literal["raw", "post_guardrail"],
+        getattr(args, "primary_quantile_contract", "post_guardrail"),
+    )
     degeneracy_thresholds = QuantileDegeneracyThresholds(
         min_rows_for_gate=int(getattr(args, "degeneracy_min_rows_for_gate", 1000)),
         max_p10_eq_p90_rate=float(getattr(args, "degeneracy_max_p10_eq_p90_rate", 0.05)),
