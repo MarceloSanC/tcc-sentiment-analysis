@@ -209,7 +209,10 @@ def test_historical_mean_skips_rows_without_warmup_window(tmp_path: Path) -> Non
     assert len(oos) == 20
 
 
-def test_baseline_no_lookahead_invariant(tmp_path: Path) -> None:
+def test_baseline_target_timestamp_ordering(tmp_path: Path) -> None:
+    # Ordering invariant only: target_ts >= decision_ts (== for h=1; > for h>=2).
+    # Literal no-lookahead is verified by deterministic tests below
+    # (historical_*_uses_strictly_past_history).
     silver = tmp_path / "silver"
     ds = tmp_path / "ds.parquet"
     _write_dataset(ds)
@@ -227,7 +230,6 @@ def test_baseline_no_lookahead_invariant(tmp_path: Path) -> None:
     oos = _load_oos(silver)
     ts = pd.to_datetime(oos["timestamp_utc"], utc=True)
     tgt = pd.to_datetime(oos["target_timestamp_utc"], utc=True)
-    # h=1 -> target_ts == ts; h>=2 -> target_ts > ts. Never target_ts < ts.
     assert (tgt >= ts).all()
     h_gt_1 = oos["horizon"].astype(int) > 1
     assert (tgt[h_gt_1] > ts[h_gt_1]).all()
@@ -393,3 +395,145 @@ def test_baseline_window_override_rejected_on_pointless_baseline(tmp_path: Path)
             baselines=["zero_return"],
             baseline_windows={"zero_return": 30},
         )
+
+
+def test_historical_mean_rolling_uses_only_strictly_past_history(tmp_path: Path) -> None:
+    # F2: literal no-lookahead. target_return = [1.0, 2.0, ..., 100.0]; window=10.
+    # At index i=30 the rolling mean is mean(target_returns[20:30]) == 25.5
+    # (strictly past). Off-by-one inclusion of target_returns[i] would give 26.5.
+    silver = tmp_path / "silver"
+    ds = tmp_path / "ds.parquet"
+    _write_deterministic_dataset(ds, n_days=100)
+
+    repo = ParquetAnalyticsRunRepository(silver)
+    use_case = RunBaselinesUseCase(analytics_run_repository=repo)
+    use_case.execute(
+        asset="AAPL",
+        dataset_path=ds,
+        parent_sweep_id="sw_literal_mean",
+        split_definitions={"train": ("2024-01-01", "2024-04-09")},  # full 100 days
+        horizons=[1],
+        baselines=["historical_mean_rolling"],
+        baseline_windows={"historical_mean_rolling": 10},
+    )
+    oos = _load_oos(silver).sort_values("timestamp_utc").reset_index(drop=True)
+    # i=30 -> first row whose history has >= 10 elements is i=10 (after 10 warmup rows).
+    # Locate row with timestamp_utc == 2024-01-31 (zero-indexed i=30).
+    row_30 = oos[oos["timestamp_utc"] == "2024-01-31T00:00:00+00:00"].iloc[0]
+    expected = float(np.mean(np.arange(21, 31, dtype="float64")))  # mean of returns at indices 20..29 (values 21..30) = 25.5
+    assert float(row_30["y_pred"]) == pytest.approx(expected)
+    # Negative: y_pred must NOT equal mean of target_returns[21:31] (would be off-by-one).
+    bad = float(np.mean(np.arange(22, 32, dtype="float64")))
+    assert float(row_30["y_pred"]) != pytest.approx(bad)
+
+
+def test_historical_quantiles_rolling_uses_only_strictly_past_history(tmp_path: Path) -> None:
+    # F5: literal cover for quantile percentiles on strictly past window.
+    silver = tmp_path / "silver"
+    ds = tmp_path / "ds.parquet"
+    _write_deterministic_dataset(ds, n_days=100)
+
+    use_case = RunBaselinesUseCase(
+        analytics_run_repository=ParquetAnalyticsRunRepository(silver),
+    )
+    use_case.execute(
+        asset="AAPL",
+        dataset_path=ds,
+        parent_sweep_id="sw_literal_q",
+        split_definitions={"train": ("2024-01-01", "2024-04-09")},
+        horizons=[1],
+        baselines=["historical_quantiles_rolling"],
+        baseline_windows={"historical_quantiles_rolling": 10},
+    )
+    oos = _load_oos(silver).sort_values("timestamp_utc").reset_index(drop=True)
+    row_30 = oos[oos["timestamp_utc"] == "2024-01-31T00:00:00+00:00"].iloc[0]
+    window = np.arange(21, 31, dtype="float64")
+    assert float(row_30["quantile_p10"]) == pytest.approx(float(np.percentile(window, 10)))
+    assert float(row_30["quantile_p50"]) == pytest.approx(float(np.percentile(window, 50)))
+    assert float(row_30["quantile_p90"]) == pytest.approx(float(np.percentile(window, 90)))
+    # Negative: shifted window must NOT match.
+    shifted = np.arange(22, 32, dtype="float64")
+    assert float(row_30["quantile_p10"]) != pytest.approx(float(np.percentile(shifted, 10)))
+
+
+def test_baseline_y_true_aligns_with_tft_multi_horizon_convention(tmp_path: Path) -> None:
+    # F1 (case b) explicit: target_returns = [1..100]; at decision_ts at index i=30,
+    # the baseline must emit:
+    #   y_true(h=1) == target_returns[30] == 31
+    #   y_true(h=2) == target_returns[31] == 32
+    # If we mis-emitted y_true=target_returns[i] for all h, h=2 would also be 31.
+    silver = tmp_path / "silver"
+    ds = tmp_path / "ds.parquet"
+    _write_deterministic_dataset(ds, n_days=100)
+
+    use_case = RunBaselinesUseCase(
+        analytics_run_repository=ParquetAnalyticsRunRepository(silver),
+    )
+    use_case.execute(
+        asset="AAPL",
+        dataset_path=ds,
+        parent_sweep_id="sw_ytrue_align",
+        split_definitions={"train": ("2024-01-01", "2024-04-09")},
+        horizons=[1, 2],
+        baselines=["zero_return"],
+    )
+    oos = _load_oos(silver)
+    decision_ts = "2024-01-31T00:00:00+00:00"  # index i=30 (target_return value at this row is 31.0)
+    row_h1 = oos[(oos["timestamp_utc"] == decision_ts) & (oos["horizon"] == 1)].iloc[0]
+    row_h2 = oos[(oos["timestamp_utc"] == decision_ts) & (oos["horizon"] == 2)].iloc[0]
+    assert float(row_h1["y_true"]) == pytest.approx(31.0)
+    assert float(row_h2["y_true"]) == pytest.approx(32.0)
+    # Target timestamps must differ between horizons (paired-by-target_ts contract).
+    assert row_h1["target_timestamp_utc"] != row_h2["target_timestamp_utc"]
+
+
+def test_baseline_y_true_skips_rows_beyond_horizon_at_end_of_dataset(tmp_path: Path) -> None:
+    # F1 follow-up: at the last index of the dataset, h=2 has no future ground
+    # truth (i + h - 1 >= len(df)) and must be skipped (no y_true=NaN silently).
+    silver = tmp_path / "silver"
+    ds = tmp_path / "ds.parquet"
+    _write_deterministic_dataset(ds, n_days=20)
+
+    use_case = RunBaselinesUseCase(
+        analytics_run_repository=ParquetAnalyticsRunRepository(silver),
+    )
+    use_case.execute(
+        asset="AAPL",
+        dataset_path=ds,
+        parent_sweep_id="sw_end_skip",
+        split_definitions={"train": ("2024-01-01", "2024-01-20")},  # all 20 days
+        horizons=[1, 2],
+        baselines=["zero_return"],
+    )
+    oos = _load_oos(silver)
+    # The last decision_ts (2024-01-20, i=19) emits h=1 (y_true=target_returns[19]=20)
+    # but must skip h=2 (would need target_returns[20], absent).
+    last_ts = "2024-01-20T00:00:00+00:00"
+    rows_last = oos[oos["timestamp_utc"] == last_ts]
+    horizons_at_last = set(rows_last["horizon"].astype(int))
+    assert horizons_at_last == {1}, f"expected only h=1 at last decision_ts, got {horizons_at_last}"
+
+
+def test_baseline_empty_list_returns_noop_result(tmp_path: Path) -> None:
+    # G10: defensive — empty baselines argument is a no-op (does not raise,
+    # does not write anything, returns empty result).
+    silver = tmp_path / "silver"
+    ds = tmp_path / "ds.parquet"
+    _write_deterministic_dataset(ds)
+
+    use_case = RunBaselinesUseCase(
+        analytics_run_repository=ParquetAnalyticsRunRepository(silver),
+    )
+    result = use_case.execute(
+        asset="AAPL",
+        dataset_path=ds,
+        parent_sweep_id="sw_empty",
+        split_definitions=_split_definitions(),
+        horizons=[1],
+        baselines=[],
+    )
+    assert result.baselines_persisted == []
+    assert result.run_ids == {}
+    assert result.n_rows_per_baseline == {}
+    oos_dir = silver / "fact_oos_predictions"
+    assert not oos_dir.exists() or not any(oos_dir.rglob("*.parquet"))
