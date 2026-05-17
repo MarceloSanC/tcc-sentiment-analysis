@@ -105,6 +105,48 @@ def test_metrics_emits_nan_post_guardrail_when_silver_missing_columns() -> None:
     assert pd.isna(row["mean_pinball_post_guardrail"])
 
 
+def test_pred_interval_negative_uses_raw_quantiles_not_post_guardrail() -> None:
+    """Regression guard: _pred_interval_negative MUST be calculated on raw
+    quantiles. If someone changes it to *_post_guardrail, the check becomes
+    tautologically zero and loses diagnostic value (Categoria C).
+    Ver METRICS_DEFINITIONS.md §"Variante quantilica" - Categoria C.
+    """
+    fact = pd.DataFrame(
+        [
+            {
+                "run_id": "r1",
+                "asset": "AAPL",
+                "feature_set_name": "BT",
+                "config_signature": "cfg1",
+                "split": "test",
+                "horizon": 1,
+                "timestamp_utc": "2024-01-01T00:00:00Z",
+                "target_timestamp_utc": "2024-01-02T00:00:00Z",
+                "y_true": 0.0,
+                "y_pred": 0.0,
+                # Crossing real em raw (p10 > p90 -> width = -2 < 0).
+                "quantile_p10": 1.0,
+                "quantile_p50": 0.0,
+                "quantile_p90": -1.0,
+                # Monotonic em post-guardrail (width = 2 > 0).
+                "quantile_p10_post_guardrail": -1.0,
+                "quantile_p50_post_guardrail": 0.0,
+                "quantile_p90_post_guardrail": 1.0,
+            }
+        ]
+    )
+
+    out = RefreshAnalyticsStoreUseCase._build_gold_oos_quality_report(
+        _quantile_contract_dim_run(),
+        fact,
+    )
+
+    # n_negative_interval_width > 0 prova que o check leu raw (com crossing).
+    # Se alguem trocar por *_post_guardrail, este valor cairia para 0.
+    run_row = out[out["scope"] == "run_split_horizon"].iloc[0]
+    assert int(run_row["n_negative_interval_width"]) == 1
+
+
 def test_prob_up_emits_dual_variants() -> None:
     out = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon(
         _quantile_contract_dim_run(),

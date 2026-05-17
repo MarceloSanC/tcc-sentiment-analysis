@@ -1343,6 +1343,9 @@ class RefreshAnalyticsStoreUseCase:
         df["_target_before_ts"] = (df["target_timestamp_utc"] < df["timestamp_utc"]).fillna(False).astype(int)
         df["_y_true_null"] = df["y_true"].isna().astype(int)
         df["_y_pred_null"] = df["y_pred"].isna().astype(int)
+        # Categoria C (raw apenas): detecta crossing residual no quantil bruto do modelo.
+        # Sob post-guardrail seria tautologicamente 0 — perderia funcao diagnostica.
+        # Ver docs/04_evaluation/METRICS_DEFINITIONS.md §"Variante quantilica" - Categoria C.
         if {"quantile_p10", "quantile_p90"}.issubset(set(df.columns)):
             width = df["quantile_p90"] - df["quantile_p10"]
             df["_pred_interval_negative"] = ((~width.isna()) & (width < 0.0)).astype(int)
