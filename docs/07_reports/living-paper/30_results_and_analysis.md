@@ -41,6 +41,13 @@ Para o TCC/artigo:
 - Comparacoes antigas entre feature sets nao devem ser apresentadas como selecao
   confirmatoria de modelo.
 
+Adicionalmente, o snapshot silver/gold pré-2026-05-10 foi arquivado em
+`data/analytics_archive_pre_phase_b/` (ver
+`docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md` §"Archive pre-Phase B").
+Esse archive é diagnóstico histórico, não evidência confirmatória — todo claim
+H1/H2a/H2b/H3 do Capítulo 5 é restrito a runs gerados após o reset, com
+`parent_sweep_id` da coorte confirmatória.
+
 ## Estrutura sugerida
 - Configuracoes avaliadas
 - Resultados principais por horizonte/split
@@ -181,10 +188,13 @@ Criticos para promocao:
   - `crossing_bruto_rate <= 0.10%` (meta oficial futura: `<=0.05%`)
   - `crossing_pos_guardrail_rate = 0`
   - `negative_interval_width = 0`
-- Gate B (impacto do guardrail):
-  - `delta_pinball_rel <= +1.0%`
-  - `abs(delta_picp) <= 0.02`
-  - `delta_mpiw_rel <= +5.0%`
+- Gate B (impacto do guardrail; thresholds semânticos relativos definidos em
+  `docs/04_evaluation/CALIBRATION_AND_RISK.md` §"Bandas de aceitacao";
+  magnitudes calculadas a partir das colunas absolutas
+  `delta_<metrica>_post_minus_raw` do `gold_prediction_metrics_by_run_split_horizon`):
+  - `delta_pinball_rel <= +1.0%` (computado como `delta_mean_pinball_post_minus_raw / mean_pinball_raw`)
+  - `abs(delta_picp) <= 0.02` (computado a partir de `delta_picp_post_minus_raw`)
+  - `delta_mpiw_rel <= +5.0%` (computado como `delta_mpiw_post_minus_raw / mpiw_raw`)
 - Gate C (variabilidade relevante, H4):
   - grupo instavel quando `std_invalid_rate > 0.005`
   - reprovar familia quando `>20%` dos grupos forem instaveis
