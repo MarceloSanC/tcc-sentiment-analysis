@@ -551,15 +551,36 @@ Toda tabela gold cai em uma das tres categorias (criterio canonico em
   do Stage 11 permanecem **raw apenas** por design (Categoria C). Teste
   de regressao protege a primeira invariante; o gate do Stage 11 sera
   anotado quando implementado.
-- **Follow-up para PR de doc separado (nao bloqueante):**
-  (i) `CALIBRATION_AND_RISK.md` §Risk Method ainda lista
-  `var_10 = mean(quantile_p10)` raw; precisa ser atualizada para
-  `quantile_p10_post_guardrail` apos merge do 8.5;
-  (ii) `METRICS_DEFINITIONS.md` ainda nao contem secao explicita
-  "Variante quantilica" com categorizacao A/B/C — a referencia citada
-  no comentario inline de `_pred_interval_negative` (8.8) e na policy
-  canonica do Stage 8 ainda aponta a um pin nao publicado. Reportado
-  aqui como gap de doc; nao corrigido nesta PR.
+- 2026-05-16: **Follow-ups YELLOW do review do Stage 8 — estado pos-rebase
+  com PR #21**:
+  - (1) `METRICS_DEFINITIONS.md` §"Variante quantilica" — **fechado via
+    PR #21** (`8ab1d39`, ja em main): categorizacao A/B/C, mapeamento por
+    tabela gold (Cat A: 6 tabelas; Cat B: gold_prediction_risk,
+    gold_model_decision_final, plots; Cat C: _pred_interval_negative +
+    gate Stage 11), flag `primary_quantile_contract`, alias unsuffixed
+    (confidence_calibrated, prob_up, prob_down) com fallback raw.
+  - (2) `20_method.md` §"Politica de variante quantilica" + entrada
+    `variante quantilica` em GLOSSARY.md (secao V) + INDEX.md anotado —
+    **fechado via PR #21** (`8ab1d39`), com justificativa academica por
+    hipotese e referencias canonicas (Chernozhukov 2010, Gneiting &
+    Raftery 2007, Jorion 2007, Acerbi & Tasche 2002).
+  - (3) `CALIBRATION_AND_RISK.md` §Risk Method e §Calibration Acceptance
+    Thresholds sincronizados com quantis post-guardrail — **fechado via
+    PR #21** (`8ab1d39`).
+  - (4) `_POST_GUARDRAIL_MISSING_WARNING_EMITTED` resetado no inicio de
+    cada `execute()` — **fechado nesta branch** (opcao 2 do prompt):
+    preserva "warning unico por refresh" e elimina silencio permanente
+    por processo apos o primeiro disparo. Teste
+    `test_post_guardrail_missing_warning_emits_once_per_refresh_not_per_process`
+    cobre o comportamento via caplog. Commit:
+    `fix(analytics-store): resetar flag de warning post-guardrail por refresh`.
+  - Rebase: branch originalmente continha 3 commits de doc duplicando
+    PR #21 (METRICS_DEFINITIONS, 20_method/GLOSSARY/INDEX,
+    CALIBRATION_AND_RISK). Foram dropados em rebase nao-interativo apos
+    PR #21 ser mergeada; o conteudo permanece em main via PR #21.
+  - Validacao apos rebase: `.venv/bin/pytest tests/unit/ -q` ->
+    `433 passed` (baseline 432 + 1 teste novo do follow-up 4); zero
+    regressao em `tests/unit/use_cases/`.
 
 ### Tasks
 
