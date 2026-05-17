@@ -272,3 +272,59 @@ def test_analyze_degeneracy_splits_groups_by_prediction_mode() -> None:
     assert "point_groups_ignored=1" in evaluation.detail
     assert "prediction_mode=quantile" in evaluation.detail
     assert "prediction_mode=point:n_rows" not in evaluation.detail
+
+
+def test_analyze_degeneracy_returns_diagnostic_group_when_fact_config_missing() -> None:
+    oos = pd.DataFrame(
+        [
+            {
+                "run_id": "r1",
+                "split": "test",
+                "horizon": 1,
+                "quantile_p10": 0.5,
+                "quantile_p50": 0.5,
+                "quantile_p90": 0.5,
+            }
+            for _ in range(100)
+        ]
+    )
+
+    metrics = QuantileContractAnalyzer.analyze_degeneracy(oos, pd.DataFrame())
+    evaluation = QuantileContractAnalyzer.evaluate_degeneracy(
+        metrics,
+        thresholds=QuantileDegeneracyThresholds(),
+    )
+
+    assert len(metrics) == 1
+    assert metrics[0].prediction_mode is None
+    assert metrics[0].p10_eq_p90_rate == 1.0
+    assert evaluation.passed is True
+    assert "unknown_mode_groups_diagnostic_only=1" in evaluation.detail
+
+
+def test_evaluate_degeneracy_treats_unknown_prediction_mode_as_diagnostic() -> None:
+    oos = pd.DataFrame(
+        [
+            {
+                "run_id": "r1",
+                "split": "test",
+                "horizon": 1,
+                "quantile_p10": 0.5,
+                "quantile_p50": 0.5,
+                "quantile_p90": 0.5,
+            }
+            for _ in range(1500)
+        ]
+    )
+    fact_config = pd.DataFrame(
+        [{"run_id": "r1", "prediction_mode": "regression", "parent_sweep_id": "sw1"}]
+    )
+
+    evaluation = QuantileContractAnalyzer.evaluate_degeneracy(
+        QuantileContractAnalyzer.analyze_degeneracy(oos, fact_config),
+        thresholds=QuantileDegeneracyThresholds(),
+    )
+
+    assert evaluation.passed is True
+    assert "unknown_mode_groups_diagnostic_only=1" in evaluation.detail
+    assert "issues=" not in evaluation.detail

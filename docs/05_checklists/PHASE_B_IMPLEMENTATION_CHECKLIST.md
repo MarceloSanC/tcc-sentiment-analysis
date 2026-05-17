@@ -949,10 +949,40 @@ declarado em `prediction_mode`.
 - Confirmacao de escopo: `_pred_interval_negative` (Stage 8.8) e
   `is_quantile_genuine` (Stage 9) nao foram alterados. Stage 11 e gate
   adicional, nao substituto.
+- 2026-05-17 — pos-review (correcoes iter 2):
+  - Commits locais:
+    - `10b35d1 test(analytics-quality): guard contra uniformizacao do gate cat C para post-guardrail`
+    - `5d33608 feat(analytics-store): propagar thresholds CLI ao gold_quantile_degeneracy_report`
+    - `63a786b feat(analytics-quality): separar grupos por prediction_mode no gate de degeneracao`
+    - commit de notas/testes diagnosticos desta iteracao:
+      `docs(checklist): registrar correcoes pos-review do Stage 11`
+  - Validacao executada:
+    - `.venv/bin/pytest tests/unit/domain/services/test_quantile_contract_analyzer.py -v`
+      -> `11 passed`.
+    - `.venv/bin/pytest tests/unit/use_cases/test_validate_analytics_quality_use_case.py -v`
+      -> `22 passed, 2 warnings` (warnings de deprecacao legacy Block A).
+    - `.venv/bin/pytest tests/unit/use_cases/test_refresh_analytics_store_use_case.py -v`
+      -> `41 passed, 36 warnings` (warnings pre-existentes/nao bloqueantes em
+      refresh pairwise).
+    - `.venv/bin/pytest tests/unit/ -v`
+      -> `467 passed, 38 warnings`.
+    - `.venv/bin/ruff check src/domain/services/quantile_contract_analyzer.py src/use_cases/refresh_analytics_store_use_case.py src/main_refresh_analytics_store.py`
+      -> `All checks passed!`.
+  - Regression-guard contra `*_post_guardrail` adicionado, analogo ao Stage
+    8.8: `analyze_degeneracy` permanece raw-only para Categoria C.
+  - Thresholds CLI agora propagam ao `gold_quantile_degeneracy_report` via
+    `RefreshAnalyticsStoreUseCase.__init__(degeneracy_thresholds=...)`;
+    `gate_passed` na tabela honra override do operador.
+  - Grupo misto `prediction_mode` agora e split por modo internamente em
+    `analyze_degeneracy`. Warning removido; nao ha mais cenario "misto"; cada
+    modo e avaliado independentemente.
+  - Cobertura diagnostica adicionada para `fact_config` vazio e
+    `prediction_mode` desconhecido. Ambos permanecem conservadores e nao
+    bloqueiam o gate.
 
 ### Tasks
 
-- [~] **11.1** Adicionar `block_quantile_degeneracy_gate` em
+- [x] **11.1** Adicionar `block_quantile_degeneracy_gate` em
       `validate_analytics_quality_use_case.py` ou
       `quantile_contract_analyzer.py`. Regra:
       - `prediction_mode='quantile'` + `% p10==p90 >= 5%` (com
@@ -960,11 +990,11 @@ declarado em `prediction_mode`.
       - `prediction_mode='point'` + degeneracao = OK (esperado).
       **Aceite:** gate detecta runs do historico com 91,25% de degeneracao.
 
-- [~] **11.2** Reportar `n_rows`, `% p10==p90`, `% p10==p50==p90`
+- [x] **11.2** Reportar `n_rows`, `% p10==p90`, `% p10==p50==p90`
       por `(parent_sweep_id, split, horizon)` no output do gate.
       **Aceite:** quality report eh suficiente para debug pos-treino.
 
-- [~] **11.3** Adicionar teste unitario do fallback
+- [x] **11.3** Adicionar teste unitario do fallback
       `_manual_forward_quantiles_and_actuals` com `H>1`, validando
       valores especificos `(n, h, q)` em layouts
       `[batch, horizon, quantile]` e `[batch, quantile, horizon]`.
