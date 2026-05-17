@@ -51,6 +51,12 @@ def parse_args() -> argparse.Namespace:
         help="Skip generation of section 9.2/9.3 prediction analysis plots after gold refresh.",
     )
     parser.add_argument(
+        "--primary-quantile-contract",
+        choices=("raw", "post_guardrail"),
+        default="post_guardrail",
+        help="Primary quantile contract used for decision gold tables and prediction plots.",
+    )
+    parser.add_argument(
         "--plots-asset",
         type=str,
         default=None,
@@ -168,6 +174,7 @@ def main() -> None:
     setup_logging(logging.INFO)
     args = parse_args()
     paths = load_data_paths()
+    primary_quantile_contract = getattr(args, "primary_quantile_contract", "post_guardrail")
 
     scope_spec = None
     if args.scope_mode or args.scope_sweep_prefixes or args.scope_splits or args.scope_horizons:
@@ -182,6 +189,7 @@ def main() -> None:
         analytics_silver_dir=paths["analytics_silver"],
         analytics_gold_dir=paths["analytics_gold"],
         scope_spec=scope_spec,
+        primary_quantile_contract=primary_quantile_contract,
     )
     logger.info(
         "Analytics gold refresh scope resolved",
@@ -199,6 +207,7 @@ def main() -> None:
         extra={
             "gold_dir": result.gold_dir,
             "outputs": result.outputs,
+            "primary_quantile_contract": primary_quantile_contract,
         },
     )
 
@@ -275,6 +284,7 @@ def main() -> None:
             analytics_silver_dir=paths["analytics_silver"],
             analytics_gold_dir=paths["analytics_gold"],
             output_dir=plots_output_dir,
+            primary_quantile_contract=primary_quantile_contract,
         ).execute(
             asset=args.plots_asset,
             scope_csv_path=args.plots_scope_csv,
@@ -286,6 +296,7 @@ def main() -> None:
                 "asset": args.plots_asset,
                 "plots_scope_csv": args.plots_scope_csv,
                 "plots_scope_sweep_prefixes": args.plots_scope_sweep_prefixes,
+                "primary_quantile_contract": primary_quantile_contract,
                 "output_dir": plots_result.output_dir,
                 "outputs": plots_result.outputs,
             },

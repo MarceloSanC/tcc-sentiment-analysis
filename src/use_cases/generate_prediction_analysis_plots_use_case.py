@@ -5,7 +5,7 @@ import math
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
@@ -40,11 +40,20 @@ class GeneratePredictionAnalysisPlotsUseCase:
         analytics_gold_dir: str | Path,
         analytics_silver_dir: str | Path,
         output_dir: str | Path,
+        primary_quantile_contract: Literal["raw", "post_guardrail"] = "post_guardrail",
     ) -> None:
+        if primary_quantile_contract not in {"raw", "post_guardrail"}:
+            raise ValueError(
+                "primary_quantile_contract must be one of: raw, post_guardrail"
+            )
         self.analytics_gold_dir = Path(analytics_gold_dir)
         self.analytics_silver_dir = Path(analytics_silver_dir)
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.primary_quantile_contract = primary_quantile_contract
+
+    def _metric_col(self, base: str) -> str:
+        return f"{base}_{self.primary_quantile_contract}"
 
     @staticmethod
     def _load_gold_table(gold_dir: Path, name: str) -> pd.DataFrame:
@@ -288,7 +297,8 @@ class GeneratePredictionAnalysisPlotsUseCase:
     ) -> None:
         plt = _require_pyplot()
         df = metrics_by_config.copy()
-        if df.empty or not {"split", "horizon", "mean_rmse", "mean_mae", "mean_directional_accuracy", "mean_mean_pinball"}.issubset(df.columns):
+        pinball_col = self._metric_col("mean_mean_pinball")
+        if df.empty or not {"split", "horizon", "mean_rmse", "mean_mae", "mean_directional_accuracy", pinball_col}.issubset(df.columns):
             self._save_no_data(path, "Heatmap Metrics by Horizon", "insufficient data in gold_prediction_metrics_by_config")
             return
 
@@ -311,7 +321,7 @@ class GeneratePredictionAnalysisPlotsUseCase:
             ("mean_rmse", "RMSE"),
             ("mean_mae", "MAE"),
             ("mean_directional_accuracy", "DA"),
-            ("mean_mean_pinball", "Pinball"),
+            (pinball_col, f"Pinball | contract: {self.primary_quantile_contract}"),
         ]
 
         labels = sorted(df["config_label"].unique().tolist())
@@ -471,14 +481,15 @@ class GeneratePredictionAnalysisPlotsUseCase:
     def _build_fig_calibration_curve(self, *, path: Path, calibration_df: pd.DataFrame, horizons: list[int]) -> None:
         plt = _require_pyplot()
         df = calibration_df.copy()
-        if df.empty or not {"split", "horizon", "coverage_nominal", "picp"}.issubset(df.columns):
+        picp_col = self._metric_col("picp")
+        if df.empty or not {"split", "horizon", "coverage_nominal", picp_col}.issubset(df.columns):
             self._save_no_data(path, "Calibration Curve", "insufficient data in gold_prediction_calibration")
             return
         df = df[df["split"].astype(str) == "test"].copy()
         df["horizon"] = pd.to_numeric(df["horizon"], errors="coerce")
         df["coverage_nominal"] = pd.to_numeric(df["coverage_nominal"], errors="coerce")
-        df["picp"] = pd.to_numeric(df["picp"], errors="coerce")
-        df = df.dropna(subset=["horizon", "coverage_nominal", "picp"]).copy()
+        df[picp_col] = pd.to_numeric(df[picp_col], errors="coerce")
+        df = df.dropna(subset=["horizon", "coverage_nominal", picp_col]).copy()
         df = df[df["horizon"].isin(horizons)].copy()
         if df.empty:
             self._save_no_data(path, "Calibration Curve", "no calibration rows for selected horizons")
@@ -486,7 +497,7 @@ class GeneratePredictionAnalysisPlotsUseCase:
 
         agg = df.groupby("horizon", dropna=False).agg(
             nominal=("coverage_nominal", "mean"),
-            observed=("picp", "mean"),
+            observed=(picp_col, "mean"),
         ).reset_index()
 
         fig, ax = plt.subplots(figsize=(7, 6))
@@ -501,7 +512,7 @@ class GeneratePredictionAnalysisPlotsUseCase:
         ax.set_ylim(0.0, 1.0)
         ax.set_xlabel("Nominal coverage")
         ax.set_ylabel("Observed coverage (PICP)")
-        ax.set_title("fig_calibration_curve")
+        ax.set_title(f"fig_calibration_curve | contract: {self.primary_quantile_contract}")
         ax.grid(True, linestyle="--", alpha=0.3)
         ax.legend(loc="best")
         fig.tight_layout()
@@ -517,16 +528,18 @@ class GeneratePredictionAnalysisPlotsUseCase:
     ) -> None:
         plt = _require_pyplot()
         df = metrics_by_config.copy()
-        req = {"split", "horizon", "mean_mpiw", "mean_picp", "feature_set_name", "config_signature"}
+        mpiw_col = self._metric_col("mean_mpiw")
+        picp_col = self._metric_col("mean_picp")
+        req = {"split", "horizon", mpiw_col, picp_col, "feature_set_name", "config_signature"}
         if df.empty or not req.issubset(df.columns):
             self._save_no_data(path, "Interval Width vs Coverage", "insufficient data in gold_prediction_metrics_by_config")
             return
 
         df = df[df["split"].astype(str) == "test"].copy()
         df["horizon"] = pd.to_numeric(df["horizon"], errors="coerce")
-        df["mean_mpiw"] = pd.to_numeric(df["mean_mpiw"], errors="coerce")
-        df["mean_picp"] = pd.to_numeric(df["mean_picp"], errors="coerce")
-        df = df.dropna(subset=["horizon", "mean_mpiw", "mean_picp"]).copy()
+        df[mpiw_col] = pd.to_numeric(df[mpiw_col], errors="coerce")
+        df[picp_col] = pd.to_numeric(df[picp_col], errors="coerce")
+        df = df.dropna(subset=["horizon", mpiw_col, picp_col]).copy()
         df = df[df["horizon"].isin(horizons)].copy()
         if df.empty:
             self._save_no_data(path, "Interval Width vs Coverage", "no rows for selected horizons")
@@ -535,10 +548,10 @@ class GeneratePredictionAnalysisPlotsUseCase:
         fig, ax = plt.subplots(figsize=(9, 6))
         for h in sorted(set(int(x) for x in df["horizon"].tolist())):
             d = df[df["horizon"] == h]
-            ax.scatter(d["mean_mpiw"], d["mean_picp"], s=20, alpha=0.6, label=f"h+{h}")
+            ax.scatter(d[mpiw_col], d[picp_col], s=20, alpha=0.6, label=f"h+{h}")
         ax.set_xlabel("Mean MPIW (interval width)")
         ax.set_ylabel("Mean PICP (coverage)")
-        ax.set_title("fig_interval_width_vs_coverage")
+        ax.set_title(f"fig_interval_width_vs_coverage | contract: {self.primary_quantile_contract}")
         ax.grid(True, linestyle="--", alpha=0.3)
         ax.legend(loc="best")
         fig.tight_layout()
@@ -855,6 +868,7 @@ class GeneratePredictionAnalysisPlotsUseCase:
             "scope_csv_path": str(scope_csv_path) if scope_csv_path else None,
             "scope_sweep_prefixes": list(scope_sweep_prefixes or []),
             "scope_selected_labels": sorted(list(scope.get("labels", set()))) if scope else [],
+            "primary_quantile_contract": self.primary_quantile_contract,
             "outputs": outputs,
         }
         manifest_path = self.output_dir / "prediction_analysis_plots_manifest.json"

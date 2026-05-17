@@ -1,16 +1,21 @@
 from __future__ import annotations
 
 import math
+import logging
 
 from dataclasses import dataclass
 from itertools import combinations
 from pathlib import Path
+from typing import ClassVar, Literal
 
 import numpy as np
 import pandas as pd
 
 from src.domain.services.scope_spec import ScopeSpec, filter_dataframe_by_scope, validate_scope_spec
 from src.utils.path_policy import to_project_relative
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -20,17 +25,60 @@ class RefreshAnalyticsStoreResult:
 
 
 class RefreshAnalyticsStoreUseCase:
+    _RAW_QUANTILE_COLUMNS: ClassVar[tuple[str, str, str]] = ("quantile_p10", "quantile_p50", "quantile_p90")
+    _POST_GUARDRAIL_QUANTILE_COLUMNS: ClassVar[tuple[str, str, str]] = (
+        "quantile_p10_post_guardrail",
+        "quantile_p50_post_guardrail",
+        "quantile_p90_post_guardrail",
+    )
+    _PROBABILISTIC_METRIC_COLUMNS: ClassVar[tuple[str, ...]] = (
+        "pinball_q10",
+        "pinball_q50",
+        "pinball_q90",
+        "mean_pinball",
+        "picp",
+        "mpiw",
+        "pred_interval_width",
+        "coverage_error",
+        "confidence_calibrated",
+        "prob_up",
+        "prob_down",
+    )
+    _POINT_METRIC_COLUMNS: ClassVar[tuple[str, ...]] = (
+        "rmse",
+        "mae",
+        "mape",
+        "smape",
+        "directional_accuracy",
+        "bias",
+    )
+    _POST_GUARDRAIL_MISSING_WARNING_EMITTED: ClassVar[bool] = False
+
+    @classmethod
+    def _prediction_metric_columns(cls) -> list[str]:
+        return [
+            *cls._POINT_METRIC_COLUMNS,
+            *(f"{m}_raw" for m in cls._PROBABILISTIC_METRIC_COLUMNS),
+            *(f"{m}_post_guardrail" for m in cls._PROBABILISTIC_METRIC_COLUMNS),
+        ]
+
     def __init__(
         self,
         *,
         analytics_silver_dir: str | Path,
         analytics_gold_dir: str | Path,
         scope_spec: ScopeSpec | None = None,
+        primary_quantile_contract: Literal["raw", "post_guardrail"] = "post_guardrail",
     ) -> None:
+        if primary_quantile_contract not in {"raw", "post_guardrail"}:
+            raise ValueError(
+                "primary_quantile_contract must be one of: raw, post_guardrail"
+            )
         self.analytics_silver_dir = Path(analytics_silver_dir)
         self.analytics_gold_dir = Path(analytics_gold_dir)
         self.analytics_gold_dir.mkdir(parents=True, exist_ok=True)
         self.scope_spec = validate_scope_spec(scope_spec) if scope_spec is not None else None
+        self.primary_quantile_contract = primary_quantile_contract
 
     @staticmethod
     def _scope_loaded_table(
@@ -424,11 +472,11 @@ class RefreshAnalyticsStoreUseCase:
         return pd.Series(1.0 - cdf0, index=q10.index, dtype='float64')
 
     @staticmethod
-    def _build_gold_prediction_metrics_by_run_split_horizon(
+    def _build_gold_prediction_metrics_by_run_split_horizon_single_contract(
         dim_run: pd.DataFrame,
         fact_oos_predictions: pd.DataFrame,
         *,
-        quantile_columns: tuple[str, str, str] = ("quantile_p10", "quantile_p50", "quantile_p90"),
+        quantile_columns: tuple[str, str, str],
     ) -> pd.DataFrame:
         if fact_oos_predictions.empty:
             return pd.DataFrame()
@@ -527,6 +575,116 @@ class RefreshAnalyticsStoreUseCase:
         return agg
 
     @staticmethod
+    def _build_gold_prediction_metrics_by_run_split_horizon(
+        dim_run: pd.DataFrame,
+        fact_oos_predictions: pd.DataFrame,
+        *,
+        quantile_columns: tuple[str, str, str] = _RAW_QUANTILE_COLUMNS,
+    ) -> pd.DataFrame:
+        if quantile_columns != RefreshAnalyticsStoreUseCase._RAW_QUANTILE_COLUMNS:
+            return RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon_single_contract(
+                dim_run,
+                fact_oos_predictions,
+                quantile_columns=quantile_columns,
+            )
+
+        raw_metrics = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon_single_contract(
+            dim_run,
+            fact_oos_predictions,
+            quantile_columns=RefreshAnalyticsStoreUseCase._RAW_QUANTILE_COLUMNS,
+        )
+        if raw_metrics.empty:
+            return pd.DataFrame()
+
+        key_cols = [
+            c for c in [
+                'run_id', 'asset', 'feature_set_name', 'config_signature',
+                'split', 'fold', 'seed', 'horizon',
+                'model_version', 'feature_set_hash', 'parent_sweep_id', 'trial_number', 'status'
+            ] if c in raw_metrics.columns
+        ]
+        probabilistic_cols = [
+            c for c in RefreshAnalyticsStoreUseCase._PROBABILISTIC_METRIC_COLUMNS
+            if c in raw_metrics.columns
+        ]
+        unique_cols = [
+            c for c in raw_metrics.columns
+            if c not in probabilistic_cols
+        ]
+
+        out = raw_metrics[unique_cols].copy()
+        raw_renamed = raw_metrics[key_cols + probabilistic_cols].copy().rename(
+            columns={m: f"{m}_raw" for m in probabilistic_cols}
+        )
+        out = out.merge(raw_renamed, on=key_cols, how='left')
+
+        def _emit_deltas(frame: pd.DataFrame) -> pd.DataFrame:
+            for m in probabilistic_cols:
+                raw_col = f"{m}_raw"
+                post_col = f"{m}_post_guardrail"
+                if raw_col in frame.columns and post_col in frame.columns:
+                    frame[f"delta_{m}_post_minus_raw"] = frame[post_col] - frame[raw_col]
+            return frame
+
+        def _set_alias_post_primary(frame: pd.DataFrame, base: str) -> None:
+            post_col = f"{base}_post_guardrail"
+            raw_col = f"{base}_raw"
+            if post_col in frame.columns:
+                frame[base] = frame[post_col]
+            elif raw_col in frame.columns:
+                frame[base] = frame[raw_col]
+
+        def _set_alias_raw_only(frame: pd.DataFrame, base: str) -> None:
+            raw_col = f"{base}_raw"
+            if raw_col in frame.columns:
+                frame[base] = frame[raw_col]
+
+        missing_post = [
+            c for c in RefreshAnalyticsStoreUseCase._POST_GUARDRAIL_QUANTILE_COLUMNS
+            if c not in fact_oos_predictions.columns
+        ]
+        if missing_post:
+            if not RefreshAnalyticsStoreUseCase._POST_GUARDRAIL_MISSING_WARNING_EMITTED:
+                logger.warning(
+                    "Post-guardrail quantile columns missing; gold probabilistic post-guardrail metrics will be NaN",
+                    extra={"missing_columns": missing_post},
+                )
+                RefreshAnalyticsStoreUseCase._POST_GUARDRAIL_MISSING_WARNING_EMITTED = True
+            for m in probabilistic_cols:
+                out[f"{m}_post_guardrail"] = np.nan
+            for base in ("confidence_calibrated", "prob_up", "prob_down"):
+                _set_alias_raw_only(out, base)
+            return _emit_deltas(out)
+
+        post_metrics = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon_single_contract(
+            dim_run,
+            fact_oos_predictions,
+            quantile_columns=RefreshAnalyticsStoreUseCase._POST_GUARDRAIL_QUANTILE_COLUMNS,
+        )
+        if post_metrics.empty:
+            for m in probabilistic_cols:
+                out[f"{m}_post_guardrail"] = np.nan
+            for base in ("confidence_calibrated", "prob_up", "prob_down"):
+                _set_alias_raw_only(out, base)
+            return _emit_deltas(out)
+
+        post_probabilistic_cols = [c for c in probabilistic_cols if c in post_metrics.columns]
+        post_renamed = post_metrics[key_cols + post_probabilistic_cols].copy().rename(
+            columns={m: f"{m}_post_guardrail" for m in post_probabilistic_cols}
+        )
+        out = out.merge(post_renamed, on=key_cols, how='left')
+        for m in probabilistic_cols:
+            col = f"{m}_post_guardrail"
+            if col not in out.columns:
+                out[col] = np.nan
+        for base in ("confidence_calibrated", "prob_up", "prob_down"):
+            _set_alias_post_primary(out, base)
+        # Categoria A: efeito do guardrail diretamente queryavel no contrato
+        # primario. Substitui funcionalmente gold_quantile_guardrail_audit
+        # (que segue materializada por compatibilidade ate Phase B fechar).
+        return _emit_deltas(out)
+
+    @staticmethod
     def _build_gold_quantile_guardrail_audit(
         dim_run: pd.DataFrame,
         fact_oos_predictions: pd.DataFrame,
@@ -539,12 +697,12 @@ class RefreshAnalyticsStoreUseCase:
         if fact_oos_predictions.empty or not required.issubset(set(fact_oos_predictions.columns)):
             return pd.DataFrame()
 
-        base_metrics = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon(
+        base_metrics = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon_single_contract(
             dim_run,
             fact_oos_predictions,
             quantile_columns=('quantile_p10', 'quantile_p50', 'quantile_p90'),
         )
-        post_metrics = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon(
+        post_metrics = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon_single_contract(
             dim_run,
             fact_oos_predictions,
             quantile_columns=(
@@ -638,12 +796,7 @@ class RefreshAnalyticsStoreUseCase:
         if not set(cols).issubset(set(metrics_run_split_h.columns)):
             return pd.DataFrame()
 
-        metric_cols = [
-            'rmse', 'mae', 'mape', 'smape', 'directional_accuracy', 'bias',
-            'pinball_q10', 'pinball_q50', 'pinball_q90', 'mean_pinball',
-            'picp', 'mpiw', 'pred_interval_width', 'prob_up', 'prob_down',
-            'coverage_error', 'confidence_calibrated'
-        ]
+        metric_cols = RefreshAnalyticsStoreUseCase._prediction_metric_columns()
         available_metric_cols = [c for c in metric_cols if c in metrics_run_split_h.columns]
 
         frame = metrics_run_split_h.copy()
@@ -675,12 +828,7 @@ class RefreshAnalyticsStoreUseCase:
         if not set(cols).issubset(set(metrics_run_split_h.columns)):
             return pd.DataFrame()
 
-        metric_cols = [
-            'rmse', 'mae', 'mape', 'smape', 'directional_accuracy', 'bias',
-            'pinball_q10', 'pinball_q50', 'pinball_q90', 'mean_pinball',
-            'picp', 'mpiw', 'pred_interval_width', 'prob_up', 'prob_down',
-            'coverage_error', 'confidence_calibrated'
-        ]
+        metric_cols = RefreshAnalyticsStoreUseCase._prediction_metric_columns()
         available_metric_cols = [c for c in metric_cols if c in metrics_run_split_h.columns]
 
         frame = metrics_run_split_h.copy()
@@ -714,9 +862,17 @@ class RefreshAnalyticsStoreUseCase:
 
         keep = [
             c for c in [
-                'run_id', *cols, 'n_samples', 'pinball_q10', 'pinball_q50', 'pinball_q90',
-                'mean_pinball', 'picp', 'mpiw', 'pred_interval_width', 'coverage_nominal',
-                'coverage_error', 'prob_up', 'prob_down', 'confidence_calibrated'
+                'run_id', *cols, 'n_samples',
+                'pinball_q10_raw', 'pinball_q50_raw', 'pinball_q90_raw',
+                'mean_pinball_raw', 'picp_raw', 'mpiw_raw', 'pred_interval_width_raw',
+                'coverage_error_raw', 'confidence_calibrated_raw',
+                'pinball_q10_post_guardrail', 'pinball_q50_post_guardrail', 'pinball_q90_post_guardrail',
+                'mean_pinball_post_guardrail', 'picp_post_guardrail', 'mpiw_post_guardrail',
+                'pred_interval_width_post_guardrail', 'coverage_error_post_guardrail',
+                'confidence_calibrated_post_guardrail',
+                'prob_up_raw', 'prob_up_post_guardrail',
+                'prob_down_raw', 'prob_down_post_guardrail',
+                'coverage_nominal', 'prob_up', 'prob_down', 'confidence_calibrated'
             ] if c in metrics_run_split_h.columns
         ]
         return metrics_run_split_h[keep].copy()
@@ -733,11 +889,8 @@ class RefreshAnalyticsStoreUseCase:
             return pd.DataFrame()
 
         metric_cols = [
-            c for c in [
-                'rmse', 'mae', 'mape', 'smape', 'directional_accuracy', 'bias',
-                'mean_pinball', 'picp', 'mpiw', 'pred_interval_width',
-                'prob_up', 'prob_down', 'coverage_error', 'confidence_calibrated'
-            ] if c in metrics_run_split_h.columns
+            c for c in RefreshAnalyticsStoreUseCase._prediction_metric_columns()
+            if c in metrics_run_split_h.columns
         ]
         if not metric_cols:
             return pd.DataFrame()
@@ -778,11 +931,8 @@ class RefreshAnalyticsStoreUseCase:
             return pd.DataFrame()
 
         metric_cols = [
-            c for c in [
-                'rmse', 'mae', 'mape', 'smape', 'directional_accuracy', 'bias',
-                'mean_pinball', 'picp', 'mpiw', 'pred_interval_width',
-                'prob_up', 'prob_down', 'coverage_error', 'confidence_calibrated'
-            ] if c in df.columns
+            c for c in RefreshAnalyticsStoreUseCase._prediction_metric_columns()
+            if c in df.columns
         ]
         if not metric_cols:
             return pd.DataFrame()
@@ -935,26 +1085,48 @@ class RefreshAnalyticsStoreUseCase:
         if fact_oos_predictions.empty:
             return pd.DataFrame()
 
-        required = ["run_id", "split", "horizon", "y_pred", "quantile_p10", "quantile_p50"]
+        required = ["run_id", "split", "horizon", "y_pred"]
         missing = [c for c in required if c not in fact_oos_predictions.columns]
         if missing:
             return pd.DataFrame()
 
         df = fact_oos_predictions.copy()
-        for c in ["horizon", "y_pred", "quantile_p10", "quantile_p50"]:
+        for c in ["horizon", "y_pred"]:
             df[c] = pd.to_numeric(df[c], errors="coerce")
-        df = df.dropna(subset=["horizon", "y_pred", "quantile_p10", "quantile_p50"]).copy()
+        df = df.dropna(subset=["horizon", "y_pred"]).copy()
         if df.empty:
             return pd.DataFrame()
 
         df["horizon"] = df["horizon"].astype(int)
         df["expected_move_row"] = df["y_pred"].abs()
         df["downside_risk_row"] = np.maximum(-df["y_pred"], 0.0)
-        df["var_10_row"] = df["quantile_p10"]
-        # ES_10 approximado via extrapolacao linear da funcao quantil entre p10 e p50:
-        # ES_10 ~= 1.125*q10 - 0.125*q50
-        df["es_10_approx_row"] = 1.125 * df["quantile_p10"] - 0.125 * df["quantile_p50"]
-        df["es_10_approx_row"] = np.minimum(df["es_10_approx_row"], df["var_10_row"])
+
+        # Categoria B: var_10/es_10_approx exigem monotonicidade da funcao quantil
+        # (Jorion 2007; Acerbi & Tasche 2002). Sob raw com crossing o numero perde
+        # interpretacao de risco; usar exclusivamente as colunas post-guardrail.
+        post_q10 = "quantile_p10_post_guardrail"
+        post_q50 = "quantile_p50_post_guardrail"
+        if post_q10 in df.columns and post_q50 in df.columns:
+            df[post_q10] = pd.to_numeric(df[post_q10], errors="coerce")
+            df[post_q50] = pd.to_numeric(df[post_q50], errors="coerce")
+            df["var_10_row"] = df[post_q10]
+            # ES_10 approximado via extrapolacao linear da funcao quantil entre p10 e p50:
+            # ES_10 ~= 1.125*q10 - 0.125*q50
+            df["es_10_approx_row"] = 1.125 * df[post_q10] - 0.125 * df[post_q50]
+            df["es_10_approx_row"] = np.minimum(df["es_10_approx_row"], df["var_10_row"])
+        else:
+            if not RefreshAnalyticsStoreUseCase._POST_GUARDRAIL_MISSING_WARNING_EMITTED:
+                logger.warning(
+                    "Post-guardrail quantile columns missing; gold probabilistic post-guardrail metrics will be NaN",
+                    extra={
+                        "missing_columns": [
+                            c for c in (post_q10, post_q50) if c not in df.columns
+                        ]
+                    },
+                )
+                RefreshAnalyticsStoreUseCase._POST_GUARDRAIL_MISSING_WARNING_EMITTED = True
+            df["var_10_row"] = np.nan
+            df["es_10_approx_row"] = np.nan
 
         group_cols = [
             c for c in [
@@ -1171,6 +1343,9 @@ class RefreshAnalyticsStoreUseCase:
         df["_target_before_ts"] = (df["target_timestamp_utc"] < df["timestamp_utc"]).fillna(False).astype(int)
         df["_y_true_null"] = df["y_true"].isna().astype(int)
         df["_y_pred_null"] = df["y_pred"].isna().astype(int)
+        # Categoria C (raw apenas): detecta crossing residual no quantil bruto do modelo.
+        # Sob post-guardrail seria tautologicamente 0 — perderia funcao diagnostica.
+        # Ver docs/04_evaluation/METRICS_DEFINITIONS.md §"Variante quantilica" - Categoria C.
         if {"quantile_p10", "quantile_p90"}.issubset(set(df.columns)):
             width = df["quantile_p90"] - df["quantile_p10"]
             df["_pred_interval_negative"] = ((~width.isna()) & (width < 0.0)).astype(int)
@@ -1499,7 +1674,13 @@ class RefreshAnalyticsStoreUseCase:
         mcs_results: pd.DataFrame,
         win_rate_results: pd.DataFrame,
         paired_intersection: pd.DataFrame,
+        *,
+        primary_quantile_contract: Literal["raw", "post_guardrail"] = "post_guardrail",
     ) -> pd.DataFrame:
+        if primary_quantile_contract not in {"raw", "post_guardrail"}:
+            raise ValueError(
+                "primary_quantile_contract must be one of: raw, post_guardrail"
+            )
         if metrics_by_config.empty:
             return pd.DataFrame()
 
@@ -1511,16 +1692,26 @@ class RefreshAnalyticsStoreUseCase:
         if base.empty:
             return pd.DataFrame()
 
+        primary_metric_map = {
+            f"mean_pinball_q10_{primary_quantile_contract}": "mean_pinball_q10",
+            f"mean_pinball_q50_{primary_quantile_contract}": "mean_pinball_q50",
+            f"mean_pinball_q90_{primary_quantile_contract}": "mean_pinball_q90",
+            f"mean_mean_pinball_{primary_quantile_contract}": "mean_mean_pinball",
+            f"mean_picp_{primary_quantile_contract}": "mean_picp",
+            f"mean_mpiw_{primary_quantile_contract}": "mean_mpiw",
+        }
+
         # keep core metrics used in academic comparison
         keep = [
             c for c in [
                 "asset", "feature_set_name", "config_signature", "split", "horizon", "n_runs",
                 "mean_rmse", "std_rmse", "mean_mae", "std_mae", "mean_directional_accuracy", "std_directional_accuracy",
-                "mean_pinball_q10", "mean_pinball_q50", "mean_pinball_q90", "mean_mean_pinball",
-                "mean_picp", "mean_mpiw",
+                *primary_metric_map.keys(),
             ] if c in base.columns
         ]
         out = base[keep].copy()
+        out = out.rename(columns={src: dst for src, dst in primary_metric_map.items() if src in out.columns})
+        out["primary_quantile_contract"] = primary_quantile_contract
         out["config_label"] = out["feature_set_name"].astype(str) + "|" + out["config_signature"].astype(str)
         out = RefreshAnalyticsStoreUseCase._normalize_parent_sweep_id_for_merge(out)
 
@@ -1549,14 +1740,22 @@ class RefreshAnalyticsStoreUseCase:
 
         # merge generalization gap
         if not generalization_gap.empty and {"asset", "feature_set_name", "config_signature", "horizon"}.issubset(set(generalization_gap.columns)):
+            primary_gap_map = {
+                f"gap_mean_pinball_{primary_quantile_contract}_test_minus_val": "gap_mean_pinball_test_minus_val",
+                f"gap_picp_{primary_quantile_contract}_test_minus_val": "gap_picp_test_minus_val",
+                f"gap_mpiw_{primary_quantile_contract}_test_minus_val": "gap_mpiw_test_minus_val",
+            }
             gap_keep = [
                 c for c in [
                     "asset", "feature_set_name", "config_signature", "horizon",
                     "gap_rmse_test_minus_val", "gap_mae_test_minus_val", "gap_directional_accuracy_test_minus_val",
-                    "gap_mean_pinball_test_minus_val", "gap_picp_test_minus_val", "gap_mpiw_test_minus_val",
+                    *primary_gap_map.keys(),
                 ] if c in generalization_gap.columns
             ]
-            out = out.merge(generalization_gap[gap_keep], on=["asset", "feature_set_name", "config_signature", "horizon"], how="left")
+            gap = generalization_gap[gap_keep].rename(
+                columns={src: dst for src, dst in primary_gap_map.items() if src in gap_keep}
+            )
+            out = out.merge(gap, on=["asset", "feature_set_name", "config_signature", "horizon"], how="left")
 
         # DM summary per config
         dm_rows: list[dict[str, object]] = []
@@ -2016,6 +2215,12 @@ class RefreshAnalyticsStoreUseCase:
         return agg
 
     def execute(self, scope_spec: ScopeSpec | None = None) -> RefreshAnalyticsStoreResult:
+        # Resetar flag de warning por refresh: o aceite original do Stage 8.1
+        # e "warning unico por refresh", nao "por processo". Sem este reset,
+        # multiplos refreshes consecutivos no mesmo processo silenciariam
+        # diagnostico de silver legado permanentemente.
+        RefreshAnalyticsStoreUseCase._POST_GUARDRAIL_MISSING_WARNING_EMITTED = False
+
         effective_scope = validate_scope_spec(scope_spec) if scope_spec is not None else self.scope_spec
 
         dim_run = self._load_partitioned_table(self.analytics_silver_dir, "dim_run")
@@ -2089,6 +2294,10 @@ class RefreshAnalyticsStoreUseCase:
         gold_prediction_metrics_by_run_split_horizon = self._build_gold_prediction_metrics_by_run_split_horizon(
             dim_run,
             fact_oos_predictions,
+        )
+        logger.info(
+            "Analytics primary quantile contract resolved",
+            extra={"primary_quantile_contract": self.primary_quantile_contract},
         )
         outputs["gold_prediction_metrics_by_run_split_horizon"] = self._safe_write(
             gold_prediction_metrics_by_run_split_horizon,
@@ -2173,6 +2382,7 @@ class RefreshAnalyticsStoreUseCase:
                 mcs_results=gold_mcs,
                 win_rate_results=gold_win_rate,
                 paired_intersection=gold_paired_intersection,
+                primary_quantile_contract=self.primary_quantile_contract,
             ),
             self.analytics_gold_dir / "gold_model_decision_final.parquet",
         )
