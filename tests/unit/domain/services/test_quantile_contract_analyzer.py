@@ -177,6 +177,7 @@ def test_analyze_degeneracy_uses_raw_quantiles_not_post_guardrail() -> None:
     )
 
     assert metrics[0].p10_eq_p90_rate == 1.0
+    assert metrics[0].p10_eq_p50_eq_p90_rate == 1.0
     assert evaluation.passed is False
     assert "p10_eq_p90_rate=1.00000000" in evaluation.detail
 
