@@ -446,6 +446,16 @@ class RefreshAnalyticsStoreUseCase:
 
 
     @staticmethod
+    def _safe_iqr(series: pd.Series) -> float:
+        # Stage 9: filtro Cat C produz grupos all-NaN para runs point/degenerate.
+        # np.nanpercentile sobre all-NaN emite RuntimeWarning. Drop antes para
+        # suprimir o warning na origem mantendo o resultado (NaN).
+        cleaned = pd.to_numeric(series, errors='coerce').dropna()
+        if cleaned.empty:
+            return float('nan')
+        return float(np.percentile(cleaned, 75) - np.percentile(cleaned, 25))
+
+    @staticmethod
     def _pinball_loss(y_true: pd.Series, y_pred_q: pd.Series, quantile: float) -> pd.Series:
         q = float(quantile)
         diff = y_true - y_pred_q
@@ -475,6 +485,7 @@ class RefreshAnalyticsStoreUseCase:
     def _build_gold_prediction_metrics_by_run_split_horizon_single_contract(
         dim_run: pd.DataFrame,
         fact_oos_predictions: pd.DataFrame,
+        fact_config: pd.DataFrame | None = None,
         *,
         quantile_columns: tuple[str, str, str],
     ) -> pd.DataFrame:
@@ -505,6 +516,35 @@ class RefreshAnalyticsStoreUseCase:
         if valid.empty:
             return pd.DataFrame()
 
+        # Stage 9: filtro Cat C — eligibilidade probabilistica per row.
+        # Mode-gate (quantile vs point) via fact_config + anti-degeneracao
+        # sobre quantis RAW (detectar colapso emitido pelo modelo antes do
+        # guardrail mascarar). Pontuais nao sofrem filtro.
+        if (
+            fact_config is not None
+            and not fact_config.empty
+            and 'prediction_mode' in fact_config.columns
+            and 'run_id' in fact_config.columns
+        ):
+            valid = valid.merge(
+                fact_config[['run_id', 'prediction_mode']].drop_duplicates('run_id'),
+                on='run_id',
+                how='left',
+            )
+        else:
+            valid['prediction_mode'] = None
+
+        q10_raw_col, _, q90_raw_col = RefreshAnalyticsStoreUseCase._RAW_QUANTILE_COLUMNS
+        if q10_raw_col in valid.columns and q90_raw_col in valid.columns:
+            p10_raw = pd.to_numeric(valid[q10_raw_col], errors='coerce')
+            p90_raw = pd.to_numeric(valid[q90_raw_col], errors='coerce')
+            is_non_degenerate = (p10_raw != p90_raw) & p10_raw.notna() & p90_raw.notna()
+        else:
+            is_non_degenerate = pd.Series(False, index=valid.index)
+        is_quantile_mode = valid['prediction_mode'].astype(str).str.lower() == 'quantile'
+        prob_eligible_mask = (is_quantile_mode & is_non_degenerate).astype(bool)
+        valid['_prob_eligible'] = prob_eligible_mask
+
         valid['horizon'] = valid['horizon'].astype(int)
         valid['error'] = valid['y_pred'] - valid['y_true']
         valid['abs_error'] = valid['error'].abs()
@@ -531,6 +571,22 @@ class RefreshAnalyticsStoreUseCase:
             valid[q10_col], valid[q50_col], valid[q90_col]
         )
 
+        # Mascara per-row aplicada APENAS a colunas probabilisticas. Pontuais
+        # (sq_error, abs_error, ape, smape_row, da_row, error) permanecem para
+        # todos os runs (point + quantile + degenerados).
+        prob_row_cols = (
+            'pinball_q10_row',
+            'pinball_q50_row',
+            'pinball_q90_row',
+            'pinball_mean_row',
+            'prob_up_row',
+            'covered_80',
+            'pred_interval_width',
+        )
+        for col in prob_row_cols:
+            if col in valid.columns:
+                valid.loc[~prob_eligible_mask, col] = np.nan
+
         group_cols = [
             c for c in [
                 'run_id', 'asset', 'feature_set_name', 'config_signature',
@@ -542,6 +598,7 @@ class RefreshAnalyticsStoreUseCase:
             valid.groupby(group_cols, dropna=False)
             .agg(
                 n_samples=('y_true', 'count'),
+                n_probabilistic_samples=('_prob_eligible', 'sum'),
                 rmse=('sq_error', lambda x: float(np.sqrt(np.mean(x)))),
                 mae=('abs_error', 'mean'),
                 mape=('ape', 'mean'),
@@ -559,6 +616,15 @@ class RefreshAnalyticsStoreUseCase:
             )
             .reset_index()
         )
+
+        # Stage 9.2: is_quantile_genuine eh per-grupo (run_id, split, horizon),
+        # calculado dinamicamente (NAO persistido em silver). Definicao
+        # permissiva: True iff o grupo contribuiu com >=1 row elegivel.
+        # Gate estrito (% p10==p90 >= 5%) eh Stage 11.
+        agg['n_probabilistic_samples'] = pd.to_numeric(
+            agg['n_probabilistic_samples'], errors='coerce'
+        ).fillna(0).astype(int)
+        agg['is_quantile_genuine'] = agg['n_probabilistic_samples'] > 0
 
         agg['coverage_nominal'] = 0.80
         agg['coverage_error'] = agg['picp'] - agg['coverage_nominal']
@@ -578,6 +644,7 @@ class RefreshAnalyticsStoreUseCase:
     def _build_gold_prediction_metrics_by_run_split_horizon(
         dim_run: pd.DataFrame,
         fact_oos_predictions: pd.DataFrame,
+        fact_config: pd.DataFrame | None = None,
         *,
         quantile_columns: tuple[str, str, str] = _RAW_QUANTILE_COLUMNS,
     ) -> pd.DataFrame:
@@ -585,12 +652,14 @@ class RefreshAnalyticsStoreUseCase:
             return RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon_single_contract(
                 dim_run,
                 fact_oos_predictions,
+                fact_config,
                 quantile_columns=quantile_columns,
             )
 
         raw_metrics = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon_single_contract(
             dim_run,
             fact_oos_predictions,
+            fact_config,
             quantile_columns=RefreshAnalyticsStoreUseCase._RAW_QUANTILE_COLUMNS,
         )
         if raw_metrics.empty:
@@ -659,6 +728,7 @@ class RefreshAnalyticsStoreUseCase:
         post_metrics = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon_single_contract(
             dim_run,
             fact_oos_predictions,
+            fact_config,
             quantile_columns=RefreshAnalyticsStoreUseCase._POST_GUARDRAIL_QUANTILE_COLUMNS,
         )
         if post_metrics.empty:
@@ -688,6 +758,7 @@ class RefreshAnalyticsStoreUseCase:
     def _build_gold_quantile_guardrail_audit(
         dim_run: pd.DataFrame,
         fact_oos_predictions: pd.DataFrame,
+        fact_config: pd.DataFrame | None = None,
     ) -> pd.DataFrame:
         required = {
             'run_id', 'split', 'horizon',
@@ -697,14 +768,21 @@ class RefreshAnalyticsStoreUseCase:
         if fact_oos_predictions.empty or not required.issubset(set(fact_oos_predictions.columns)):
             return pd.DataFrame()
 
+        # Stage 9: audit recebe o mesmo filtro Cat C (mode-gate + non-degeneracy
+        # raw) do builder primario. Sem propagacao, runs point/degenerados
+        # produziriam NaN em mean_pinball_before/after/etc.; com propagacao,
+        # apenas runs elegiveis mostram delta numerico — semanticamente
+        # consistente com o filtro upstream.
         base_metrics = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon_single_contract(
             dim_run,
             fact_oos_predictions,
+            fact_config,
             quantile_columns=('quantile_p10', 'quantile_p50', 'quantile_p90'),
         )
         post_metrics = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon_single_contract(
             dim_run,
             fact_oos_predictions,
+            fact_config,
             quantile_columns=(
                 'quantile_p10_post_guardrail',
                 'quantile_p50_post_guardrail',
@@ -814,7 +892,7 @@ class RefreshAnalyticsStoreUseCase:
         for m in available_metric_cols:
             g = grouped[m].agg(['mean', 'std']).reset_index().rename(columns={'mean': f'mean_{m}', 'std': f'std_{m}'})
             out = out.merge(g, on=cols, how='left')
-            iqr = grouped[m].agg(lambda s: float(np.nanpercentile(s, 75) - np.nanpercentile(s, 25))).reset_index().rename(columns={m: f'iqr_{m}'})
+            iqr = grouped[m].agg(RefreshAnalyticsStoreUseCase._safe_iqr).reset_index().rename(columns={m: f'iqr_{m}'})
             out = out.merge(iqr, on=cols, how='left')
 
         return out
@@ -846,7 +924,7 @@ class RefreshAnalyticsStoreUseCase:
         for m in available_metric_cols:
             g = grouped[m].agg(['mean', 'std']).reset_index().rename(columns={'mean': f'mean_{m}', 'std': f'std_{m}'})
             out = out.merge(g, on=cols, how='left')
-            iqr = grouped[m].agg(lambda s: float(np.nanpercentile(s, 75) - np.nanpercentile(s, 25))).reset_index().rename(columns={m: f'iqr_{m}'})
+            iqr = grouped[m].agg(RefreshAnalyticsStoreUseCase._safe_iqr).reset_index().rename(columns={m: f'iqr_{m}'})
             out = out.merge(iqr, on=cols, how='left')
 
         return out
@@ -2249,6 +2327,12 @@ class RefreshAnalyticsStoreUseCase:
             scope_spec=effective_scope,
             scoped_run_ids=scoped_run_ids,
         )
+        fact_config = self._load_partitioned_table(
+            self.analytics_silver_dir,
+            "fact_config",
+            scope_spec=effective_scope,
+            scoped_run_ids=scoped_run_ids,
+        )
         fact_model_artifacts = self._load_partitioned_table(
             self.analytics_silver_dir,
             "fact_model_artifacts",
@@ -2294,6 +2378,7 @@ class RefreshAnalyticsStoreUseCase:
         gold_prediction_metrics_by_run_split_horizon = self._build_gold_prediction_metrics_by_run_split_horizon(
             dim_run,
             fact_oos_predictions,
+            fact_config,
         )
         logger.info(
             "Analytics primary quantile contract resolved",
@@ -2304,7 +2389,7 @@ class RefreshAnalyticsStoreUseCase:
             self.analytics_gold_dir / "gold_prediction_metrics_by_run_split_horizon.parquet",
         )
         outputs["gold_quantile_guardrail_audit"] = self._safe_write(
-            self._build_gold_quantile_guardrail_audit(dim_run, fact_oos_predictions),
+            self._build_gold_quantile_guardrail_audit(dim_run, fact_oos_predictions, fact_config),
             self.analytics_gold_dir / "gold_quantile_guardrail_audit.parquet",
         )
         outputs["gold_prediction_metrics_by_config"] = self._safe_write(
