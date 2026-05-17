@@ -220,11 +220,6 @@ class RunBaselinesUseCase:
                     continue
                 y_pred, q10, q50, q90 = prediction
 
-                y_true_value = target_returns[i]
-                if not np.isfinite(y_true_value):
-                    # AGENT_CORE Non-Negotiable: skip rows with missing supervision.
-                    continue
-
                 for h in horizons:
                     h_int = int(h)
                     if h_int < 1:
@@ -232,6 +227,19 @@ class RunBaselinesUseCase:
                     target_ts = decision_ts + pd.Timedelta(days=max(h_int - 1, 0))
                     if target_ts <= decision_ts and h_int > 1:
                         # Defensive: per the convention target_ts >= decision_ts for h>=2.
+                        continue
+                    # y_true must align with the TFT multi-horizon convention: actuals_matrix[i, h-1]
+                    # is the target_return at the future step (h-1 ahead). See
+                    # src/adapters/pytorch_forecasting_tft_trainer.py:480-544 (actuals from dataloader is
+                    # [batch, horizon]) + src/use_cases/train_tft_model_use_case.py:790 (y_true_m[i][h_idx]).
+                    # Using target_returns[i] for all horizons would mis-pair candidate vs baseline at h>=2.
+                    y_true_idx = i + h_int - 1
+                    if y_true_idx >= len(target_returns):
+                        # No future ground truth available for this horizon at this decision_ts.
+                        continue
+                    y_true_value = target_returns[y_true_idx]
+                    if not np.isfinite(y_true_value):
+                        # AGENT_CORE Non-Negotiable: skip rows with missing supervision.
                         continue
                     guardrail = QuantileGuardrailService.enforce_monotonic_triplet(q10, q50, q90)
                     err = float(y_pred - y_true_value)
