@@ -1061,26 +1061,48 @@ class RefreshAnalyticsStoreUseCase:
         if fact_oos_predictions.empty:
             return pd.DataFrame()
 
-        required = ["run_id", "split", "horizon", "y_pred", "quantile_p10", "quantile_p50"]
+        required = ["run_id", "split", "horizon", "y_pred"]
         missing = [c for c in required if c not in fact_oos_predictions.columns]
         if missing:
             return pd.DataFrame()
 
         df = fact_oos_predictions.copy()
-        for c in ["horizon", "y_pred", "quantile_p10", "quantile_p50"]:
+        for c in ["horizon", "y_pred"]:
             df[c] = pd.to_numeric(df[c], errors="coerce")
-        df = df.dropna(subset=["horizon", "y_pred", "quantile_p10", "quantile_p50"]).copy()
+        df = df.dropna(subset=["horizon", "y_pred"]).copy()
         if df.empty:
             return pd.DataFrame()
 
         df["horizon"] = df["horizon"].astype(int)
         df["expected_move_row"] = df["y_pred"].abs()
         df["downside_risk_row"] = np.maximum(-df["y_pred"], 0.0)
-        df["var_10_row"] = df["quantile_p10"]
-        # ES_10 approximado via extrapolacao linear da funcao quantil entre p10 e p50:
-        # ES_10 ~= 1.125*q10 - 0.125*q50
-        df["es_10_approx_row"] = 1.125 * df["quantile_p10"] - 0.125 * df["quantile_p50"]
-        df["es_10_approx_row"] = np.minimum(df["es_10_approx_row"], df["var_10_row"])
+
+        # Categoria B: var_10/es_10_approx exigem monotonicidade da funcao quantil
+        # (Jorion 2007; Acerbi & Tasche 2002). Sob raw com crossing o numero perde
+        # interpretacao de risco; usar exclusivamente as colunas post-guardrail.
+        post_q10 = "quantile_p10_post_guardrail"
+        post_q50 = "quantile_p50_post_guardrail"
+        if post_q10 in df.columns and post_q50 in df.columns:
+            df[post_q10] = pd.to_numeric(df[post_q10], errors="coerce")
+            df[post_q50] = pd.to_numeric(df[post_q50], errors="coerce")
+            df["var_10_row"] = df[post_q10]
+            # ES_10 approximado via extrapolacao linear da funcao quantil entre p10 e p50:
+            # ES_10 ~= 1.125*q10 - 0.125*q50
+            df["es_10_approx_row"] = 1.125 * df[post_q10] - 0.125 * df[post_q50]
+            df["es_10_approx_row"] = np.minimum(df["es_10_approx_row"], df["var_10_row"])
+        else:
+            if not RefreshAnalyticsStoreUseCase._POST_GUARDRAIL_MISSING_WARNING_EMITTED:
+                logger.warning(
+                    "Post-guardrail quantile columns missing; gold probabilistic post-guardrail metrics will be NaN",
+                    extra={
+                        "missing_columns": [
+                            c for c in (post_q10, post_q50) if c not in df.columns
+                        ]
+                    },
+                )
+                RefreshAnalyticsStoreUseCase._POST_GUARDRAIL_MISSING_WARNING_EMITTED = True
+            df["var_10_row"] = np.nan
+            df["es_10_approx_row"] = np.nan
 
         group_cols = [
             c for c in [

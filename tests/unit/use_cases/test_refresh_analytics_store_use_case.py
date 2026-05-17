@@ -105,6 +105,75 @@ def test_metrics_emits_nan_post_guardrail_when_silver_missing_columns() -> None:
     assert pd.isna(row["mean_pinball_post_guardrail"])
 
 
+def test_gold_prediction_risk_uses_post_guardrail_quantiles() -> None:
+    # Fixture: crossing em raw (p10 > p50), monotonico em post-guardrail.
+    fact = pd.DataFrame(
+        [
+            {
+                "run_id": "r1",
+                "asset": "AAPL",
+                "feature_set_name": "BT",
+                "config_signature": "cfg1",
+                "split": "test",
+                "fold": "wf_1",
+                "seed": 42,
+                "horizon": 1,
+                "y_pred": 0.5,
+                "quantile_p10": 1.0,
+                "quantile_p50": 0.0,
+                "quantile_p90": -1.0,
+                "quantile_p10_post_guardrail": -1.0,
+                "quantile_p50_post_guardrail": 0.0,
+                "quantile_p90_post_guardrail": 1.0,
+            }
+        ]
+    )
+
+    out = RefreshAnalyticsStoreUseCase._build_gold_prediction_risk(
+        _quantile_contract_dim_run(),
+        fact,
+    )
+
+    row = out.iloc[0]
+    assert float(row["var_10"]) == -1.0
+    assert float(row["var_10"]) != float(fact.iloc[0]["quantile_p10"])
+    # ES_10 = 1.125 * (-1.0) - 0.125 * 0.0 = -1.125, clipado em min(es, var_10) = -1.125
+    assert float(row["es_10_approx"]) == pytest.approx(-1.125)
+    assert float(row["es_10_approx"]) <= float(row["var_10"])
+
+
+def test_gold_prediction_risk_emits_nan_when_post_guardrail_missing() -> None:
+    fact = pd.DataFrame(
+        [
+            {
+                "run_id": "r1",
+                "asset": "AAPL",
+                "feature_set_name": "BT",
+                "config_signature": "cfg1",
+                "split": "test",
+                "fold": "wf_1",
+                "seed": 42,
+                "horizon": 1,
+                "y_pred": 0.5,
+                "quantile_p10": 1.0,
+                "quantile_p50": 0.0,
+                "quantile_p90": -1.0,
+            }
+        ]
+    )
+
+    out = RefreshAnalyticsStoreUseCase._build_gold_prediction_risk(
+        _quantile_contract_dim_run(),
+        fact,
+    )
+
+    row = out.iloc[0]
+    assert float(row["expected_move"]) == pytest.approx(0.5)
+    assert float(row["downside_risk"]) == 0.0
+    assert pd.isna(row["var_10"])
+    assert pd.isna(row["es_10_approx"])
+
+
 def test_primary_quantile_contract_default_is_post_guardrail(tmp_path) -> None:
     use_case = RefreshAnalyticsStoreUseCase(
         analytics_silver_dir=tmp_path / "silver",
