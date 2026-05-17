@@ -588,6 +588,7 @@ class RefreshAnalyticsStoreUseCase:
             valid.groupby(group_cols, dropna=False)
             .agg(
                 n_samples=('y_true', 'count'),
+                n_probabilistic_samples=('_prob_eligible', 'sum'),
                 rmse=('sq_error', lambda x: float(np.sqrt(np.mean(x)))),
                 mae=('abs_error', 'mean'),
                 mape=('ape', 'mean'),
@@ -605,6 +606,15 @@ class RefreshAnalyticsStoreUseCase:
             )
             .reset_index()
         )
+
+        # Stage 9.2: is_quantile_genuine eh per-grupo (run_id, split, horizon),
+        # calculado dinamicamente (NAO persistido em silver). Definicao
+        # permissiva: True iff o grupo contribuiu com >=1 row elegivel.
+        # Gate estrito (% p10==p90 >= 5%) eh Stage 11.
+        agg['n_probabilistic_samples'] = pd.to_numeric(
+            agg['n_probabilistic_samples'], errors='coerce'
+        ).fillna(0).astype(int)
+        agg['is_quantile_genuine'] = agg['n_probabilistic_samples'] > 0
 
         agg['coverage_nominal'] = 0.80
         agg['coverage_error'] = agg['picp'] - agg['coverage_nominal']
