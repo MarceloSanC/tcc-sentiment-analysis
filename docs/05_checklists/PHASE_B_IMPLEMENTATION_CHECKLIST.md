@@ -1012,29 +1012,125 @@ no mesmo contrato de grao do TFT para comparacao pareada valida.
 
 ### Notas de revisao:
 
+- 2026-05-17, branch `feat/analytics-store-stage12-statistical-baselines`.
+  Pytest: `tests/unit/use_cases/test_run_baselines_use_case.py` 9 testes
+  passando; `test_validate_analytics_quality_use_case.py` 26 testes passando
+  (22 originais + 4 do gate Stage 12); `test_refresh_analytics_store_use_case.py`
+  43 testes passando (41 originais + 2 do par TFT+baseline). Ruff limpo nas
+  areas tocadas.
+- **Subset MVP entregue** (3 baselines): `zero_return` (point),
+  `historical_mean_rolling` (window=30, point),
+  `historical_quantiles_rolling` (window=252, quantile).
+  **Follow-up YELLOW** (Stage 12-bis ou emenda pre-registro): `random_walk`,
+  `AR(1)`, `EWMA-vol` — nao bloqueiam H2a/H2b com subset atual mas devem ser
+  registrados como pendencia.
+- Decisoes registradas:
+  - `run_id` deterministico via sha256(canonical_json({baseline_name, asset,
+    parent_sweep_id, seed, window})). Lei 2 do Stage 1 aplica: re-execucao com
+    mesmos inputs colide ate `overwrite_on_collision=True`.
+  - `parent_sweep_id` e parametro OBRIGATORIO no `RunBaselinesUseCase.execute`
+    (sem default). `ValueError` imediato se vazio.
+  - `feature_set_name='baseline'`, `model_version=f'baseline_{name}_v1'` —
+    permite ao gate 12.2 e a downstream pairwise distinguir candidato vs
+    baseline sem heuristica fragil.
+  - `prediction_mode='point'` para `zero_return` e `historical_mean_rolling`;
+    `'quantile'` para `historical_quantiles_rolling`. Stage 9 filter exclui
+    baselines pontuais de PICP/MPIW automaticamente. Stage 11 degeneracy gate
+    nao dispara em modo `point` (ja contemplado).
+  - `training_run_id`: nao aplicavel ao Stage 12 (baseline nao gera artifacts
+    de modelo treinado; `fact_model_artifacts` nao e populada para baselines).
+    Stage 10 invariante preservada por contrato — `fact_inference_predictions`
+    nao recebe linhas de baseline.
+  - Guardrail monotonico (`QuantileGuardrailService.enforce_monotonic_triplet`)
+    aplicado a TODOS os baselines (paridade metodologica com TFT — principio
+    H2a/H2b do `20_method.md`). Para baselines pontuais com quantis triviais
+    iguais, post_guardrail == raw (nao-op, mas o passo do pipeline e
+    identico).
+  - Janela default justificada: `historical_mean_rolling=30` (suaviza ruido
+    diario sem capturar regime de medio prazo); `historical_quantiles_rolling=252`
+    (~1 ano de pregoes, anualidade financeira). Janelas sao parametrizaveis
+    via `BASELINE_SPECS` — basta declarar nova `BaselineSpec` para alterar.
+  - Warmup incompleto -> skip da linha; sem zero/NaN silencioso (validado em
+    `test_historical_mean_skips_rows_without_warmup_window`).
+  - Sem look-ahead: `history = target_returns[:i]` estritamente passada
+    relativa ao decision_timestamp (validado em `test_baseline_no_lookahead_invariant`).
+- Gate 12.2 (`baselines_share_parent_sweep_id_with_candidates`) ativo APENAS
+  em `scope_spec.scope_mode == 'cohort_decision'`. Em `global_health` retorna
+  `skipped(not_cohort_decision)` — garante que silvers historicos pre-Stage
+  12 nao disparam falso positivo. Sweep com `parent_sweep_id` nulo/none e
+  ignorado.
+- Cross-links: Stage 1 (overwrite_on_collision/Lei 2); Stage 5
+  (`_pairwise_group_cols` cohort-aware via `parent_sweep_id`); Stage 8
+  (variante quantilica raw/post-guardrail); Stage 9 (prediction_mode filter
+  para metricas probabilisticas); Stage 10 (`training_run_id` invariante
+  preservada por nao tocar `fact_model_artifacts`); Stage 11 (gate de
+  degeneracao convive com baselines pontuais via `prediction_mode='point'`).
+
+- 2026-05-17 (follow-up review), branch idem. Findings YELLOW do review
+  inicial resolvidos:
+  - **F1 (y_true multi-horizon): case (b)**. Investigacao em
+    [`src/adapters/pytorch_forecasting_tft_trainer.py:480-544`](../../src/adapters/pytorch_forecasting_tft_trainer.py#L480-L544)
+    confirmou que `actuals_matrix[i, h-1]` vem do dataloader
+    pytorch-forecasting como o target_return no passo futuro (h-1 ahead);
+    [`src/use_cases/train_tft_model_use_case.py:790`](../../src/use_cases/train_tft_model_use_case.py#L790)
+    lê `y_true = y_true_m[i][h_idx]`. Baseline ajustado em
+    [`src/use_cases/run_baselines_use_case.py`](../../src/use_cases/run_baselines_use_case.py)
+    `_emit_oos_rows` para usar `y_true = target_returns[i + h - 1]` com skip
+    quando `i + h - 1 >= len(df)` (sem ground truth futuro disponivel) ou
+    quando o valor nao for finito.
+  - **F2 (no-lookahead literal)**: teste deterministico
+    `test_historical_mean_rolling_uses_only_strictly_past_history` (serie
+    1..100, window=10, assert literal `y_pred == 25.5` em i=30 + assert
+    negativo contra off-by-one).
+  - **F3 (win_rate pairwise)**: cobertura adicionada em
+    `test_refresh_win_rate_pairwise_includes_candidate_vs_baseline_when_shared_parent_sweep_id`.
+  - **F4 (janelas parametrizaveis)**: parametro `baseline_windows: dict[str, int] | None`
+    em `RunBaselinesUseCase.execute`. Janela efetiva entra em `run_id`,
+    `feature_set_hash`, `config_signature`, `fact_config.max_encoder_length`
+    e `training_config_json` — determinismo preservado (mesma override ->
+    mesmo run_id; override diferente -> run_id distinto, sem colidir).
+  - **F5 (asserts fracos quantis)**: cobertura literal
+    `test_historical_quantiles_rolling_uses_only_strictly_past_history`
+    bate p10/p50/p90 contra `np.percentile(target_returns[i-w:i], q)`.
+  - **G3 (janela no pre-registro)**: janelas sao parametros de runtime via
+    `baseline_windows`; defaults registrados nas Notas servem para reprodu-
+    cao do MVP, override permitido para sweeps futuros sem code change.
+  - **G10 (DataFrame vazio)**: `test_baseline_empty_list_returns_noop_result`
+    confirma `baselines=[]` retorna noop sem escrever silver.
+  - Renomeacao para clareza: `test_baseline_no_lookahead_invariant` ->
+    `test_baseline_target_timestamp_ordering` (o teste original so cobria
+    ordenacao temporal; literal no-lookahead passa aos novos testes
+    deterministicos).
+  Pytest: 492 passed (vs 482 baseline + 10 testes novos -- 9 em
+  `test_run_baselines_use_case.py` (5 F2/F5/G10/F1-pairwise + 4 F4) e
+  1 em `test_refresh_analytics_store_use_case.py` (F3 win_rate)).
+  Ruff limpo nas areas tocadas.
+
 ### Tasks
 
-- [ ] **12.1** Implementar runner de baselines persistindo em
+- [~] **12.1** Implementar runner de baselines persistindo em
       `fact_oos_predictions` no mesmo grao:
       `(run_id, parent_sweep_id, split, horizon, target_timestamp_utc, y_true, y_pred)`
       e quantis quando aplicavel. Lista canonica conforme `A_code_audit.md`
       §M7-Q2:
-      - `zero_return` (ponto + quantis triviais)
-      - random walk
-      - media historica
-      - AR(1)
-      - EWMA-vol (quantis historicos derivados de volatilidade EWMA)
-      - quantis historicos (empirical p10/p50/p90)
+      - `zero_return` (ponto + quantis triviais) — **entregue (MVP)**
+      - random walk — *follow-up YELLOW*
+      - media historica — **entregue (MVP)** como `historical_mean_rolling`
+      - AR(1) — *follow-up YELLOW*
+      - EWMA-vol (quantis historicos derivados de volatilidade EWMA) —
+        *follow-up YELLOW*
+      - quantis historicos (empirical p10/p50/p90) — **entregue (MVP)** como
+        `historical_quantiles_rolling`
       Subset minimo a entregar deve ser fixado no pre-registro.
       **Aceite:** baselines aparecem em silver com `status=ok` e entram
       nas tabelas pareadas DM/MCS/win-rate.
 
-- [ ] **12.2** Garantir que baselines da rodada confirmatoria compartilham
+- [~] **12.2** Garantir que baselines da rodada confirmatoria compartilham
       o mesmo `parent_sweep_id` dos candidatos TFT.
       **Aceite:** check automatizado falha quando baseline/candidato caem
       em sweep ids diferentes.
 
-- [ ] **12.3** Cobrir em testes/fixture de refresh e quality gate:
+- [~] **12.3** Cobrir em testes/fixture de refresh e quality gate:
       candidato + baseline no mesmo sweep geram comparacoes pareadas
       nao vazias em `gold_dm_pairwise_results` e `gold_mcs_results`.
       **Aceite:** suite alvo passa.

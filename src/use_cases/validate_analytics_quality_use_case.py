@@ -919,6 +919,47 @@ class ValidateAnalyticsQualityUseCase:
 
         self._record(checks, "gold_metrics_by_config_n_oos_contract", n_oos_ok, n_oos_detail)
 
+        # Stage 12 gate: candidate sweeps must include at least one baseline run
+        # sharing the same parent_sweep_id. Active only in cohort_decision scope
+        # to avoid false positives on legacy/global_health silvers (pre-Stage 12).
+        baseline_parity_ok = True
+        baseline_parity_detail = "skipped(not_cohort_decision)"
+        if scope_spec.scope_mode == "cohort_decision" and not dim_run.empty:
+            needed_cols = {"parent_sweep_id", "feature_set_name", "model_version"}
+            missing_cols = sorted(needed_cols - set(dim_run.columns))
+            if missing_cols:
+                baseline_parity_ok = False
+                baseline_parity_detail = f"missing_columns={missing_cols}"
+            else:
+                dim_view = dim_run.copy()
+                feature_set_lower = dim_view["feature_set_name"].astype(str).str.strip().str.lower()
+                model_version_lower = dim_view["model_version"].astype(str).str.strip().str.lower()
+                dim_view["_is_baseline"] = feature_set_lower.eq("baseline") | model_version_lower.str.startswith(
+                    "baseline_"
+                )
+                issues: list[str] = []
+                for sweep_id, grp in dim_view.groupby("parent_sweep_id", dropna=False):
+                    sweep_value = str(sweep_id) if pd.notna(sweep_id) else "<null>"
+                    if not sweep_value or sweep_value.lower() in {"none", "nan", "null", "<na>"}:
+                        continue
+                    n_candidates = int((~grp["_is_baseline"]).sum())
+                    n_baselines = int(grp["_is_baseline"].sum())
+                    if n_candidates > 0 and n_baselines == 0:
+                        issues.append(
+                            f"sweep={sweep_value},candidates={n_candidates},baselines=0"
+                        )
+                if issues:
+                    baseline_parity_ok = False
+                    baseline_parity_detail = ", ".join(issues)
+                else:
+                    baseline_parity_detail = "ok"
+        self._record(
+            checks,
+            "baselines_share_parent_sweep_id_with_candidates",
+            baseline_parity_ok,
+            baseline_parity_detail,
+        )
+
         # P0: official runs quantile/attention contract
         contract_ok = True
         contract_issues: list[str] = []
