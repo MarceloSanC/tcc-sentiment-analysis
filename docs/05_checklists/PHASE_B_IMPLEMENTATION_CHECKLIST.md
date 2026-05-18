@@ -1259,6 +1259,13 @@ sem cruzar com fontes processadas.
   apos merge sem dropar; pos-Stage 14, a guarda equivalente esta no
   novo assert (defense-in-depth acima) operando sobre o nome novo.
   Mantida sem mudanca para nao expandir o blast radius do PR.
+- 2026-05-17 (follow-up post-review) — endereçados 3 YELLOWs da revisão:
+  (1) `canonical_for` em DATA_SOURCES.md ganhou tag
+  `fundamentals_fallback_policy`; (2) INDEX.md linha 76-77 expandida para
+  refletir a politica de fallback; (3) novo teste
+  `test_fundamentals_effective_date_applies_45d_fallback_when_reported_date_missing`
+  cobre regressão em :117-118 (`fiscal_date_end + timedelta(days=45)`).
+  Suite continua em 503 passed (502 + 1 novo); ruff limpo.
 
 ### Tasks
 
