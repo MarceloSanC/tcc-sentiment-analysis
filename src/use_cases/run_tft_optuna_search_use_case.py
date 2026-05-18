@@ -8,7 +8,7 @@ import shutil
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar, Literal
 
 import pandas as pd
 
@@ -36,6 +36,8 @@ class RunTFTOptunaSearchResult:
 
 
 class RunTFTOptunaSearchUseCase:
+    VALID_OBJECTIVE_METRICS: ClassVar[tuple[str, ...]] = ("robust_score", "mean_val_rmse")
+
     def __init__(
         self,
         *,
@@ -46,7 +48,7 @@ class RunTFTOptunaSearchUseCase:
         replica_seeds: list[int] | None,
         continue_on_error: bool,
         merge_tests: bool = False,
-        objective_metric: str = "robust_score",
+        objective_metric: Literal["robust_score", "mean_val_rmse"] = "robust_score",
         objective_lambda: float = 1.0,
     ) -> None:
         validate_train_runner_contract(train_runner)
@@ -57,7 +59,19 @@ class RunTFTOptunaSearchUseCase:
         self.replica_seeds = list(replica_seeds or [7, 42, 123])
         self.continue_on_error = bool(continue_on_error)
         self.merge_tests = bool(merge_tests)
-        self.objective_metric = str(objective_metric or "robust_score")
+        normalized_metric = str(objective_metric or "robust_score")
+        # Stage 13: fail loud at __init__ instead of waiting until the first trial
+        # runs _objective_from_summary — prevents starting a study under a
+        # leakage-prone metric (M1-Q4).
+        if normalized_metric not in self.VALID_OBJECTIVE_METRICS:
+            raise ValueError(
+                f"objective_metric={normalized_metric!r} invalido. "
+                f"Opcoes validas: {self.VALID_OBJECTIVE_METRICS}. "
+                "Stage 13: mean_test_rmse e joint_val_test_rmse removidos "
+                "(leakage metodologico — usar test set como criterio de HPO "
+                "viola separacao val/test; ver A_code_audit.md §M1-Q4)."
+            )
+        self.objective_metric = normalized_metric
         self.objective_lambda = float(objective_lambda)
 
     @staticmethod
@@ -177,20 +191,10 @@ class RunTFTOptunaSearchUseCase:
             value = self._to_float(top_run.get("mean_val_rmse"))
             return value if value is not None else float("inf")
 
-        if self.objective_metric == "mean_test_rmse":
-            value = self._to_float(top_run.get("mean_test_rmse"))
-            return value if value is not None else float("inf")
-
-        if self.objective_metric == "joint_val_test_rmse":
-            mean_val = self._to_float(top_run.get("mean_val_rmse"))
-            mean_test = self._to_float(top_run.get("mean_test_rmse"))
-            if mean_val is None or mean_test is None:
-                return float("inf")
-            return (mean_val + mean_test) / 2.0
-
+        # Defense in depth: unreachable if __init__ validation is intact.
         raise ValueError(
             "Unsupported objective_metric. "
-            "Use one of: robust_score, mean_val_rmse, mean_test_rmse, joint_val_test_rmse"
+            f"Use one of: {self.VALID_OBJECTIVE_METRICS}"
         )
 
     @staticmethod
