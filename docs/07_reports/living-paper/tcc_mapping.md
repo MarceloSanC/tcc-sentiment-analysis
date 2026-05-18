@@ -60,16 +60,18 @@ Observacao: 2.4 sincronizada com H1/H2a/H2b/H3 em 2026-05-17.
 
 | Secao | Fonte primaria | Fonte complementar | Status fonte | Status .tex |
 |---|---|---|---|---|
-| 3.1 Previsao de series financeiras | `docs/07_reports/living-paper/10_problem_and_related_work.md` | `docs/00_overview/STRATEGIC_DIRECTION.md` secao 3 | parcial | v1 existe; expandir base teorica |
-| 3.2 Modelagem com deep learning | `docs/07_reports/living-paper/10_problem_and_related_work.md` | `text/7_Referencias/7_Referencias.bib` | pendente | v1 existe; revisar profundidade |
-| 3.3 Temporal Fusion Transformer | `docs/07_reports/living-paper/10_problem_and_related_work.md` | `docs/00_overview/GLOSSARY.md`, `docs/03_modeling/MULTI_HORIZON.md` | parcial | v1 existe; revisar TFT/quantis |
-| 3.4 Predicao probabilistica e quantilica | `docs/04_evaluation/METRICS_DEFINITIONS.md`, `docs/04_evaluation/CALIBRATION_AND_RISK.md` | `docs/00_overview/GLOSSARY.md` | pronto | v1 existe; revisar PICP/calibracao |
-| 3.5 Avaliacao OOS e testes estatisticos | `docs/04_evaluation/STATISTICAL_TESTS.md` | `docs/01_architecture/decisions/ADR-0002-oos-alignment.md` | pronto | v1 existe; revisar H2a/H2b |
-| 3.6 Reprodutibilidade e rastreabilidade | `docs/08_governance/GOVERNANCE_AND_VERSIONING.md`, `docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md` | `docs/08_governance/EXPERIMENT_TRACKING_POLICY.md` | pronto | v1 existe; revisar governanca |
+| 3.1 Previsao de series financeiras | `docs/07_reports/living-paper/10_problem_and_related_work.md` | `docs/00_overview/STRATEGIC_DIRECTION.md` secao 3 | pronto | v2 sincronizado (HME/HMA, R^2 OOS, AAPL piloto, implicacoes para desenho) |
+| 3.2 Modelagem com deep learning | `docs/07_reports/living-paper/10_problem_and_related_work.md` | `text/7_Referencias/7_Referencias.bib` | pronto | v2 sincronizado (Lim & Zohren 21, leakage temporal, escolha instrumental) |
+| 3.3 Temporal Fusion Transformer | `docs/07_reports/living-paper/10_problem_and_related_work.md` | `docs/00_overview/GLOSSARY.md`, `docs/03_modeling/MULTI_HORIZON.md` | pronto | v2 sincronizado (Lim et al. 21, VSN/LSTM/atencao/multi-quantile head, guardrail) |
+| 3.4 Predicao probabilistica e quantilica | `docs/04_evaluation/METRICS_DEFINITIONS.md`, `docs/04_evaluation/CALIBRATION_AND_RISK.md` | `docs/00_overview/GLOSSARY.md` | pronto | v2 sincronizado (Koenker & Bassett 78, Gneiting & Raftery 07, Chernozhukov et al. 10, Jorion 07, Acerbi & Tasche 02) |
+| 3.5 Avaliacao OOS e testes estatisticos | `docs/04_evaluation/STATISTICAL_TESTS.md` | `docs/01_architecture/decisions/ADR-0002-oos-alignment.md` | pronto | v2 sincronizado (DM 95, HLN 97, MCS Hansen et al. 11, Holm, parent_sweep_id) |
+| 3.6 Reprodutibilidade e rastreabilidade | `docs/08_governance/GOVERNANCE_AND_VERSIONING.md`, `docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md` | `docs/08_governance/EXPERIMENT_TRACKING_POLICY.md` | pronto | v2 sincronizado (Pineau et al. 21, run_id deterministico, ADR-0001, pre-registro) |
 
-Gap real: `10_problem_and_related_work.md` precisa ser expandido antes do
-fechamento do Capitulo 3. Nao criar doc tecnico em `03_modeling/` para revisao
-de literatura; a fonte primaria deve permanecer no living paper.
+Observacao: Capitulo 3 foi expandido em 2026-05-17 (PR
+`docs/tcc-expand-cap3-and-literature`). Living paper `10_md` agora carrega prosa autonoma
+de revisao (~2493 palavras, 6 subsecoes); `.tex` reescrito com `\cite{}` ativo para 15
+chaves nucleares. Sem duplicacao de definicoes formais (pinball, PICP, MPIW, VSN, MCS,
+run_id) -- cross-link a docs canonicos em 04_evaluation/ e 00_overview/.
 
 ## Capitulo 4 - Metodo (`text/4_Metodo/`)
 
@@ -127,7 +129,7 @@ limitacoes antes de Capitulo 6 ser considerado pronto.
 
 ## Gaps P0 Antes Da Escrita Final
 
-- Expandir `docs/07_reports/living-paper/10_problem_and_related_work.md`.
+- ~~Expandir `docs/07_reports/living-paper/10_problem_and_related_work.md`.~~ (2026-05-17, branch `docs/tcc-expand-cap3-and-literature`)
 - Preencher `docs/07_reports/phase-gates/A_code_audit.md`.
 - Criar pre-registro versionado da Fase B.
 - Implementar e persistir baselines comparaveis.
