@@ -1530,6 +1530,86 @@ def test_baseline_gate_does_not_fail_legacy_sweeps_under_global_health(tmp_path)
     assert gate["passed"] is True
 
 
+def test_confidence_calibrated_gate_skips_point_baselines(tmp_path) -> None:
+    # Stage F.0.6: point baselines (zero_return, historical_mean_rolling)
+    # legitimately produce NaN confidence_calibrated because they are not
+    # quantile-genuine. Stage 9 marks these rows with
+    # `is_quantile_genuine=False`. The gate must filter them out so the
+    # NaN does not register as `bad_confidence`.
+    silver = tmp_path / "silver"
+    gold = tmp_path / "gold"
+    _seed_minimal_valid_silver(silver)
+
+    _write_table(
+        gold,
+        "gold_prediction_metrics_by_run_split_horizon",
+        [
+            # TFT quantile-genuine row: valid confidence — passes.
+            {
+                "run_id": "r1",
+                "split": "test",
+                "horizon": 1,
+                "confidence_calibrated": 0.8,
+                "is_quantile_genuine": True,
+            },
+            # Point baseline row: NaN confidence by design — must be skipped.
+            {
+                "run_id": "r_baseline_zr",
+                "split": "test",
+                "horizon": 1,
+                "confidence_calibrated": None,
+                "is_quantile_genuine": False,
+            },
+        ],
+    )
+
+    result = ValidateAnalyticsQualityUseCase(
+        analytics_silver_dir=silver,
+        analytics_gold_dir=gold,
+    ).execute()
+    gate = next(
+        item
+        for item in result.checks
+        if item["check"] == "gold_confidence_calibrated_by_horizon"
+    )
+    assert gate["passed"] is True
+    assert "bad_confidence=0" in str(gate["detail"])
+
+
+def test_confidence_calibrated_gate_still_fails_on_quantile_genuine_nan(tmp_path) -> None:
+    # F.0.6 regression: must continue to fail when a quantile-genuine row
+    # has NaN confidence (real defect, not point-baseline artifact).
+    silver = tmp_path / "silver"
+    gold = tmp_path / "gold"
+    _seed_minimal_valid_silver(silver)
+
+    _write_table(
+        gold,
+        "gold_prediction_metrics_by_run_split_horizon",
+        [
+            {
+                "run_id": "r1",
+                "split": "test",
+                "horizon": 1,
+                "confidence_calibrated": None,
+                "is_quantile_genuine": True,
+            }
+        ],
+    )
+
+    result = ValidateAnalyticsQualityUseCase(
+        analytics_silver_dir=silver,
+        analytics_gold_dir=gold,
+    ).execute()
+    gate = next(
+        item
+        for item in result.checks
+        if item["check"] == "gold_confidence_calibrated_by_horizon"
+    )
+    assert gate["passed"] is False
+    assert "bad_confidence=1" in str(gate["detail"])
+
+
 def test_official_contract_excludes_baselines_from_artifact_check(tmp_path) -> None:
     # Stage F.0.7: baselines (feature_set_name='baseline' OR model_version
     # startswith 'baseline_') have no torch artifact by design. The

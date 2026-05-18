@@ -841,6 +841,20 @@ class ValidateAnalyticsQualityUseCase:
                     conf = gold_conf[gold_conf["split"].astype(str).isin(["val", "test"])].copy()
                     conf["horizon"] = pd.to_numeric(conf["horizon"], errors="coerce")
                     conf["confidence_calibrated"] = pd.to_numeric(conf["confidence_calibrated"], errors="coerce")
+                    # Stage F.0.6: `confidence_calibrated` is a probabilistic
+                    # metric (depends on PICP). Point baselines (zero_return,
+                    # historical_mean_rolling) and any run where Stage 9 marks
+                    # `is_quantile_genuine=False` legitimately produce NaN
+                    # confidence — filtering them out prevents false-positive
+                    # `bad_confidence` rows that triggered the F.1 smoke
+                    # 2026-05-18 failure (8 rows, 4 per point baseline).
+                    if "is_quantile_genuine" in conf.columns:
+                        is_genuine = conf["is_quantile_genuine"]
+                        # is_quantile_genuine arrives as bool, object("True"/"False"),
+                        # or NaN depending on writer. Coerce to bool with strict
+                        # interpretation: only True counts as quantile-genuine.
+                        is_genuine_bool = is_genuine.astype(str).str.strip().str.lower().eq("true")
+                        conf = conf[is_genuine_bool].copy()
                     bad_conf = int(conf["confidence_calibrated"].isna().sum())
                     non_finite = int(conf["confidence_calibrated"].isin([float("inf"), float("-inf")]).sum())
                     horizon_misses: list[str] = []
