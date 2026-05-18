@@ -6,13 +6,36 @@
 % Fora de escopo: novas afirmacoes sem evidencia na secao de resultados.
 
 \section{Síntese dos achados}
-% TODO: resumir os principais resultados que respondem a pergunta de pesquisa.
+% TODO: aguardando Fase B (resultados confirmatorios H1/H2a/H2b) e Fase C
+% (contribuicao de familias H3). Preencher apos consolidacao dos artefatos.
 
 \section{Contribuições do trabalho}
-% TODO: consolidar contribuicoes metodologicas e aplicadas.
+% TODO: consolidar contribuicoes metodologicas e aplicadas apos Fase B/C.
 
 \section{Limitações}
-% TODO: explicitar limitacoes de dados, metodo e validade externa.
+As limitações deste trabalho são, em parte, decorrência direta do recorte assumido e devem ser interpretadas conjuntamente com os achados, independentemente do desfecho confirmatório das hipóteses.
+
+Em primeiro lugar, os modelos são \textit{single-asset} por ativo: cada execução é treinada e avaliada para um ativo específico, com AAPL como piloto inicial. A plataforma é multi-ativo e a pipeline pode ser replicada para outros ativos, mas as conclusões são válidas apenas para os ativos e períodos efetivamente avaliados, sem afirmação de generalização para ativos, mercados ou períodos não incluídos no pré-registro.
+
+Em segundo lugar, as análises de contribuição relativa de famílias de indicadores (preço, técnico, sentimento, fundamentalista) por \textit{Variable Selection Network}, importância por permutação e ablação explicativa indicam contribuição preditiva condicional ao modelo treinado, e não causalidade. Interpretações locais são reportadas como ilustrativas; conclusões metodológicas derivam de evidência global por horizonte e da estabilidade entre sementes e \textit{folds}.
+
+Em terceiro lugar, retornos diários de ativo líquido apresentam expectativa empírica de \(R^2\) fora da amostra reduzida (tipicamente entre \(0{,}1\%\) e \(1\%\) na literatura de \textit{equity premium}), o que torna empiricamente plausível a ausência de superioridade do candidato TFT \textit{all-features} frente a baselines simples. Refutação de H2a ou H2b é, nesse contexto, resultado científico válido sobre os limites do estimador para os ativos avaliados sob protocolo OOS auditável, e não falha do método.
+
+Em quarto lugar, o horizonte \(h+30\) é tratado como suplementar por padrão, dada amostra efetiva pequena e sobreposição temporal entre observações; claims confirmatórios concentram-se em \(h+1\) e \(h+7\).
+
+Em quinto lugar, os resultados da Round 0 (rodada exploratória sobre AAPL com coorte \texttt{0\_2\_3\_}) têm papel apenas diagnóstico do \textit{pipeline} e motivador dos \textit{quality gates}; não constituem evidência confirmatória. Claims confirmatórios dependem da Fase B sob pré-registro versionado, conforme \texttt{docs/08\_governance/preregistration\_round1}.
+
+Em sexto lugar, o histórico de execuções anteriores a 2026-05-10 apresentou \(91{,}25\%\) de degenerescência quantilica em \textit{runs} com \texttt{parent\_sweep\_id} nulo, fato registrado em \texttt{docs/07\_reports/phase-gates/A\_code\_audit.md} (M5-Q5) e em \texttt{docs/07\_reports/living-paper/evidence\_log.md}. Esse \textit{snapshot} foi arquivado em \texttt{data/analytics\_archive\_pre\_phase\_b/} e tratado como diagnóstico histórico; nenhum \textit{run} desse histórico alimenta resultados confirmatórios deste trabalho. A fronteira temporal para claims confirmatórios é, portanto, posterior ao \textit{reset} operacional documentado em \texttt{docs/01\_architecture/ANALYTICS\_STORE\_ARCHITECTURE.md} (\textit{Archive pre-Phase B}).
+
+Por fim, a interpretabilidade local da arquitetura TFT é tratada como ilustrativa; conclusões de contribuição relativa de famílias de indicadores requerem consistência em pelo menos dois dos três métodos definidos no Capítulo 4 (VSN, permutação, ablação) e estabilidade entre sementes e \textit{folds}.
 
 \section{Trabalhos futuros}
-% TODO: listar evolucoes tecnicas coerentes com as limitacoes observadas.
+Como evoluções tecnicamente coerentes com as limitações observadas, propõem-se quatro direções.
+
+A primeira é ampliar a avaliação para mais ativos reais, mantendo o desenho \textit{single-asset} (um modelo por ativo) e definindo critérios de inclusão de ativos no próprio pré-registro, com declaração explícita de disponibilidade, qualidade e comparabilidade.
+
+A segunda é tratar classificação ou detecção de regimes de mercado como estudo separado, com rotulagem e metodologia próprias; o presente trabalho registra \textit{out-of-distribution} e regimes de alta volatilidade apenas como ameaças à validade, não como objeto de modelagem.
+
+A terceira é o desenho de estudo específico para inferência causal ou econométrica das famílias de indicadores. O escopo atual sustenta apenas contribuição preditiva condicional ao modelo; afirmações causais exigem identificação adequada, fora do recorte deste TCC.
+
+A quarta é a aplicação do estimador em \textit{portfolio} ou estratégia de \textit{trading}, condicionada à validação fora do escopo experimental atual (custos de transação, microestrutura, restrição de execução), também fora do recorte deste trabalho.
