@@ -505,18 +505,34 @@ class BuildTFTDatasetUseCase:
         df = self._add_phase_a_derived_features(df)
         df = self._add_sentiment_dynamic_features(df)
 
-        # Merge fundamentals with as-of join
+        # Merge fundamentals with as-of join. We rename `effective_date` to
+        # `fundamentals_effective_date` only at the merge boundary so the
+        # column persists in the final dataset for source-level auditability
+        # (Stage 14 / audit M3-Q4) while the internal name in `fundamentals_df`
+        # construction stays untouched.
         if not fundamentals_df.empty:
             df = df.sort_values("date")
-            fundamentals_df = fundamentals_df.sort_values("effective_date")
+            fundamentals_df = fundamentals_df.rename(
+                columns={"effective_date": "fundamentals_effective_date"}
+            ).sort_values("fundamentals_effective_date")
             df = pd.merge_asof(
                 df,
                 fundamentals_df,
                 left_on="date",
-                right_on="effective_date",
+                right_on="fundamentals_effective_date",
                 direction="backward",
             )
-            df = df.drop(columns=["effective_date"])
+            if "fundamentals_effective_date" in df.columns:
+                mask = df["fundamentals_effective_date"].notna()
+                if mask.any() and (
+                    df.loc[mask, "fundamentals_effective_date"]
+                    > df.loc[mask, "date"]
+                ).any():
+                    raise ValueError(
+                        "Anti-leakage violation: fundamentals_effective_date "
+                        "posterior to sample date (Stage 14 / A_code_audit.md "
+                        "§M3-Q4)."
+                    )
         else:
             for col in [
                 "revenue",

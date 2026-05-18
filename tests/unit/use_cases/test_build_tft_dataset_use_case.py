@@ -548,6 +548,61 @@ def test_build_dataset_schema_contract_basic(tmp_path: Path) -> None:
         assert pd.api.types.is_numeric_dtype(df[col])
 
 
+def test_dataset_preserves_fundamentals_effective_date_column(tmp_path: Path) -> None:
+    asset_id = "AAPL"
+    repo = FakeTFTDatasetRepository(output_dir=tmp_path)
+    use_case = BuildTFTDatasetUseCase(
+        candle_repository=FakeCandleRepository(_candles()),
+        indicator_repository=FakeTechnicalIndicatorRepository(_indicators(asset_id)),
+        daily_sentiment_repository=FakeDailySentimentRepository(_daily_sentiment(asset_id)),
+        fundamental_repository=FakeFundamentalRepository(_fundamentals(asset_id)),
+        tft_dataset_repository=repo,
+    )
+
+    use_case.execute(asset_id, _dt_utc(2024, 1, 1), _dt_utc(2024, 1, 3))
+
+    assert repo.saved is not None
+    df = repo.saved
+    assert "fundamentals_effective_date" in df.columns
+    assert df["fundamentals_effective_date"].notna().any()
+
+
+def test_fundamentals_effective_date_never_after_sample_date(tmp_path: Path) -> None:
+    asset_id = "AAPL"
+    repo = FakeTFTDatasetRepository(output_dir=tmp_path)
+    use_case = BuildTFTDatasetUseCase(
+        candle_repository=FakeCandleRepository(_candles()),
+        indicator_repository=FakeTechnicalIndicatorRepository(_indicators(asset_id)),
+        daily_sentiment_repository=FakeDailySentimentRepository(_daily_sentiment(asset_id)),
+        fundamental_repository=FakeFundamentalRepository(_fundamentals(asset_id)),
+        tft_dataset_repository=repo,
+    )
+
+    use_case.execute(asset_id, _dt_utc(2024, 1, 1), _dt_utc(2024, 1, 3))
+    assert repo.saved is not None
+    df = repo.saved
+    mask = df["fundamentals_effective_date"].notna()
+    timestamps = pd.to_datetime(df.loc[mask, "timestamp"], utc=True).dt.normalize()
+    eff = pd.to_datetime(df.loc[mask, "fundamentals_effective_date"], utc=True)
+    assert (eff <= timestamps).all()
+
+
+def test_dataset_does_not_have_effective_date_column(tmp_path: Path) -> None:
+    asset_id = "AAPL"
+    repo = FakeTFTDatasetRepository(output_dir=tmp_path)
+    use_case = BuildTFTDatasetUseCase(
+        candle_repository=FakeCandleRepository(_candles()),
+        indicator_repository=FakeTechnicalIndicatorRepository(_indicators(asset_id)),
+        daily_sentiment_repository=FakeDailySentimentRepository(_daily_sentiment(asset_id)),
+        fundamental_repository=FakeFundamentalRepository(_fundamentals(asset_id)),
+        tft_dataset_repository=repo,
+    )
+
+    use_case.execute(asset_id, _dt_utc(2024, 1, 1), _dt_utc(2024, 1, 3))
+    assert repo.saved is not None
+    assert "effective_date" not in repo.saved.columns
+
+
 def test_build_dataset_quality_gate_rejects_nan_ratio_above_threshold(tmp_path: Path) -> None:
     asset_id = "AAPL"
     indicators = _indicators(asset_id)
