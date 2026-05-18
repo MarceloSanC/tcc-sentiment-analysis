@@ -416,6 +416,140 @@ documentar caveats restantes em PASS_WITH_ISSUES.
 - Smoke não exerceu Optuna (Stage 13). F.2 deve declarar se HPO é parte
   do escopo confirmatório ou se hiperparams vêm de Round 0 (audit M1 ação 3).
 
+## Re-run 2026-05-18 (pos-Stage F.0)
+
+Stage F.0 implementado em sequencia de 10 commits (`feat/stage-f0-pre-smoke-fixes`),
+endereçando os 3 gaps + 2 quality checks falsa-positivos identificados acima.
+Smoke re-executado em sequencia sob arquitetura sibling-pipeline:
+
+```bash
+.venv/bin/python -m src.main_train_tft \
+  --asset AAPL --features "BASELINE_FEATURES,TECHNICAL_FEATURES,SENTIMENT_FEATURES,FUNDAMENTAL_FEATURES" \
+  --max-epochs 5 --max-encoder-length 60 --max-prediction-length 7 \
+  --evaluation-horizons "[1, 7]" \
+  --parent-sweep-id "phase_a_smoke_20260518_v2" \
+  --seed 20260517 --prediction-mode quantile
+
+.venv/bin/python -m src.main_baselines_test_pipeline \
+  --asset AAPL --config-json config/sweeps/explicit/phase_a_smoke_20260518_v2.json \
+  --overwrite-on-collision
+
+.venv/bin/python -m src.main_refresh_analytics_store \
+  --scope-mode cohort_decision \
+  --scope-sweep-prefixes "phase_a_smoke_20260518_v2" \
+  --primary-quantile-contract post_guardrail \
+  --fail-on-quality
+```
+
+### Veredicto re-run: **PASS_WITH_KNOWN_LIMITATION**
+
+5 de 6 criterios PASS; criterio 6 (refresh + quality gate) **falha em 2
+de 27 checks** (vs. 4 de 26 no run inicial), por causa unica: Gap 6
+descoberto na re-run (TFT y_true convention bug em decisoes boundary
+de h>=2). Demais checks 100% PASS, incluindo todos os anteriormente
+flacos.
+
+### Resultados por critério (re-run)
+
+| # | Criterio | Veredicto | Notas |
+|---|---|---|---|
+| 1 | `% p10==p90 < 5%` (gate Stage 11) | **PASS** | Identico ao run inicial. |
+| 2 | Zero violacoes probabilisticas | **PASS** | MPIW post_guardrail >= 0 em todas linhas. |
+| 3 | Gold cohort-aware | **PASS** | Todas 10 tabelas com parent_sweep_id. |
+| 4 | `pytest tests/` | **PASS** | 525 passed (510 baseline + 15 novos Stage F.0). |
+| 5 | CI verde nos PRs | **PARTIAL** | Identico ao status do run inicial; sem mudanca. |
+| 6 | Refresh + quality sem erro | **PARTIAL** | Exit 1; 2 de 27 checks falham, ambos decorrentes de Gap 6. |
+
+### Quality checks resolvidos pelo Stage F.0
+
+- ✓ `gold_confidence_calibrated_by_horizon` — F.0.6 filtra
+  `is_quantile_genuine=False`; bad_confidence=0 vs F.1 inicial bad_confidence=8.
+- ✓ `official_contract_quantile_attention` — F.0.7 exclui baselines do
+  artifact contract; missing_model_artifacts ausente.
+- ✓ `cardinality_config_fold_seed` — passa (run anterior tinha duplicidade
+  por orfas de smoke v1 + v2 simultaneos; resolvido com cleanup).
+- ✓ `referential_integrity` — passa (cleanup de bridge_run_features
+  orphan).
+- ✓ `tft_baselines_timestamp_subset_alignment` (novo F.0.3 gate) —
+  detecta Gap 6 corretamente (sweep=phase_a_smoke_20260518_v2|split=test|h=7|tft_n=685|baseline_n=679|symdiff=6).
+
+### Quality checks ainda falhos (Gap 6 — fora de escopo F.0)
+
+**`oos_pairwise_target_alignment`**:
+```
+sweep=phase_a_smoke_20260518_v2|split=test|h=7|configs=4|min_ts=679|max_ts=685
+```
+- TFT v2 (eac8c...): 685 target_timestamps para test/h=7
+- Baselines (3 runs): 679 target_timestamps cada
+- Symmetric diff = 6 (exatamente os 6 ultimos decision_ts do test split)
+
+**`dm_mcs_persisted_executable`**: `report_stats_ready=False` decorrente.
+
+### Causa-raiz Gap 6 (TFT y_true bug)
+
+Empirical investigation:
+- Dataset AAPL termina em 2025-12-30 (idx 4022).
+- TFT v2 emite test/h=7 para decisao em 2025-12-30 com:
+  - `target_timestamp_utc = 2026-01-05` (6 dias apos decisao; **alem do dataset**)
+  - `y_true = -0.004478` == `target_return[4022]` (return do dia da decisao, nao 6 dias futuro)
+- O codigo do baseline use case explicitamente comenta:
+  > "y_true must align with the TFT multi-horizon convention:
+  > actuals_matrix[i, h-1] is the target_return at the future step
+  > (h-1 ahead)"
+- Mas empiricamente TFT usa `target_return[i]` (decision_ts) para
+  todos os horizontes, nao `target_return[i + h - 1]`.
+
+Para alignment PASS, **uma das duas opcoes**:
+- (a) Corrigir TFT trainer para usar `actuals_matrix[i, h-1]` corretamente
+  (provavel bug no extracao de y_true do DataLoader pytorch_forecasting).
+- (b) Modificar baseline para igualar TFT (semanticamente errado mas
+  alinhado), violando AGENT_CORE "skip rows with missing supervision".
+
+Opcao (a) e o caminho correto. Foi promovida a follow-up bloqueante
+de F.1 PASS pleno em
+[`A_audit_closure_2026-05-17.md`](phase-gates/A_audit_closure_2026-05-17.md)
+secao "Findings post-closure".
+
+### Métricas comparativas (run inicial vs re-run)
+
+| Metrica | Run inicial | Re-run v2 |
+|---|---|---|
+| total_checks | 26 | 27 (novo F.0.3 gate) |
+| failed_checks | 4 | 2 |
+| TFT test/h=1 PICP_post | 0.747 | identico (mesmo seed) |
+| TFT test/h=7 PICP_post | 0.777 | identico |
+| Baselines test/h=1 PICP_post (hist_quant) | 0.827 | identico |
+| Baselines test/h=7 PICP_post (hist_quant) | 0.828 | identico |
+| Crossing rate raw | 0.0 todas linhas | 0.0 todas linhas |
+
+Metricas substantivas identicas porque a unica diferenca operacional
+foi o trim de offsets em baseline (alinhamento horizontal das rows
+no inicio do split). PICP/MPIW/pinball foram calculados sobre subset
+ja correto desde o inicio.
+
+### Recomendacao operacional (atualizada)
+
+**Prosseguir para F.2 pre-registro: NAO** ate que Gap 6 (TFT y_true
+convention) seja investigado e corrigido. Stage F.0 desbloqueou todos
+os outros gaps mas revelou o sexto, que e bloqueante para F.1 PASS
+pleno e para qualquer experimento confirmatorio que use h>=2 com
+metricas de y_true exato.
+
+Plano:
+1. Abrir novo Stage (provavel "Stage 15: corrigir TFT y_true matrix
+   extraction") investigando se a falha esta em
+   `pytorch_forecasting_tft_trainer.py:480-544` (extracao do dataloader)
+   ou em `train_tft_model_use_case.py:790` (uso de `y_true_m[i][h_idx]`).
+2. Adicionar teste unit que valida `y_true[i, h-1] == target_return[i + h - 1]`
+   antes de Stage 15 fechar.
+3. Re-rodar F.1 smoke pos-Stage 15.
+4. Se PASS, prosseguir F.2.
+
+Investigacoes de follow-up nao-bloqueantes (mantidas do run inicial):
+- `n_rows<1000` em val (smoke data-limited).
+- Documentacao do `feature_set_name='BTSF'` automatico.
+- Lint-type-unit em PRs #20, #23, #25-28 (corrigidos em #29; main atual verde).
+
 ## Referências cruzadas
 
 - Aceite literal: [PHASE_B_IMPLEMENTATION_CHECKLIST.md](../05_checklists/PHASE_B_IMPLEMENTATION_CHECKLIST.md) F.1

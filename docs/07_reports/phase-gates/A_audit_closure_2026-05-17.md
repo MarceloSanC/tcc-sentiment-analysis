@@ -404,10 +404,34 @@ revisao independente do closure). Registro honesto:
   endereçou contrato cross-Stage 10. F.1 smoke registrou
   `missing_model_artifacts=3`, exatamente os 3 baselines.
 
-Esses 5 gaps **nao invalidam o closure mapping** dos Stages 1-14 em si
-— todos os P0 transversais permanecem fechados, todos RED zerados. Sao
-gaps **na cobertura dos reviews**, nao nos Stages. Plano de fix em
-[`PHASE_B_IMPLEMENTATION_CHECKLIST.md` Stage F.0](../../05_checklists/PHASE_B_IMPLEMENTATION_CHECKLIST.md).
+- **Gap 6 — TFT y_true convention bug em decisoes boundary (descoberto
+  via re-run do F.1 smoke pos-Stage F.0)**: TFT trainer emite
+  `y_true_m[i][h_idx]` que empiricamente retorna `target_return[i]`
+  (return no decision_ts) ao inves de `target_return[i + h - 1]`
+  (return h-1 dias no futuro). Isso fica visivel nas decisoes
+  boundary de h>=2 onde `i + h - 1 >= dataset_len` — TFT emite a
+  predicao mesmo assim com y_true do dia atual, contrariando o
+  comentario do proprio Stage 12 que afirma "actuals_matrix[i, h-1]
+  is the target_return at the future step (h-1 ahead)". Re-run do
+  smoke 2026-05-18 v2 com Stage F.0.2 alinhamento mostrou TFT
+  emitindo 685 timestamps para test/h=7 (incluindo decisoes onde
+  target_ts > dataset_end), enquanto baselines emitiram 679
+  (corretamente filtrando rows sem y_true real). Symdiff=6 nas
+  ultimas 6 decisoes do test split. Resultado: pre-existing bug em
+  Stage 11 trainer ou pytorch_forecasting TimeSeriesDataSet —
+  necessita Stage proprio para investigar e corrigir antes de F.1
+  poder PASS pleno.
+
+Esses **6 gaps** (5 originais + Gap 6 descoberto durante re-run F.0.5)
+**nao invalidam o closure mapping** dos Stages 1-14 em si — todos os
+P0 transversais permanecem fechados, todos RED zerados. Sao gaps **na
+cobertura dos reviews**, nao nos Stages mergeados. Gap 6 e o unico
+que aponta para bug latente em Stage 11 trainer; demais sao de
+cobertura cross-Stage (Stage 12 ↔ Stages 9/10) e bug pre-existente em
+CLI. Plano de fix em
+[`PHASE_B_IMPLEMENTATION_CHECKLIST.md` Stage F.0](../../05_checklists/PHASE_B_IMPLEMENTATION_CHECKLIST.md);
+Gap 6 promovido a follow-up bloqueante de F.1 PASS pleno (proximo
+Stage de codigo, possivelmente Stage 15 ou Stage F.0.10).
 
 Evidencia completa do smoke em
 [`docs/07_reports/smoke_confirmatory_2026-05-18.md`](../smoke_confirmatory_2026-05-18.md).
