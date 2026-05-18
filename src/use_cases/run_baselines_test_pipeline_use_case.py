@@ -196,12 +196,21 @@ class RunBaselinesTestPipelineUseCase:
 
         folds = _extract_folds(config)
         seeds = _extract_seeds(config)
-        offset_start = _resolve_offset_days(config, per_config)
         training = config.get("training_config") or {}
         max_pred = int(training.get("max_prediction_length") or 1)
-        # TFT trainer drops the last (max_prediction_length - 1) decisions per
-        # split to keep multi-horizon decoding feasible. Baselines mirror that.
-        offset_end = max(max_pred - 1, 0)
+        # Empirical alignment (validated against F.1 smoke 2026-05-18 re-run):
+        # the TFT trainer's first emitted decision per split lands at
+        # `max_encoder_length + max_prediction_length - 1` trading rows
+        # past split_start, not just `max_encoder_length`. The extra
+        # `max_prediction_length - 1` rows are skipped because the TFT
+        # TimeSeriesDataSet requires a full decoder window to be available
+        # from the first decision.
+        base_offset = _resolve_offset_days(config, per_config)
+        offset_start = base_offset + max(max_pred - 1, 0)
+        # TFT emits up to the last row of each split (the use case's own
+        # `y_true_idx >= len(target_returns)` guard already drops impossible
+        # rows per horizon for the baseline). No explicit end-side offset.
+        offset_end = 0
 
         horizons_raw = training.get("evaluation_horizons")
         if horizons_raw is None:

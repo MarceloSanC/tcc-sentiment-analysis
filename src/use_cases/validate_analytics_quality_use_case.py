@@ -88,6 +88,87 @@ class ValidateAnalyticsQualityUseCase:
     def _record(checks: list[dict[str, object]], name: str, passed: bool, detail: str) -> None:
         checks.append({"check": name, "passed": bool(passed), "detail": detail})
 
+    @staticmethod
+    def _evaluate_tft_baselines_alignment(
+        *,
+        dim_run: "pd.DataFrame",
+        fact_oos_predictions: "pd.DataFrame",
+        scope_mode: str | None,
+    ) -> tuple[bool, str]:
+        """Stage F.0.3 helper. Verifies that, per
+        (parent_sweep_id, split, horizon), TFT candidate runs and baseline
+        runs emit identical `target_timestamp_utc` sets. fact_oos_predictions
+        lacks parent_sweep_id directly; we enrich via dim_run join.
+
+        Active only under `scope_mode='cohort_decision'` (legacy global_health
+        silvers may legitimately mix baseline and candidate runs without the
+        Stage 12 alignment contract).
+        """
+        if scope_mode != "cohort_decision":
+            return True, "skipped(not_cohort_decision)"
+        if dim_run.empty or fact_oos_predictions.empty:
+            return True, "skipped(empty_silver)"
+        if not {"feature_set_name", "model_version"}.issubset(dim_run.columns):
+            return False, "missing_required_dim_run_columns"
+        if "parent_sweep_id" not in dim_run.columns:
+            return False, "missing_parent_sweep_id_in_dim_run"
+
+        dim_view = dim_run.copy()
+        fset_lower = dim_view["feature_set_name"].astype(str).str.strip().str.lower()
+        mver_lower = dim_view["model_version"].astype(str).str.strip().str.lower()
+        dim_view["_is_baseline"] = fset_lower.eq("baseline") | mver_lower.str.startswith(
+            "baseline_"
+        )
+        # fact_oos already carries parent_sweep_id only in some
+        # writers/tests; prefer the column on fact_oos when present and only
+        # merge missing fields from dim_run.
+        join_cols = ["run_id", "_is_baseline"]
+        if "parent_sweep_id" not in fact_oos_predictions.columns:
+            join_cols.append("parent_sweep_id")
+        join_view = dim_view[join_cols].drop_duplicates("run_id")
+        oos_view = fact_oos_predictions.merge(join_view, on="run_id", how="left")
+        oos_view["_is_baseline"] = (
+            oos_view["_is_baseline"].fillna(False).astype(bool)
+        )
+        grp_cols = [
+            c
+            for c in ["asset", "parent_sweep_id", "split", "horizon"]
+            if c in oos_view.columns
+        ]
+        if "parent_sweep_id" not in grp_cols:
+            return True, "skipped(parent_sweep_id_join_failed)"
+
+        issues: list[str] = []
+        for keys, grp in oos_view.groupby(grp_cols, dropna=False):
+            kv = dict(zip(grp_cols, keys if isinstance(keys, tuple) else (keys,)))
+            sweep_val = str(kv.get("parent_sweep_id"))
+            if not sweep_val or sweep_val.lower() in {"none", "nan", "null", "<na>"}:
+                continue
+            tft_ts = set(
+                grp.loc[~grp["_is_baseline"], "target_timestamp_utc"]
+                .dropna()
+                .astype(str)
+                .tolist()
+            )
+            bas_ts = set(
+                grp.loc[grp["_is_baseline"], "target_timestamp_utc"]
+                .dropna()
+                .astype(str)
+                .tolist()
+            )
+            if not tft_ts or not bas_ts:
+                continue
+            if tft_ts != bas_ts:
+                issues.append(
+                    f"sweep={sweep_val}|split={kv.get('split')}"
+                    f"|h={kv.get('horizon')}|tft_n={len(tft_ts)}"
+                    f"|baseline_n={len(bas_ts)}"
+                    f"|symdiff={len(tft_ts.symmetric_difference(bas_ts))}"
+                )
+        if issues:
+            return False, ", ".join(issues)
+        return True, "ok"
+
     def _resolve_scope_spec(self) -> ScopeSpec:
         legacy_scope_used = bool(
             self.block_a_parent_sweep_prefixes or self.block_a_splits or self.block_a_horizons
@@ -980,71 +1061,11 @@ class ValidateAnalyticsQualityUseCase:
         # Without that alignment the pairwise builder excludes TFT from
         # gold_dm_pairwise_results / gold_mcs_results (observed in F.1
         # smoke 2026-05-18). Active only under cohort_decision scope.
-        alignment_ok = True
-        alignment_detail = "skipped(not_cohort_decision)"
-        if scope_spec.scope_mode == "cohort_decision":
-            if dim_run.empty or fact_oos_predictions.empty:
-                alignment_detail = "skipped(empty_silver)"
-            elif not {"feature_set_name", "model_version"}.issubset(dim_run.columns):
-                alignment_ok = False
-                alignment_detail = "missing_required_dim_run_columns"
-            else:
-                dim_view = dim_run.copy()
-                fset_lower = dim_view["feature_set_name"].astype(str).str.strip().str.lower()
-                mver_lower = dim_view["model_version"].astype(str).str.strip().str.lower()
-                dim_view["_is_baseline"] = fset_lower.eq("baseline") | mver_lower.str.startswith(
-                    "baseline_"
-                )
-                run_id_to_baseline = dict(
-                    zip(
-                        dim_view["run_id"].astype(str),
-                        dim_view["_is_baseline"].astype(bool),
-                    )
-                )
-                oos_view = fact_oos_predictions.copy()
-                oos_view["_is_baseline"] = (
-                    oos_view["run_id"].astype(str).map(run_id_to_baseline).fillna(False).astype(bool)
-                )
-                grp_cols = [
-                    c
-                    for c in ["asset", "parent_sweep_id", "split", "horizon"]
-                    if c in oos_view.columns
-                ]
-                if not grp_cols:
-                    alignment_detail = "skipped(missing_group_columns)"
-                else:
-                    issues: list[str] = []
-                    for keys, grp in oos_view.groupby(grp_cols, dropna=False):
-                        kv = dict(zip(grp_cols, keys if isinstance(keys, tuple) else (keys,)))
-                        sweep_val = str(kv.get("parent_sweep_id"))
-                        if not sweep_val or sweep_val.lower() in {"none", "nan", "null", "<na>"}:
-                            continue
-                        tft_ts = set(
-                            grp.loc[~grp["_is_baseline"], "target_timestamp_utc"]
-                            .dropna()
-                            .astype(str)
-                            .tolist()
-                        )
-                        bas_ts = set(
-                            grp.loc[grp["_is_baseline"], "target_timestamp_utc"]
-                            .dropna()
-                            .astype(str)
-                            .tolist()
-                        )
-                        if not tft_ts or not bas_ts:
-                            continue
-                        if tft_ts != bas_ts:
-                            issues.append(
-                                f"sweep={sweep_val}|split={kv.get('split')}"
-                                f"|h={kv.get('horizon')}|tft_n={len(tft_ts)}"
-                                f"|baseline_n={len(bas_ts)}"
-                                f"|symdiff={len(tft_ts.symmetric_difference(bas_ts))}"
-                            )
-                    if issues:
-                        alignment_ok = False
-                        alignment_detail = ", ".join(issues)
-                    else:
-                        alignment_detail = "ok"
+        alignment_ok, alignment_detail = self._evaluate_tft_baselines_alignment(
+            dim_run=dim_run,
+            fact_oos_predictions=fact_oos_predictions,
+            scope_mode=scope_spec.scope_mode,
+        )
         self._record(
             checks,
             "tft_baselines_timestamp_subset_alignment",

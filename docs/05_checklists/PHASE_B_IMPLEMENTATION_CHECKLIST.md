@@ -1475,6 +1475,100 @@ documentar caminho oficial.
 
 ---
 
+## Stage F.0 — Fixes pre-smoke (descobertos via F.1 2026-05-18)
+
+**Objetivo:** desbloquear F.1 smoke confirmatorio com PASS em todos os
+criterios. F.1 executado em 2026-05-18 reportou veredicto FAIL com 5 gaps
+estruturais nao cobertos pelos reviews dos Stages 1-14:
+
+1. Stage 12 entregou `RunBaselinesUseCase` sem CLI canonico.
+2. TFT vs baselines `target_timestamp_utc` misaligned por warmup
+   (encoder 60d).
+3. Bug pre-existente `--help` em `main_refresh_analytics_store`
+   (`%` nao escapado).
+4. `gold_confidence_calibrated_by_horizon` falsa-positivo em point
+   baselines (cross-Stage 9 nao testado).
+5. `official_contract_quantile_attention` exigia artefato torch de
+   baselines (cross-Stage 10 nao testado).
+
+Decisao arquitetural: TFT e baselines tem orquestradores independentes
+consumindo o mesmo JSON config schema; alinhamento por configuracao
+compartilhada, nao por acoplamento de processo. Sibling architecture:
+`main_baselines_test_pipeline.py` espelha `main_tft_test_pipeline.py`.
+
+### Notas de revisao:
+
+- 2026-05-18: Stage F.0 implementado pos-F.1 smoke FAIL. Evidencia:
+  - [`docs/07_reports/smoke_confirmatory_2026-05-18.md`](../07_reports/smoke_confirmatory_2026-05-18.md) (relatorio inicial + re-rodada).
+  - [`docs/07_reports/phase-gates/A_audit_closure_2026-05-17.md`](../07_reports/phase-gates/A_audit_closure_2026-05-17.md) §"Findings post-closure" (amendment 2026-05-18).
+  - 5 gaps documentados; F.0.0-F.0.9 abordam cada um.
+
+### Tasks
+
+- [~] **F.0.0** Schema da secao `baselines` em sweep JSON config.
+      **Aceite:** schema documentado em
+      [`SWEEPS_AND_SELECTION.md`](../03_modeling/SWEEPS_AND_SELECTION.md)
+      §"Schema da secao baselines"; ao menos 1 config real em
+      `config/sweeps/explicit/*.json` com seção `baselines` como exemplo;
+      novo config `phase_a_smoke_20260518_v2.json` para re-rodada do smoke.
+
+- [~] **F.0.1** Standalone CLI `src/main_run_baselines.py` (debug).
+      **Aceite:** `python -m src.main_run_baselines --help` retorna exit 0;
+      `RunBaselinesUseCase` reinvocavel sem JSON; runbook em
+      [`RUN_BASELINES.md`](../06_runbooks/RUN_BASELINES.md). NAO substitui
+      caminho canonico (F.0.2).
+
+- [~] **F.0.2** Sibling test pipeline canonico.
+      **Aceite:** `src/use_cases/run_baselines_test_pipeline_use_case.py`
+      + `src/main_baselines_test_pipeline.py`; mesmo JSON do
+      `main_tft_test_pipeline` alimenta ambos; `parent_sweep_id` derivado
+      de `output_subdir`; alinhamento warmup via
+      `evaluation_start_offset_days = max_encoder_length + max_prediction_length - 1`
+      (TFT TimeSeriesDataSet skip empirico, validado pos-F.1 v2 smoke);
+      `evaluation_end_offset_days = 0`. Aceita parametros aditivos em
+      `RunBaselinesUseCase.execute()` sem quebrar Stage 12.
+
+- [~] **F.0.3** Defense-in-depth gate em quality validator.
+      **Aceite:** check `tft_baselines_timestamp_subset_alignment` em
+      `validate_analytics_quality_use_case.py`; ativo em
+      `scope_mode=cohort_decision`; falha se
+      `set(target_timestamp_utc | TFT) != set(target_timestamp_utc | baselines)`.
+      Regression guard para Cenario Falha D do F.1.
+
+- [~] **F.0.4** Fix `--help` em `main_refresh_analytics_store`.
+      **Aceite:** `python -m src.main_refresh_analytics_store --help`
+      retorna exit 0 (escape `%%` em help strings).
+
+- [~] **F.0.5** Re-rodar F.1 smoke com fixes F.0.0-F.0.4 + F.0.6-F.0.7.
+      **Aceite:** todos 6 criterios PASS conforme aceite literal de
+      [F.1](#stage-final--smoke-confirmatorio--pre-registro-bc); relatorio
+      atualizado em `docs/07_reports/smoke_confirmatory_2026-05-18.md`
+      secao "Re-run pos-Stage F.0".
+
+- [~] **F.0.6** Quality check `gold_confidence_calibrated_by_horizon`:
+      filtrar `is_quantile_genuine=False`.
+      **Aceite:** point baselines (NaN confidence por design) nao mais
+      contadas como `bad_confidence`. Regression guard via teste: NaN em
+      quantile-genuine ainda falha (defeito real preservado).
+
+- [~] **F.0.7** Quality check `official_contract_quantile_attention`:
+      filtrar baselines do artifact check.
+      **Aceite:** runs com `feature_set_name='baseline'` OR `model_version`
+      startswith `'baseline_'` excluidos do `fact_model_artifacts` check.
+      Quantile contract continua aplicando a TODOS os runs.
+
+- [~] **F.0.8** Amendment ao closure doc.
+      **Aceite:** seção "Findings post-closure" em
+      [`A_audit_closure_2026-05-17.md`](../07_reports/phase-gates/A_audit_closure_2026-05-17.md)
+      lista os 5 gaps; cross-link bidirecional com Stage F.0.
+
+- [~] **F.0.9** Adicionar Stage F.0 ao checklist.
+      **Aceite:** este Stage existe no checklist com Objetivo,
+      Notas, Cross-link e Tasks. Tasks `[~]` durante implementacao;
+      `[x]` apos merge do PR de Stage F.0.
+
+---
+
 ## Stage final — Smoke confirmatorio + pre-registro (B+C)
 
 ### Notas de revisao:
@@ -1494,6 +1588,9 @@ documentar caminho oficial.
   Closure mapping validado por sessao independente de revisao
   (veredicto APPROVE_WITH_CAVEATS; 5/5 spot-checks de mapping
   passaram; 4 caveats incorporados no closure final).
+- 2026-05-18: F.1 smoke veredicto FAIL; gaps documentados em
+  [`smoke_confirmatory_2026-05-18.md`](../07_reports/smoke_confirmatory_2026-05-18.md);
+  Stage F.0 criado para desbloquear; F.1 re-rodara apos F.0 merged.
 
 ### Tasks
 

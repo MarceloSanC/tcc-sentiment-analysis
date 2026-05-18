@@ -149,29 +149,37 @@ def test_offset_start_aligns_with_max_encoder_length(tmp_path: Path) -> None:
     assert first_ts == pd.Timestamp("2024-01-31T00:00:00+00:00")
 
 
-def test_offset_end_aligns_with_max_prediction_length(tmp_path: Path) -> None:
-    """With max_prediction_length=7, the last 6 idxs of each split are dropped
-    (matching the TFT trainer's last-decision rule for multi-horizon).
+def test_start_offset_includes_max_prediction_length_minus_one(tmp_path: Path) -> None:
+    """Empirical TFT alignment (validated against F.1 smoke 2026-05-18 re-run):
+    the start offset is `max_encoder_length + max_prediction_length - 1`
+    trading days, not just `max_encoder_length`. The extra
+    `max_prediction_length - 1` rows are skipped because the TFT
+    TimeSeriesDataSet requires a full decoder window from the first decision.
+
+    end_offset stays at 0 — the use case's per-horizon `y_true_idx >= len`
+    guard already drops impossible rows.
     """
     silver = tmp_path / "silver"
     ds = tmp_path / "dataset.parquet"
-    _write_dataset(ds, n_days=120)
+    _write_dataset(ds, n_days=200)
     pipeline = _make_pipeline(silver)
 
     config = {
-        "output_subdir": "sw_end_offset",
+        "output_subdir": "sw_offset_combined",
         "training_config": {
-            "max_encoder_length": 0,
+            "max_encoder_length": 10,
             "max_prediction_length": 7,
             "evaluation_horizons": [1],
         },
         "split_config": {
+            # Train 100 days so warmup history > 10, leaving val/test for the
+            # offset check.
             "train_start": "2024-01-01",
-            "train_end": "2024-01-31",
-            "val_start": "2024-02-01",
-            "val_end": "2024-02-29",
-            "test_start": "2024-03-01",
-            "test_end": "2024-03-31",
+            "train_end": "2024-04-09",
+            "val_start": "2024-04-10",
+            "val_end": "2024-05-31",
+            "test_start": "2024-06-01",
+            "test_end": "2024-07-18",
         },
         "baselines": [{"name": "zero_return", "config": {}}],
         "replica_seeds": [42],
@@ -179,9 +187,10 @@ def test_offset_end_aligns_with_max_prediction_length(tmp_path: Path) -> None:
     pipeline.execute(asset="AAPL", config=config, dataset_path=ds)
     oos = _load_oos(silver)
     val_rows = oos[oos["split"] == "val"]
-    # Val span: 2024-02-01 to 2024-02-29 inclusive = 29 rows.
-    # offset_end = max_pred - 1 = 6.  Expected emitted = 29 - 6 = 23.
-    assert len(val_rows) == 23
+    # Val span: 2024-04-10 to 2024-05-31 inclusive = 52 rows.
+    # Combined start offset = max_encoder_length + max_pred - 1 = 10 + 6 = 16.
+    # Expected emitted (h=1) = 52 - 16 = 36.
+    assert len(val_rows) == 36
 
 
 def test_window_override_per_baseline(tmp_path: Path) -> None:
