@@ -197,6 +197,8 @@ class RunBaselinesUseCase:
         seed: int | None,
         split_definitions: dict[str, tuple[pd.Timestamp, pd.Timestamp]],
         horizons: list[int],
+        evaluation_start_offset_days: int = 0,
+        evaluation_end_offset_days: int = 0,
     ) -> tuple[list[dict[str, Any]], int]:
         rows: list[dict[str, Any]] = []
         skipped_warmup = 0
@@ -207,6 +209,17 @@ class RunBaselinesUseCase:
         for split_name, (start, end) in split_definitions.items():
             ts_mask = (df["timestamp"] >= start) & (df["timestamp"] <= end)
             idxs = df.index[ts_mask].tolist()
+            # Stage F.0.2 alignment: drop first/last N idxs per split so the
+            # emitted target_timestamps coincide with what the TFT trainer
+            # produces (which skips `max_encoder_length` rows from the start
+            # and `max_prediction_length - 1` rows from the end to satisfy
+            # multi-horizon decoding).
+            n_start = int(max(evaluation_start_offset_days, 0))
+            n_end = int(max(evaluation_end_offset_days, 0))
+            if n_start:
+                idxs = idxs[n_start:]
+            if n_end:
+                idxs = idxs[:-n_end] if n_end < len(idxs) else []
             for i in idxs:
                 decision_ts = pd.Timestamp(timestamps[i])
                 history = target_returns[:i]
@@ -484,6 +497,8 @@ class RunBaselinesUseCase:
         seed: int | None = None,
         overwrite_on_collision: bool = False,
         baseline_windows: dict[str, int] | None = None,
+        evaluation_start_offset_days: int = 0,
+        evaluation_end_offset_days: int = 0,
     ) -> RunBaselinesResult:
         if not parent_sweep_id or not str(parent_sweep_id).strip():
             raise ValueError(
@@ -594,6 +609,8 @@ class RunBaselinesUseCase:
                 seed=seed,
                 split_definitions=splits,
                 horizons=horizons_sorted,
+                evaluation_start_offset_days=int(evaluation_start_offset_days),
+                evaluation_end_offset_days=int(evaluation_end_offset_days),
             )
             if rows:
                 self.analytics_run_repository.append_fact_oos_predictions(
