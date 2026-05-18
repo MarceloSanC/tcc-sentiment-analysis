@@ -1236,38 +1236,62 @@ considerar para planejamento.
 
 Criterio para abrir a Fase B:
 
-- [ ] M1 GREEN ou YELLOW com acao concluida
-- [ ] M2 GREEN ou YELLOW com acao concluida
-- [ ] M3 GREEN ou YELLOW com acao concluida
-- [ ] M4 GREEN ou YELLOW com acao concluida (incluindo decisao sobre
-      `run_id=None` em silver de inferencia)
-- [ ] M5 GREEN ou YELLOW com acao concluida
-- [ ] M6 GREEN ou YELLOW com acao concluida
-- [ ] M7 GREEN ou YELLOW com acao concluida
-- [ ] Nenhum modulo com veredicto RED em aberto
+- [~] M1 GREEN ou YELLOW com acao concluida (codigo Stage 13 mergeado;
+      acao 3 "justificar herdanca de hiperparametros Round 0" depende
+      de F.2 pre-registro)
+- [~] M2 GREEN ou YELLOW com acao concluida (codigo Stages 9, 11
+      mergeados; acao 5 "smoke `max_prediction_length>=7`" depende de
+      F.1 smoke confirmatorio)
+- [~] M3 GREEN ou YELLOW com acao concluida (codigo Stage 14 mergeado;
+      acoes 1, 2 — politica de warmup, artefato source-level AAPL —
+      dependem de F.2 pre-registro)
+- [x] M4 GREEN ou YELLOW com acao concluida (incluindo decisao sobre
+      `run_id=None` em silver de inferencia — Stage 10 mergeado;
+      acoes 1, 2, 4 sao future work/Fase C explicitos no texto do audit)
+- [x] M5 GREEN ou YELLOW com acao concluida (todos os P0 + Caminho B
+      cobertos por Stages 1, 2, 4-9 mergeados)
+- [~] M6 GREEN ou YELLOW com acao concluida (codigo Stages 3-6 cobre
+      itens 1, 2, 3, 5; acao 4 "declarar filtro de coorte reproduzivel"
+      depende de F.2; acao 6 "smoke H=7" depende de F.1; acao 7
+      "auditar `fact_inference_*`" e Fase C explicito)
+- [~] M7 GREEN ou YELLOW com acao concluida (codigo Stages 6, 8, 12
+      cobre 3 acoes; 5 acoes — explicit-config vs OFAT, all-features
+      podada, contrato quantilico declarado, decisao h=30, smokes —
+      dependem de F.1 e/ou F.2; baselines restantes condicionais a F.2)
+- [x] Nenhum modulo com veredicto RED em aberto (verificado em
+      `A_audit_closure_2026-05-17.md`; nenhum RED restante)
 
 **Itens P0 transversais (independentes de modulo, decorrentes das tres Leis):**
 
-- [ ] Caminho B vs Caminho C decidido e registrado (afeta sequenciamento de
-      PRs em "Implementacao apos auditoria")
-- [ ] Q8 resolvido: `_append_to_parquet` substituido por
+- [x] Caminho B vs Caminho C decidido e registrado (Caminho B; commit
+      `b74035b` mergeado em main)
+- [x] Q8 resolvido: `_append_to_parquet` substituido por
       `_write_with_overwrite_policy` (ou equivalente) com flag explicita.
-      Pre-condicao para reset confiavel
-- [ ] Q7 resolvido: `gold_model_decision_final` ranqueia por
-      `groupby(["asset", "parent_sweep_id", "horizon"])`
-- [ ] Q6 resolvido: teste de regressao da invariante `9f0ccec` em
-      `compute_config_signature` mergeado
-- [ ] Q1 implementado: raw e post-guardrail persistidos em paralelo como
-      colunas separadas; pre-registro fixa qual eh primario
-- [ ] Lei 3 aplicada: `run_id=None` removido de `fact_inference_predictions`
+      Pre-condicao para reset confiavel (Stage 1 / PR #14)
+- [x] Q7 resolvido: `gold_model_decision_final` ranqueia por
+      `groupby(["asset", "parent_sweep_id", "horizon"])` (Stage 4 / PR #17)
+- [x] Q6 resolvido: teste de regressao da invariante `9f0ccec` em
+      `compute_config_signature` mergeado (Stage 2 / PR #15)
+- [x] Q1 implementado: raw e post-guardrail persistidos em paralelo como
+      colunas separadas; pre-registro fixa qual eh primario (Stage 8 /
+      PR #23; declaracao formal do primario ficara em F.2 pre-registro)
+- [x] Lei 3 aplicada: `run_id=None` removido de `fact_inference_predictions`
       e `fact_feature_contrib_local`, ou substituido por FK explicita para
-      `dim_run`/`fact_model_artifacts`
+      `dim_run`/`fact_model_artifacts` (Stage 10 / PR #26;
+      `training_run_id` materializado, schema bump v1→v2)
 
 **Nota sob Caminho C:** se Caminho C for escolhido, M5 deixa de existir como
 modulo (refresh deprecado) e os itens dele migram para validacao do
 write-time builder. Os itens P0 transversais acima continuam validos.
 
-**Data de abertura da Fase B:** ___
+**Estado da marcacao (2026-05-17):** marcacao parcial — todos os P0
+transversais e RED zerados confirmados. Modulos M1, M2, M3, M6, M7
+permanecem `[~]` ate F.1 (smoke confirmatorio) e F.2 (pre-registro)
+mergeados. Detalhamento completo em
+[`A_audit_closure_2026-05-17.md`](A_audit_closure_2026-05-17.md).
+
+**Data de abertura da Fase B:** ___ (preenchida apos F.1 + F.2 mergeados
+e `[~]` viraram `[x]` acima)
 **Responsavel:** Marcelo
 
 ---

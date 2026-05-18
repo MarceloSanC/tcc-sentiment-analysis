@@ -38,14 +38,40 @@ PK/FK). Caminho B eh um **passo intermediario aceitavel** quando o custo
 de C nao se justifica no curto prazo. A decisao operacional abaixo registra
 qual caminho sera entregue ate a abertura da Phase B.
 
-- [ ] Decisao operacional Caminho B vs Caminho C registrada antes de
+- [x] Decisao operacional Caminho B vs Caminho C registrada antes de
       iniciar Stage 15. Stages 1-14 sao `(B+C)` (obrigatorios em ambos os
       caminhos), entao podem comecar sem a decisao fechada.
   - Caminho B (refresh scoped + cohort-aware gold): ~600-1.000 LOC, 4-6 d.p.
     Stages 1-14 obrigatorios; Stages 15-19 nao se aplicam.
   - Caminho C (write-time + refresh deprecado): ~2.000-3.000 LOC, 8-15 d.p.
     Stages 1-14 obrigatorios + Stages 15-19.
-  - Decisao registrada em: ___________________________________________
+  - **Decisao registrada em 2026-05-17: Caminho B.**
+    Justificativa:
+    1. Stages 1-14 (todos mergeados em main, PRs #14-34) cobrem todos os
+       itens P0 transversais do `A_code_audit.md` §"Gate de saida da Fase A"
+       (Q1 Stage 8, Q6 Stage 2, Q7 Stage 4, Q8 Stage 1, Lei 3 Stage 10) +
+       cohort-aware gold (Stages 4-6) + refresh scoped (Stage 7) +
+       baselines persistidos (Stage 12) + gate de degeneracao (Stage 11) +
+       anti-leakage HPO (Stage 13) + rastreabilidade fundamentals
+       (Stage 14). Suficiente para Phase B confirmatoria.
+    2. Caminho C entregaria +2000-3000 LOC adicionais (Stages 15-19:
+       write-time per-run gold, hook sweep fechado, atomicidade
+       multi-tabela, scoped-only CLI, deprecation refresh global) sem
+       ganho cientifico para escopo TCC — sao otimizacoes operacionais
+       para volumes (milhares de sweeps simultaneos) que o escopo do TCC
+       (AAPL piloto, 5 seeds x 3 folds em Phase B per
+       STRATEGIC_DIRECTION §B.1) nao atinge.
+    3. Refresh global continua sendo caminho default em Caminho B e e
+       operacionalmente aceitavel no volume previsto (refresh leva
+       minutos, nao horas).
+    4. Stages 15-19 ficam como future work registrado; se durante Phase B
+       o refresh global virar gargalo empirico medido (nao teorizado),
+       reavaliar como otimizacao targetada.
+    5. Custo de oportunidade decisivo: 8-15 d.p. de engenharia adicional
+       em Caminho C = 8-15 d.p. nao gastos em escrita de capitulos do TCC
+       (POST_AUDIT_EXECUTION_PLAN §Etapa 8 explicita que texto LaTeX e
+       etapa de consolidacao, nao fonte primaria de decisoes — escrever
+       requer Phase B + Fase C executadas primeiro).
 
 ## Convencao de branch, commit e PR
 
@@ -1453,6 +1479,22 @@ documentar caminho oficial.
 
 ### Notas de revisao:
 
+- 2026-05-17: fechamento parcial da Fase A registrado em
+  [`A_audit_closure_2026-05-17.md`](../07_reports/phase-gates/A_audit_closure_2026-05-17.md)
+  e marcacao parcial do gate em
+  [`A_code_audit.md`](../07_reports/phase-gates/A_code_audit.md)
+  §"Gate de saida da Fase A":
+  - P0 transversais (6 itens) → `[x]` todos fechados.
+  - Modulos M4, M5 → `[x]` (todas as acoes cobertas por Stages
+    mergeados ou explicitamente Fase C/future work).
+  - Modulos M1, M2, M3, M6, M7 → `[~]` (codigo Stages 1-14 mergeados,
+    mas acoes dependentes de F.1 e/ou F.2 permanecem abertas).
+  - "Nenhum RED em aberto" → `[x]`.
+  - `Data de abertura da Fase B` → em branco; preenchida apos F.1 + F.2.
+  Closure mapping validado por sessao independente de revisao
+  (veredicto APPROVE_WITH_CAVEATS; 5/5 spot-checks de mapping
+  passaram; 4 caveats incorporados no closure final).
+
 ### Tasks
 
 - [ ] **F.1** Smoke confirmatorio com `max_epochs >= 5`, `n_rows >= 1000`.
@@ -1471,10 +1513,14 @@ documentar caminho oficial.
       **Aceite:** documento de pre-registro mergeado em
       `docs/06_pre_registration/` (ou local equivalente).
 
-- [ ] **F.3** Marcar `A_code_audit.md` "Gate de saida da Fase A" como
+- [~] **F.3** Marcar `A_code_audit.md` "Gate de saida da Fase A" como
       satisfeito.
       **Aceite:** todos os checkboxes do gate marcados; data de abertura
       da Fase B preenchida.
+      **Estado parcial (2026-05-17):** P0 transversais e RED zerados
+      marcados `[x]`; M1/M2/M3/M6/M7 marcados `[~]` aguardando F.1+F.2;
+      `Data de abertura da Fase B` em branco. Satisfacao plena requer
+      F.1 e F.2 mergeados antes do `[x]` final.
 
 ---
 
