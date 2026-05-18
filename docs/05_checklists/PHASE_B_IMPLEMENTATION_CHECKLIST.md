@@ -1479,6 +1479,22 @@ documentar caminho oficial.
 
 ### Notas de revisao:
 
+- 2026-05-17: fechamento parcial da Fase A registrado em
+  [`A_audit_closure_2026-05-17.md`](../07_reports/phase-gates/A_audit_closure_2026-05-17.md)
+  e marcacao parcial do gate em
+  [`A_code_audit.md`](../07_reports/phase-gates/A_code_audit.md)
+  §"Gate de saida da Fase A":
+  - P0 transversais (6 itens) → `[x]` todos fechados.
+  - Modulos M4, M5 → `[x]` (todas as acoes cobertas por Stages
+    mergeados ou explicitamente Fase C/future work).
+  - Modulos M1, M2, M3, M6, M7 → `[~]` (codigo Stages 1-14 mergeados,
+    mas acoes dependentes de F.1 e/ou F.2 permanecem abertas).
+  - "Nenhum RED em aberto" → `[x]`.
+  - `Data de abertura da Fase B` → em branco; preenchida apos F.1 + F.2.
+  Closure mapping validado por sessao independente de revisao
+  (veredicto APPROVE_WITH_CAVEATS; 5/5 spot-checks de mapping
+  passaram; 4 caveats incorporados no closure final).
+
 ### Tasks
 
 - [ ] **F.1** Smoke confirmatorio com `max_epochs >= 5`, `n_rows >= 1000`.
@@ -1497,10 +1513,14 @@ documentar caminho oficial.
       **Aceite:** documento de pre-registro mergeado em
       `docs/06_pre_registration/` (ou local equivalente).
 
-- [ ] **F.3** Marcar `A_code_audit.md` "Gate de saida da Fase A" como
+- [~] **F.3** Marcar `A_code_audit.md` "Gate de saida da Fase A" como
       satisfeito.
       **Aceite:** todos os checkboxes do gate marcados; data de abertura
       da Fase B preenchida.
+      **Estado parcial (2026-05-17):** P0 transversais e RED zerados
+      marcados `[x]`; M1/M2/M3/M6/M7 marcados `[~]` aguardando F.1+F.2;
+      `Data de abertura da Fase B` em branco. Satisfacao plena requer
+      F.1 e F.2 mergeados antes do `[x]` final.
 
 ---
 
