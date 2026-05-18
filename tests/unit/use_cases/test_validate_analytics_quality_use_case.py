@@ -1610,6 +1610,153 @@ def test_confidence_calibrated_gate_still_fails_on_quantile_genuine_nan(tmp_path
     assert "bad_confidence=1" in str(gate["detail"])
 
 
+def test_alignment_gate_passes_when_tft_and_baseline_share_target_ts(tmp_path) -> None:
+    # Stage F.0.3: TFT and baselines emit identical target_timestamp_utc
+    # sets per (parent_sweep_id, split, horizon) — gate passes.
+    silver = tmp_path / "silver"
+    _seed_minimal_valid_silver(silver)  # candidate r1 has 1 oos row for test/h1
+
+    # The candidate r1 minimal seed emits target_timestamp_utc=2026-01-09T01:00:00+00:00
+    # under sw1/test/h=1. Add a baseline run with the same timestamp set.
+    _write_table(
+        silver,
+        "dim_run",
+        [
+            _dim_row(
+                run_id="r_baseline_aligned",
+                parent_sweep_id="sw1",
+                feature_set_name="baseline",
+                model_version="baseline_zero_return_v1",
+            ),
+        ],
+        {"asset": "AAPL", "sweep_id": "sw1_baseline_aligned"},
+    )
+    _write_table(
+        silver,
+        "fact_oos_predictions",
+        [
+            {
+                "schema_version": 1,
+                "run_id": "r_baseline_aligned",
+                "model_version": "baseline_zero_return_v1",
+                "asset": "AAPL",
+                "feature_set_name": "baseline",
+                "parent_sweep_id": "sw1",
+                "config_signature": "cfg_baseline",
+                "split": "test",
+                "fold": "none",
+                "seed": 0,
+                "horizon": 1,
+                "timestamp_utc": "2026-01-09T00:00:00+00:00",
+                "target_timestamp_utc": "2026-01-09T00:00:00+00:00",
+                "y_true": 0.0,
+                "y_pred": 0.0,
+                "error": 0.0,
+                "abs_error": 0.0,
+                "sq_error": 0.0,
+                "quantile_p10": 0.0,
+                "quantile_p50": 0.0,
+                "quantile_p90": 0.0,
+                "year": 2026,
+            }
+        ],
+        {"asset": "AAPL", "feature_set_name": "baseline", "year": "2026"},
+    )
+
+    result = ValidateAnalyticsQualityUseCase(
+        analytics_silver_dir=silver,
+        scope_spec=ScopeSpec.create(scope_mode="cohort_decision", parent_sweep_prefixes=["sw1"]),
+    ).execute()
+    gate = next(
+        item
+        for item in result.checks
+        if item["check"] == "tft_baselines_timestamp_subset_alignment"
+    )
+    assert gate["passed"] is True
+    assert "ok" in str(gate["detail"])
+
+
+def test_alignment_gate_fails_on_target_ts_mismatch(tmp_path) -> None:
+    # Stage F.0.3: TFT and baseline emit different target_timestamps —
+    # gate fails (regression guard against the F.1 smoke 2026-05-18
+    # Cenario Falha D).
+    silver = tmp_path / "silver"
+    _seed_minimal_valid_silver(silver)
+
+    _write_table(
+        silver,
+        "dim_run",
+        [
+            _dim_row(
+                run_id="r_baseline_misaligned",
+                parent_sweep_id="sw1",
+                feature_set_name="baseline",
+                model_version="baseline_zero_return_v1",
+            ),
+        ],
+        {"asset": "AAPL", "sweep_id": "sw1_baseline_misaligned"},
+    )
+    _write_table(
+        silver,
+        "fact_oos_predictions",
+        [
+            {
+                "schema_version": 1,
+                "run_id": "r_baseline_misaligned",
+                "model_version": "baseline_zero_return_v1",
+                "asset": "AAPL",
+                "feature_set_name": "baseline",
+                "parent_sweep_id": "sw1",
+                "config_signature": "cfg_baseline",
+                "split": "test",
+                "fold": "none",
+                "seed": 0,
+                "horizon": 1,
+                # Deliberately mismatched: TFT had 2026-01-09; baseline has 2026-01-10.
+                "timestamp_utc": "2026-01-10T01:00:00+00:00",
+                "target_timestamp_utc": "2026-01-10T01:00:00+00:00",
+                "y_true": 0.0,
+                "y_pred": 0.0,
+                "error": 0.0,
+                "abs_error": 0.0,
+                "sq_error": 0.0,
+                "quantile_p10": 0.0,
+                "quantile_p50": 0.0,
+                "quantile_p90": 0.0,
+                "year": 2026,
+            }
+        ],
+        {"asset": "AAPL", "feature_set_name": "baseline", "year": "2026"},
+    )
+
+    result = ValidateAnalyticsQualityUseCase(
+        analytics_silver_dir=silver,
+        scope_spec=ScopeSpec.create(scope_mode="cohort_decision", parent_sweep_prefixes=["sw1"]),
+    ).execute()
+    gate = next(
+        item
+        for item in result.checks
+        if item["check"] == "tft_baselines_timestamp_subset_alignment"
+    )
+    assert gate["passed"] is False
+    detail = str(gate["detail"])
+    assert "symdiff" in detail
+    assert "sweep=sw1" in detail
+
+
+def test_alignment_gate_silenced_in_global_health(tmp_path) -> None:
+    silver = tmp_path / "silver"
+    _seed_minimal_valid_silver(silver)
+    result = ValidateAnalyticsQualityUseCase(analytics_silver_dir=silver).execute()
+    gate = next(
+        item
+        for item in result.checks
+        if item["check"] == "tft_baselines_timestamp_subset_alignment"
+    )
+    assert gate["passed"] is True
+    assert "skipped(not_cohort_decision)" in str(gate["detail"])
+
+
 def test_official_contract_excludes_baselines_from_artifact_check(tmp_path) -> None:
     # Stage F.0.7: baselines (feature_set_name='baseline' OR model_version
     # startswith 'baseline_') have no torch artifact by design. The
