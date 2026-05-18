@@ -8,7 +8,7 @@ update_when:
   - chave de API ou autenticacao mudar
   - fallback de `reported_date` ausente para fundamentals mudar (valor de
     dias ou metodo)
-canonical_for: [data_sources, external_apis, ingestion_path, yfinance, finnhub, alpha_vantage]
+canonical_for: [data_sources, external_apis, ingestion_path, yfinance, finnhub, alpha_vantage, fundamentals_fallback_policy]
 ---
 
 # Data Sources
