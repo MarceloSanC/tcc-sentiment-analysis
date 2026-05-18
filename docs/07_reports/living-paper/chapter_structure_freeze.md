@@ -64,9 +64,11 @@ Secoes congeladas:
 3. Engenharia de features
 4. Configuracao do modelo TFT
 5. Protocolo experimental (splits, seeds, folds)
-6. Metricas de avaliacao (pontuais e probabilisticas)
-7. Analytics Store e governanca de experimento
-8. Criterios de qualidade e validacao
+6. Baselines
+7. Metricas de avaliacao (pontuais e probabilisticas)
+8. Explicabilidade e contribuicao
+9. Analytics Store e governanca de experimento
+10. Criterios de qualidade e validacao
 
 ## Capitulo 5 - Resultados e discussao
 Arquivo:
