@@ -1145,19 +1145,58 @@ no mesmo contrato de grao do TFT para comparacao pareada valida.
 
 ### Notas de revisao:
 
+- 2026-05-17, branch `fix/hpo-stage13-block-test-set-as-objective`.
+  Suite: `.venv/bin/pytest tests/unit/` -> 499 passed, 38 warnings, 31.50s
+  (baseline pos-Stage 12 + 7 novos em
+  `tests/unit/use_cases/test_run_tft_optuna_search_use_case.py`). Ruff
+  limpo em `src/use_cases/run_tft_optuna_search_use_case.py`,
+  `src/main_tft_optuna_sweep.py` e nos testes novos.
+- Decisoes registradas:
+  - Validacao **eager** no `__init__` via classvar `VALID_OBJECTIVE_METRICS`
+    (`("robust_score", "mean_val_rmse")`) + type hint
+    `Literal["robust_score", "mean_val_rmse"]` no parametro.
+    Falha imediata na instanciacao, antes de qualquer trial Optuna ser
+    submetido — evita iniciar sessoes longas sob metrica leakage-prone.
+  - Mensagem do `ValueError` cita literalmente "leakage" e "A_code_audit.md §M1-Q4"
+    para auto-documentar a restricao a quem encontrar o erro.
+  - `_objective_from_summary` ficou com apenas duas branches (`robust_score`,
+    `mean_val_rmse`); fallback `ValueError` mantido como defesa em
+    profundidade (unreachable se a validacao do `__init__` estiver intacta —
+    coberto por `test_objective_from_summary_has_no_test_set_branches`).
+  - Default `objective_metric=None`/string vazia continua normalizando para
+    `"robust_score"` antes da validacao — preservou comportamento de configs
+    antigos que omitem o campo.
+  - CLI `--objective-metric` aceita apenas `{robust_score, mean_val_rmse}`;
+    argparse mostra `choices` automaticamente no `--help`, sem mudanca de
+    help text. Configs YAML/JSON com `objective_metric: mean_test_rmse`
+    bypassam o argparse mas falham no `__init__` do use case — sem
+    validacao duplicada na CLI (single source of truth no use case).
+  - **NAO** tocado: `RunTFTModelAnalysisUseCase` (audit §M1-Q4 linhas
+    217-219 explicitamente preserva ranking diagnostico por
+    `mean_test_rmse`) e
+    `tests/unit/domain/services/test_explicit_config_sweep_analysis_service.py:62`
+    (coluna `mean_test_rmse` em `ranking_oos` e diagnostica, nao objective
+    HPO). Plot `_save_val_test_metrics_plot` continua mostrando test rmse
+    para visualizacao diagnostica de top-k trials — metrica e calculada e
+    persistida normalmente; Stage 13 remove apenas como **opcao de
+    selecao HPO**.
+  - Smoke manual: `python -m src.main_tft_optuna_sweep --objective-metric mean_test_rmse`
+    -> `argparse error: invalid choice`; instanciacao direta com
+    `objective_metric='mean_test_rmse'` -> `ValueError` citando leakage / M1-Q4.
+
 ### Tasks
 
-- [ ] **13.1** Em
+- [~] **13.1** Em
       [run_tft_optuna_search_use_case.py:49,176-184](../../src/use_cases/run_tft_optuna_search_use_case.py#L49):
       remover `mean_test_rmse` e `joint_val_test_rmse` da lista de
       `objective_metric` aceitos.
       **Aceite:** instanciar com essas opcoes levanta `ValueError`.
 
-- [ ] **13.2** Atualizar CLI [main_tft_optuna_sweep.py](../../src/main_tft_optuna_sweep.py)
+- [~] **13.2** Atualizar CLI [main_tft_optuna_sweep.py](../../src/main_tft_optuna_sweep.py)
       para nao expor essas opcoes em `--objective-metric`.
       **Aceite:** help da CLI nao lista as opcoes invalidas.
 
-- [ ] **13.3** Atualizar testes que cobrem essas opcoes.
+- [~] **13.3** Atualizar testes que cobrem essas opcoes.
       **Aceite:** suite passa.
 
 ---
