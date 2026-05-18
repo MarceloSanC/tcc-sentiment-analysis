@@ -30,12 +30,21 @@ que a fechou (ou para F.1/F.2/Fase C quando aplicavel). Base para marcar
 
 Todos os P0 transversais do `A_code_audit.md` §"Gate de saida da Fase A"
 (linhas 1235-1268) **fechados** via Stages 1-14 mergeados (PRs #14-34) +
-decisao Caminho B registrada (commit pendente — branch
-`docs/checklist-caminho-b-decided`).
+decisao Caminho B registrada (commit `b74035b` mergeado em main).
 
-**Nenhum RED em aberto.** Itens nao-fechados sao YELLOW residuais com
-destino explicito declarado (F.1 smoke confirmatorio, F.2 pre-registro, ou
-Fase C/future work).
+**Nenhum RED em aberto.** Itens nao-fechados sao:
+- YELLOW residuais com destino explicito declarado (F.1 smoke confirmatorio,
+  F.2 pre-registro, ou Fase C/future work).
+- 2 itens P1 do `A_code_audit.md:1275-1283` nao-bloqueantes para Phase B
+  (`feature_registry.py` audit por feature; `validate_analytics_quality`
+  Block A MPIW=0 check literal); ambos devem ser revisitados antes da
+  analise final.
+- 1 pendencia condicional (baselines `random_walk`/`AR(1)`/`EWMA-vol`):
+  vira bloqueante apenas se F.2 pre-registro fixar qualquer um como
+  baseline primario.
+- 4 follow-ups YELLOW registrados em Notas de revisao dos Stages 4, 9, 10,
+  14 (cobertura defensiva, propagacao downstream, dividas tecnicas
+  reconhecidas).
 
 ## Mapeamento detalhado
 
@@ -218,12 +227,25 @@ Acoes em [`A_code_audit.md:1177-1226`](A_code_audit.md#L1177):
 
 | Item P0 | Status | Fechamento |
 |---|---|---|
-| Caminho B vs C decidido e registrado | **fechado** | commit pendente em `docs/checklist-caminho-b-decided` (Caminho B) |
+| Caminho B vs C decidido e registrado | **fechado** | commit `b74035b` mergeado em main (Caminho B) |
 | Q8 `_append_to_parquet` substituido | **fechado** | Stage 1 (PR #14) |
 | Q7 `gold_model_decision_final` ranking cohort | **fechado** | Stage 4 (PR #17) |
 | Q6 teste de regressao 9f0ccec | **fechado** | Stage 2 (PR #15) |
 | Q1 raw + post-guardrail paralelos | **fechado** | Stage 8 (PR #23) |
 | Lei 3 `run_id=None` removido / FK explicita | **fechado** | Stage 10 (PR #26) |
+
+## Modulos P1 (nao-bloqueantes para Fase B)
+
+`A_code_audit.md:1275-1283` lista 4 itens P1 fora da estrutura M1-M7. Por
+declaracao do proprio audit (linha 1275), nao bloqueiam abertura da Fase B,
+mas devem ser revisados antes da analise final:
+
+| Modulo P1 | Status | Fechamento |
+|---|---|---|
+| `run_tft_optuna_search_use_case.py` (desabilitar `mean_test_rmse`) | **fechado** | promovido a M1-Q4 P0 → Stage 13 (PR #32) |
+| `feature_registry.py` (anti_leakage_tag/warmup_count audit por feature) | **YELLOW residual P1** | nao tratado por Stage 1-14; revisar antes da analise final |
+| `validate_analytics_quality_use_case.py` (Block A MPIW=0 > 5% bloqueante) | **YELLOW residual P1** | semanticamente coberto pelo gate Stage 11 (`p10==p90`), mas literal "MPIW=0" nao foi explicitamente verificada — registrar follow-up |
+| `sklearn_indicator_normalizer.py` (instanciacao fora do treino?) | **moot** | audit M3-Q1 ja confirmou "nao instanciado no caminho atual" (linhas 371-380) |
 
 ## Itens nao-fechados (com destino explicito)
 
@@ -252,27 +274,90 @@ Nada classificado como **bloqueante**. Distribuicao:
 
 - M3 acao 3: auditoria multi-asset (AAPL only em Phase B).
 - M4 acao 1: persistencia multi-horizonte engine de inferencia
-  (explicito como future work no audit).
+  (explicito como future work no audit, linha 559).
 - M4 acoes 2, 4: testes multi-horizonte engine (decorrente) e
-  `evidence_tier` para explicabilidade (Fase C).
-- M6 acao 7: auditar `fact_inference_*` antes da Fase C.
-- M7 follow-up: baselines restantes (`random_walk`, `AR(1)`, `EWMA-vol`).
+  `evidence_tier` para explicabilidade (Fase C, linha 570).
+- M6 acao 7: auditar `fact_inference_*` antes da Fase C (linha 1015).
+
+### Pendencia condicional a F.2 pre-registro
+
+- **M7 follow-up — baselines restantes (`random_walk`, `AR(1)`,
+  `EWMA-vol`)**: classificacao depende da escolha do baseline primario
+  no F.2 pre-registro. Se F.2 fixar qualquer um destes tres como
+  baseline primario para H2a/H2b, vira **bloqueante** para Phase B e
+  exige Stage 12-bis ou emenda ao pre-registro. Alinha com a postura
+  cautelosa registrada em Stage 12 Notas ("follow-up YELLOW para
+  Stage 12-bis ou emenda pre-registro"). Audit M7-Q2 (linhas 1179-1183)
+  lista os baselines com "e/ou", permitindo subset — mas o subset
+  permitido depende da decisao formal em F.2.
+
+### YELLOW residuais abertos (de Notas de revisao dos Stages)
+
+Itens reconhecidos durante reviews dos Stages 1-14 como follow-ups
+nao-bloqueantes para Phase B, mas reais. Nao cobrem nenhum item do gate
+de saida, mas merecem registro para auditoria futura:
+
+- **Stage 4**: cobertura explicita para `parent_sweep_id=None` legado
+  pre-9f0ccec ausente em teste (PHASE_B_IMPLEMENTATION_CHECKLIST.md
+  Stage 4 Notas). Filtro upstream ja exclui esse caso na pratica; gap
+  apenas de cobertura de teste defensiva.
+- **Stage 9**: propagacao de `is_quantile_genuine` para as 5 tabelas
+  derivadas (`metrics_by_config`, `_by_horizon`, `_calibration`,
+  `_generalization_gap`, `_robustness_by_horizon`) nao implementada.
+  Filtro upstream ja garante limpeza dos agregados via
+  NaN-propagation, mas predicado per-config/per-horizon ausente para
+  consumidores que precisarem.
+- **Stage 10**: backfill heuristico de `training_run_id` em silver
+  legado e one-shot manual sem lock. Para silver reconstruido apos
+  reset Stage 3, esses runs ficam com `training_run_id` nulo ou via
+  match heuristico ambiguo. Documentado como pendencia manual.
+- **Stage 14**: anti-leakage check em `build_tft_dataset_use_case.py:409-416`
+  virou tautologico apos rename (`effective_date` → `fundamentals_effective_date`).
+  Defense-in-depth assert pos-merge cobre semantica nova; check antigo
+  e divida tecnica para remocao/refactor futuro.
 
 ## Conclusao
 
 **Todos os RED do audit estao fechados.** Todos os P0 transversais do
-Gate de saida da Fase A tem evidencia rastreavel (PRs #14-34 mergeados).
+Gate de saida da Fase A tem evidencia rastreavel (PRs #14-34 mergeados +
+commit `b74035b` Caminho B).
 
-**YELLOW residuais** estao distribuidos entre F.1 smoke, F.2 pre-registro
-ou Fase C/future work — sem nenhum bloqueando abertura da Phase B
-confirmatoria, conforme criterio formal "Nenhum modulo com veredicto RED
-em aberto" + "M_X GREEN ou YELLOW com acao concluida" do
-`A_code_audit.md:1247-1248`.
+**YELLOW residuais** estao distribuidos entre:
+- F.1 smoke (5 itens) e F.2 pre-registro (7 itens) — bloqueam abertura
+  formal da Phase B confirmatoria, mas nao a marcacao parcial do gate.
+- Out-of-scope Phase B / Fase C / future work (5 itens) — declaracoes
+  defensiveis com base no texto literal do audit.
+- 1 pendencia condicional a F.2 (baselines restantes).
+- 4 follow-ups YELLOW de Notas de revisao dos Stages (cobertura
+  defensiva, propagacao downstream, dividas tecnicas).
+- 2 itens P1 nao-bloqueantes (`feature_registry.py`,
+  `validate_analytics_quality` Block A literal).
 
-**Proxima acao**: marcar Gate de saida da Fase A em `A_code_audit.md`
-(checkboxes linhas 1239-1264) e preencher `Data de abertura da Fase B`
-(linha 1270) apos F.1 smoke + F.2 pre-registro.
+Criterio formal "Nenhum modulo com veredicto RED em aberto" +
+"M_X GREEN ou YELLOW com acao concluida" do `A_code_audit.md:1247-1248`
+**satisfeito para o subset de acoes de codigo** (Stages 1-14 mergeados).
 
-**Sem gaps materiais descobertos** durante esta verificacao. Cada acao
-YELLOW/RED do audit tem ou Stage que a fechou, ou destino declarado
-(F.1, F.2, Fase C, future work).
+**Estrategia de marcacao parcial do gate** (proxima acao):
+
+- **P0 transversais** (`A_code_audit.md:1253-1264`): marcar `[x]` — todos
+  os 6 itens sao puramente codigo, todos fechados via Stages mergeados.
+- **Modulos M1-M7**: marcacao bipartida conforme dependencia:
+  - M4, M5: `[x]` — todas as acoes cobertas por Stages mergeados
+    (M4 itens out-of-scope estao explicitos no audit como future work;
+    M5 todos os P0 + Caminho B fechados).
+  - M1, M2, M3, M6, M7: `[~]` — depende de F.1 e/ou F.2 para fechamento
+    pleno; codigo entregue mas marco documental/operacional pendente.
+- **"Nenhum modulo com veredicto RED em aberto"** (`:1247`): `[x]`
+  marcavel — verificado, nenhum RED restante.
+- **`Data de abertura da Fase B`** (`:1270`): manter em branco com nota
+  "preenchida apos F.1 smoke confirmatorio + F.2 pre-registro mergeados".
+
+Esta estrategia preserva honestidade do gate: P0 fechados e RED zerados
+sao fato; itens condicionados a F.1/F.2 mantem visibilidade ate
+satisfacao plena.
+
+**Sem gaps materiais descobertos** durante esta verificacao e revisao
+independente (relatorio APPROVE_WITH_CAVEATS de sessao de auditoria
+independente; 5/5 spot-checks de mapping passaram). Cada acao YELLOW/RED
+do audit tem ou Stage que a fechou, ou destino declarado (F.1, F.2,
+Fase C, future work, P1 nao-bloqueante).
