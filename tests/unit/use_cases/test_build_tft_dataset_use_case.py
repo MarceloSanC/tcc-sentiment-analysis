@@ -626,3 +626,60 @@ def test_build_dataset_quality_gate_rejects_nan_ratio_above_threshold(tmp_path: 
 
     with pytest.raises(ValueError, match="build_dataset quality gate failed: feature NaN ratio"):
         use_case.execute(asset_id, _dt_utc(2024, 1, 1), _dt_utc(2024, 1, 3))
+
+
+def test_fundamentals_effective_date_applies_45d_fallback_when_reported_date_missing(
+    tmp_path: Path,
+) -> None:
+    asset_id = "AAPL"
+    # fiscal_date_end Fri 2023-12-01 + 45 days = Mon 2024-01-15 (weekday, no roll).
+    fiscal_end = date(2023, 12, 1)
+    expected_fallback = fiscal_end + timedelta(days=45)
+
+    candles = [
+        Candle(
+            timestamp=_dt_utc(2024, 1, day),
+            open=100, high=101, low=99, close=100 + day, volume=10 + day,
+        )
+        for day in (15, 16, 17)
+    ]
+    indicators = [
+        TechnicalIndicatorSet(
+            asset_id=asset_id,
+            timestamp=_dt_utc(2024, 1, day),
+            indicators={"rsi_14": 30.0 + day},
+        )
+        for day in (15, 16, 17)
+    ]
+    fundamentals = [
+        FundamentalReport(
+            asset_id=asset_id,
+            fiscal_date_end=fiscal_end,
+            report_type="annual",
+            revenue=1000.0,
+            net_income=200.0,
+            operating_cash_flow=150.0,
+            total_shareholder_equity=300.0,
+            total_liabilities=400.0,
+            reported_date=None,  # triggers +45d fallback (use case :117-118)
+            source="mock",
+        )
+    ]
+
+    repo = FakeTFTDatasetRepository(output_dir=tmp_path)
+    use_case = BuildTFTDatasetUseCase(
+        candle_repository=FakeCandleRepository(candles),
+        indicator_repository=FakeTechnicalIndicatorRepository(indicators),
+        daily_sentiment_repository=FakeDailySentimentRepository([]),
+        fundamental_repository=FakeFundamentalRepository(fundamentals),
+        tft_dataset_repository=repo,
+    )
+
+    use_case.execute(asset_id, _dt_utc(2024, 1, 15), _dt_utc(2024, 1, 17))
+
+    assert repo.saved is not None
+    df = repo.saved
+    eff = pd.to_datetime(df["fundamentals_effective_date"], utc=True).dt.date
+    # At least one row must carry the +45d fallback effective_date exactly
+    # (fiscal_end + 45d lands on a weekday; no business-day roll applied).
+    assert (eff == expected_fallback).any()
