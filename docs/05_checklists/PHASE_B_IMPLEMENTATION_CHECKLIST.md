@@ -72,13 +72,13 @@ de Phase B; sem isso, re-rodar o mesmo `run_id` duplica linhas em silver.
 ### Tasks
 
 
-- [~] **1.1** Definir interface `AnalyticsRunRepository` com novo contrato
+- [x] **1.1** Definir interface `AnalyticsRunRepository` com novo contrato
       `overwrite: bool = False` em todos os `append_*`/`upsert_*`.
       Atualizar `src/interfaces/analytics_run_repository.py`.
       **Aceite:** type checker passa; nenhuma chamada existente quebrada
       (default `overwrite=False` preserva semantica atual exceto pelo bug).
 
-- [~] **1.2** Implementar `_write_with_overwrite_policy` em
+- [x] **1.2** Implementar `_write_with_overwrite_policy` em
       [parquet_analytics_run_repository.py:94-100](../../src/adapters/parquet_analytics_run_repository.py#L94-L100).
       Comportamento: se path nao existe, escreve. Se existe e nao ha
       colisao de chave logica, append. Se existe e ha colisao e
@@ -88,19 +88,19 @@ de Phase B; sem isso, re-rodar o mesmo `run_id` duplica linhas em silver.
       `src/infrastructure/schemas/analytics_store_schema.py` e validados em
       `tests/unit/infrastructure/schemas/test_analytics_store_schema.py`.
 
-- [~] **1.3** Migrar os 12 `append_*` para usar
+- [x] **1.3** Migrar os 12 `append_*` para usar
       `_write_with_overwrite_policy`. Manter `upsert_dim_run` como esta
       (ja honra a lei).
       **Aceite:** todos os metodos em
       [parquet_analytics_run_repository.py:144-267](../../src/adapters/parquet_analytics_run_repository.py#L144-L267)
       delegam ao novo metodo.
 
-- [~] **1.4** Testes unitarios cobrindo: (a) primeira escrita; (b) append
+- [x] **1.4** Testes unitarios cobrindo: (a) primeira escrita; (b) append
       sem colisao; (c) colisao sem flag = erro; (d) colisao com flag =
       sobrescrita correta; (e) particoes diferentes nao se afetam.
       **Aceite:** `pytest tests/unit/adapters/test_parquet_analytics_run_repository.py` passa.
 
-- [~] **1.5** Atualizar call sites em
+- [x] **1.5** Atualizar call sites em
       `src/use_cases/train_tft_model_use_case.py` e
       `src/use_cases/run_tft_inference_use_case.py` para passar
       `overwrite=True` apenas quando o usuario explicitamente solicitar
@@ -136,14 +136,14 @@ de coexistencia por coluna sem aviso.
 
 ### Tasks
 
-- [~] **2.1** Adicionar teste
+- [x] **2.1** Adicionar teste
       `test_config_signature_changes_when_parent_sweep_id_changes` em
       [tests/unit/infrastructure/schemas/test_analytics_store_schema.py](../../tests/unit/infrastructure/schemas/test_analytics_store_schema.py).
       Cobrir: dois `training_config` iguais com `parent_sweep_id` diferente
       = hashes diferentes. Idem para `fold`, `trial_number`, `seed`.
       **Aceite:** 4 asserts independentes, todos passando.
 
-- [~] **2.2** Adicionar teste
+- [x] **2.2** Adicionar teste
       `test_config_signature_stable_across_volatile_keys` que garante que
       `created_at`/`started_at`/`ended_at`/`timestamp` continuam sendo
       ignorados (regressao do comportamento atual).
@@ -171,23 +171,23 @@ de coexistencia por coluna sem aviso.
 
 ### Tasks
 
-- [~] **3.1** Mover `data/analytics/silver/` para
+- [x] **3.1** Mover `data/analytics/silver/` para
       `data/analytics_archive_pre_phase_b/silver/` (script ou comando manual,
       registrar comando exato no PR).
       **Aceite:** `data/analytics/silver/` vazio; archive populado;
       `git status` confirma tracking files inalterados (apenas dados).
 
-- [~] **3.2** Mover `data/analytics/gold/` para
+- [x] **3.2** Mover `data/analytics/gold/` para
       `data/analytics_archive_pre_phase_b/gold/`.
       **Aceite:** mesmo criterio.
 
-- [~] **3.3** Atualizar `docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md`
+- [x] **3.3** Atualizar `docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md`
       com nota sobre o archive: dados pre-`2026-05-10` sao diagnostico
       historico, nao evidencia confirmatoria.
       **Aceite:** doc canonico atualizado e linkado em
       `A_code_audit.md` §M6.
 
-- [~] **3.4** Proteger archive como rollback: aplicar permissoes
+- [x] **3.4** Proteger archive como rollback: aplicar permissoes
       read-only em `data/analytics_archive_pre_phase_b/` (`chmod -R a-w`)
       e documentar em `docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md`
       que o archive nao deve ser modificado ate o fechamento do
@@ -225,20 +225,20 @@ porque `gold_model_decision_final` eh a tabela final de decisao do paper.
 
 ### Tasks
 
-- [~] **4.1** Adicionar `parent_sweep_id` ao groupby em
+- [x] **4.1** Adicionar `parent_sweep_id` ao groupby em
       [refresh_analytics_store_use_case.py:1575-1590](../../src/use_cases/refresh_analytics_store_use_case.py#L1575-L1590)
       (`gold_model_decision_final`: `rank_rmse`, `rank_mae`, `rank_da`).
       **Aceite:** rank eh calculado dentro de
       `(asset, parent_sweep_id, horizon)`, nao mais cross-coorte.
 
-- [~] **4.2** Adicionar `parent_sweep_id` ao groupby em
+- [x] **4.2** Adicionar `parent_sweep_id` ao groupby em
       [refresh_analytics_store_use_case.py:151-176](../../src/use_cases/refresh_analytics_store_use_case.py#L151-L176)
       (`gold_ranking_by_config`: `rank_test_rmse`, `rank_test_mae`,
       `rank_test_da`).
       **Aceite:** ranks sao por
       `(asset, parent_sweep_id, feature_set_name)`.
 
-- [~] **4.3** Testes unitarios: criar dois sweeps sinteticos com mesmas
+- [x] **4.3** Testes unitarios: criar dois sweeps sinteticos com mesmas
       configs, verificar que ranks sao independentes por sweep.
       **Aceite:** `pytest tests/unit/use_cases/test_refresh_analytics_store_use_case.py`
       passa com novos casos.
@@ -277,33 +277,33 @@ omitem `config_signature` e hoje misturam coortes silenciosamente.
 
 ### Tasks
 
-- [~] **5.1** `gold_feature_set_impact`: adicionar `parent_sweep_id` ao
+- [x] **5.1** `gold_feature_set_impact`: adicionar `parent_sweep_id` ao
       groupby em [refresh_analytics_store_use_case.py:259](../../src/use_cases/refresh_analytics_store_use_case.py#L259).
       **Aceite:** output tem coluna `parent_sweep_id`; agregados nao
       somam runs de sweeps diferentes.
 
-- [~] **5.2** `gold_prediction_metrics_by_horizon`: idem em
+- [x] **5.2** `gold_prediction_metrics_by_horizon`: idem em
       [:556](../../src/use_cases/refresh_analytics_store_use_case.py#L556).
       **Aceite:** mesmo criterio.
 
-- [~] **5.3** `gold_feature_impact_by_horizon`: idem em
+- [x] **5.3** `gold_feature_impact_by_horizon`: idem em
       [:760](../../src/use_cases/refresh_analytics_store_use_case.py#L760).
       **Aceite:** mesmo criterio.
 
-- [~] **5.4** `gold_feature_contrib_local_summary`: idem em
+- [x] **5.4** `gold_feature_contrib_local_summary`: idem em
       [:1820](../../src/use_cases/refresh_analytics_store_use_case.py#L1820).
       **Aceite:** mesmo criterio.
 
-- [~] **5.5** `gold_consistency_topk`: adicionar `parent_sweep_id` ao
+- [x] **5.5** `gold_consistency_topk`: adicionar `parent_sweep_id` ao
       `keys` em [:175](../../src/use_cases/refresh_analytics_store_use_case.py#L175).
       **Aceite:** rankings de top-k sao por sweep.
 
-- [~] **5.6** Atualizar testes existentes em
+- [x] **5.6** Atualizar testes existentes em
       `test_refresh_analytics_store_use_case.py` que assumem o shape
       antigo dessas 5 tabelas.
       **Aceite:** suite passa com novos shapes.
 
-- [~] **5.7** Atualizar consumidores que leem as 5 tabelas alteradas
+- [x] **5.7** Atualizar consumidores que leem as 5 tabelas alteradas
       para acomodar o novo shape (coluna `parent_sweep_id` adicional e
       grao mais fino):
       - [generate_prediction_analysis_plots_use_case.py](../../src/use_cases/generate_prediction_analysis_plots_use_case.py)
@@ -349,34 +349,34 @@ no output para rastreabilidade direta (Lei 3).
 
 ### Tasks
 
-- [~] **6.1** `gold_ic95_by_config_metric`
+- [x] **6.1** `gold_ic95_by_config_metric`
       ([refresh_analytics_store_use_case.py:227](../../src/use_cases/refresh_analytics_store_use_case.py#L227)):
       adicionar `parent_sweep_id` derivado via merge com `dim_run`.
       **Aceite:** output tem coluna nao-nula para runs pos-9f0ccec.
 
-- [~] **6.2** `gold_prediction_metrics_by_config`
+- [x] **6.2** `gold_prediction_metrics_by_config`
       ([:519](../../src/use_cases/refresh_analytics_store_use_case.py#L519)):
       idem.
 
-- [~] **6.3** `gold_prediction_calibration`
+- [x] **6.3** `gold_prediction_calibration`
       ([:597-604](../../src/use_cases/refresh_analytics_store_use_case.py#L597-L604)):
       idem.
 
-- [~] **6.4** `gold_prediction_generalization_gap`
+- [x] **6.4** `gold_prediction_generalization_gap`
       ([:627-630](../../src/use_cases/refresh_analytics_store_use_case.py#L627-L630)):
       idem.
 
-- [~] **6.5** `gold_prediction_robustness_by_horizon`
+- [x] **6.5** `gold_prediction_robustness_by_horizon`
       ([:673](../../src/use_cases/refresh_analytics_store_use_case.py#L673)):
       idem.
 
-- [~] **6.6** Atualizar `gold_metrics_by_config_n_oos_contract` em
+- [x] **6.6** Atualizar `gold_metrics_by_config_n_oos_contract` em
       `validate_analytics_quality_use_case.py` para filtrar pelos dois
       lados via `parent_sweep_id` direto (resolve mismatch_with_run_level=13800
       historico documentado em M5-Q4).
       **Aceite:** check passa em `cohort_decision` para sweep limpo.
 
-- [~] **6.7** Atualizar consumidores que leem as 5 tabelas com nova
+- [x] **6.7** Atualizar consumidores que leem as 5 tabelas com nova
       coluna `parent_sweep_id` no output:
       - [generate_prediction_analysis_plots_use_case.py](../../src/use_cases/generate_prediction_analysis_plots_use_case.py)
       - [validate_analytics_quality_use_case.py](../../src/use_cases/validate_analytics_quality_use_case.py)
@@ -438,11 +438,11 @@ coorte declarada em vez de ler o silver inteiro.
 
 ### Tasks
 
-- [~] **7.1** Adicionar `scope_spec: ScopeSpec | None = None` em
+- [x] **7.1** Adicionar `scope_spec: ScopeSpec | None = None` em
       `RefreshAnalyticsStoreUseCase.__init__` e em `execute`.
       **Aceite:** assinatura atualizada; default mantem comportamento global.
 
-- [~] **7.2** Modificar `_load_partitioned_table`
+- [x] **7.2** Modificar `_load_partitioned_table`
       ([refresh_analytics_store_use_case.py:28-38](../../src/use_cases/refresh_analytics_store_use_case.py#L28-L38))
       para suportar scoping semantico por tabela (nao filtro cego global):
       - construir `scoped_run_ids` a partir de `dim_run` filtrado por scope;
@@ -452,7 +452,7 @@ coorte declarada em vez de ler o silver inteiro.
       **Aceite:** com scope, leitura retorna coorte correta sem esvaziar
       tabelas que nao possuem todas as colunas de escopo.
 
-- [~] **7.3** Adicionar flags de scope em
+- [x] **7.3** Adicionar flags de scope em
       [main_refresh_analytics_store.py](../../src/main_refresh_analytics_store.py):
       `--scope-mode`, `--scope-sweep-prefixes`, `--scope-splits`,
       `--scope-horizons`. Reusar parsing existente do block-A.
@@ -584,7 +584,7 @@ Toda tabela gold cai em uma das tres categorias (criterio canonico em
 
 ### Tasks
 
-- [~] **8.1** Refatorar
+- [x] **8.1** Refatorar
       `_build_gold_prediction_metrics_by_run_split_horizon`
       ([:309-409](../../src/use_cases/refresh_analytics_store_use_case.py#L309-L409))
       para emitir colunas duplas (Categoria A): `picp_raw`/`picp_post_guardrail`,
@@ -597,27 +597,27 @@ Toda tabela gold cai em uma das tres categorias (criterio canonico em
       **Aceite:** output contem ambos os conjuntos; `gold_quantile_guardrail_audit`
       vira redundante (manter por compatibilidade ate Phase B fechar).
 
-- [~] **8.2** Propagar dualidade para tabelas derivadas (Categoria A):
+- [x] **8.2** Propagar dualidade para tabelas derivadas (Categoria A):
       `gold_prediction_metrics_by_config`, `gold_prediction_calibration`,
       `gold_prediction_robustness_by_horizon`, `gold_prediction_generalization_gap`,
       `gold_prediction_metrics_by_horizon`.
       **Aceite:** todas as agregacoes preservam ambas as variantes.
 
-- [~] **8.3** Atualizar `gold_model_decision_final` (Categoria B — single
+- [x] **8.3** Atualizar `gold_model_decision_final` (Categoria B — single
       por definicao de "selecao") para selecionar a variante primaria via
       flag de configuracao (default: `post_guardrail`, sobrepujavel via
       `--primary-quantile-contract`).
       **Aceite:** decisao explicita; flag persistida em log do refresh
       e em coluna `primary_quantile_contract` no output.
 
-- [~] **8.4** Atualizar plot generators (Categoria B — single por design
+- [x] **8.4** Atualizar plot generators (Categoria B — single por design
       operacional)
       ([generate_prediction_analysis_plots_use_case.py](../../src/use_cases/generate_prediction_analysis_plots_use_case.py))
       para ler a variante primaria selecionada via flag.
       **Aceite:** plots refletem o contrato escolhido; titulos anotam
       qual variante esta sendo plotada.
 
-- [~] **8.5** **Mover `gold_prediction_risk` para post-guardrail apenas
+- [x] **8.5** **Mover `gold_prediction_risk` para post-guardrail apenas
       (Categoria B).** Substituir `quantile_p10`/`quantile_p50` por
       `quantile_p10_post_guardrail`/`quantile_p50_post_guardrail` em
       [`refresh_analytics_store_use_case.py:1079,1082`](../../src/use_cases/refresh_analytics_store_use_case.py#L1079-L1082)
@@ -633,7 +633,7 @@ Toda tabela gold cai em uma das tres categorias (criterio canonico em
       `var_10 != mean(quantile_p10)` raw quando ha crossing; documentado
       em `CALIBRATION_AND_RISK.md` (sincronizado no PR doc).
 
-- [~] **8.6** **Adicionar colunas `delta_<metrica>_post_minus_raw`** no
+- [x] **8.6** **Adicionar colunas `delta_<metrica>_post_minus_raw`** no
       `_build_gold_prediction_metrics_by_run_split_horizon` para todas as
       familias Categoria A duplicadas em 8.1. Substitui funcionalmente
       `gold_quantile_guardrail_audit` (que continua materializado por
@@ -648,7 +648,7 @@ Toda tabela gold cai em uma das tres categorias (criterio canonico em
       que `delta_picp_post_minus_raw == picp_post_guardrail - picp_raw`
       por linha.
 
-- [~] **8.7** **Duplicar `prob_up`/`prob_down` como Categoria A.** Hoje
+- [x] **8.7** **Duplicar `prob_up`/`prob_down` como Categoria A.** Hoje
       `prob_up_row` em
       [`refresh_analytics_store_use_case.py:482-484`](../../src/use_cases/refresh_analytics_store_use_case.py#L482-L484)
       eh calculado via `_prob_up_from_quantiles(p10, p50, p90)` somente
@@ -661,7 +661,7 @@ Toda tabela gold cai em uma das tres categorias (criterio canonico em
       crossing demonstra divergencia entre `prob_up_raw` e
       `prob_up_post_guardrail`.
 
-- [~] **8.8** **Anotacao protetiva Categoria C.** Adicionar comentarios
+- [x] **8.8** **Anotacao protetiva Categoria C.** Adicionar comentarios
       explicitos marcando que os seguintes checks **devem permanecer raw**
       por design (sob post-guardrail seriam tautologicamente satisfeitos
       e perderiam funcao diagnostica):
@@ -773,7 +773,7 @@ genuinamente quantilicos e nao-degenerados.
 
 ### Tasks
 
-- [~] **9.1** Em `_build_gold_prediction_metrics_by_run_split_horizon`,
+- [x] **9.1** Em `_build_gold_prediction_metrics_by_run_split_horizon`,
       filtrar `fact_oos_predictions` por `prediction_mode='quantile'`
       (via merge com `fact_config`) AND `quantile_p10 != quantile_p90`
       antes do calculo das metricas probabilisticas. Manter calculo
@@ -781,12 +781,12 @@ genuinamente quantilicos e nao-degenerados.
       **Aceite:** runs `point` ou degenerados nao contribuem para
       PICP/MPIW/pinball; aparecem em RMSE/MAE/DA normalmente.
 
-- [~] **9.2** Adicionar coluna `is_quantile_genuine` no output de
+- [x] **9.2** Adicionar coluna `is_quantile_genuine` no output de
       `gold_prediction_metrics_by_run_split_horizon` (calculada
       dinamicamente, nao persistida em silver).
       **Aceite:** consumidores podem filtrar diretamente.
 
-- [~] **9.3** Testes unitarios cobrindo: (a) run quantile genuino entra
+- [x] **9.3** Testes unitarios cobrindo: (a) run quantile genuino entra
       em PICP; (b) run point nao entra; (c) run quantile degenerado
       (`p10==p90`) nao entra.
       **Aceite:** suite passa.
@@ -852,14 +852,14 @@ de inferencia por FK explicita para o run de treino.
 
 ### Tasks
 
-- [~] **10.1** Adicionar parametro `training_run_id` ao schema de
+- [x] **10.1** Adicionar parametro `training_run_id` ao schema de
       `fact_inference_runs`, `fact_inference_predictions` e
       `fact_feature_contrib_local`. Atualizar
       `src/infrastructure/schemas/analytics_store_schema.py`.
       **Aceite:** schema versao bumped; documentado em
       `ANALYTICS_STORE_ARCHITECTURE.md`.
 
-- [~] **10.2** Eliminar dependencia ambigua de `model_version` isolado.
+- [x] **10.2** Eliminar dependencia ambigua de `model_version` isolado.
       Tres call sites coordenados:
       - **Treino — persistir `training_run_id` no metadata do artefato:**
         em [train_tft_model_use_case.py:1031-1091](../../src/use_cases/train_tft_model_use_case.py#L1031-L1091)
@@ -881,7 +881,7 @@ de inferencia por FK explicita para o run de treino.
       `fact_inference_predictions` e `fact_feature_contrib_local`; a FK
       eh deterministica, sem lookup heuristico por `model_version`.
 
-- [~] **10.3** Migrar dados existentes (se nao foi feito reset no Stage 3,
+- [x] **10.3** Migrar dados existentes (se nao foi feito reset no Stage 3,
       ou se inferencia rodou em sweep limpo): script de backfill que
       preenche `training_run_id` retroativamente usando chaves compostas
       (ex.: `model_path` + `asset` + hash de config) e valida unicidade;
@@ -889,7 +889,7 @@ de inferencia por FK explicita para o run de treino.
       **Aceite:** zero linhas com `training_run_id` nulo em
       `fact_inference_*`.
 
-- [~] **10.4** Testes unitarios e de integracao do fluxo de inferencia.
+- [x] **10.4** Testes unitarios e de integracao do fluxo de inferencia.
       **Aceite:** `pytest tests/unit/use_cases/test_run_tft_inference_use_case.py` passa.
 
 ---
@@ -1108,7 +1108,7 @@ no mesmo contrato de grao do TFT para comparacao pareada valida.
 
 ### Tasks
 
-- [~] **12.1** Implementar runner de baselines persistindo em
+- [x] **12.1** Implementar runner de baselines persistindo em
       `fact_oos_predictions` no mesmo grao:
       `(run_id, parent_sweep_id, split, horizon, target_timestamp_utc, y_true, y_pred)`
       e quantis quando aplicavel. Lista canonica conforme `A_code_audit.md`
@@ -1125,12 +1125,12 @@ no mesmo contrato de grao do TFT para comparacao pareada valida.
       **Aceite:** baselines aparecem em silver com `status=ok` e entram
       nas tabelas pareadas DM/MCS/win-rate.
 
-- [~] **12.2** Garantir que baselines da rodada confirmatoria compartilham
+- [x] **12.2** Garantir que baselines da rodada confirmatoria compartilham
       o mesmo `parent_sweep_id` dos candidatos TFT.
       **Aceite:** check automatizado falha quando baseline/candidato caem
       em sweep ids diferentes.
 
-- [~] **12.3** Cobrir em testes/fixture de refresh e quality gate:
+- [x] **12.3** Cobrir em testes/fixture de refresh e quality gate:
       candidato + baseline no mesmo sweep geram comparacoes pareadas
       nao vazias em `gold_dm_pairwise_results` e `gold_mcs_results`.
       **Aceite:** suite alvo passa.
@@ -1186,17 +1186,17 @@ no mesmo contrato de grao do TFT para comparacao pareada valida.
 
 ### Tasks
 
-- [~] **13.1** Em
+- [x] **13.1** Em
       [run_tft_optuna_search_use_case.py:49,176-184](../../src/use_cases/run_tft_optuna_search_use_case.py#L49):
       remover `mean_test_rmse` e `joint_val_test_rmse` da lista de
       `objective_metric` aceitos.
       **Aceite:** instanciar com essas opcoes levanta `ValueError`.
 
-- [~] **13.2** Atualizar CLI [main_tft_optuna_sweep.py](../../src/main_tft_optuna_sweep.py)
+- [x] **13.2** Atualizar CLI [main_tft_optuna_sweep.py](../../src/main_tft_optuna_sweep.py)
       para nao expor essas opcoes em `--objective-metric`.
       **Aceite:** help da CLI nao lista as opcoes invalidas.
 
-- [~] **13.3** Atualizar testes que cobrem essas opcoes.
+- [x] **13.3** Atualizar testes que cobrem essas opcoes.
       **Aceite:** suite passa.
 
 ---
@@ -1269,20 +1269,20 @@ sem cruzar com fontes processadas.
 
 ### Tasks
 
-- [~] **14.1** Renomear `effective_date` para
+- [x] **14.1** Renomear `effective_date` para
       `fundamentals_effective_date` durante o merge em
       `build_tft_dataset_use_case.py` e remover o `df.drop(...)` em
       [linha 519](../../src/use_cases/build_tft_dataset_use_case.py#L519).
       **Aceite:** dataset_tft_AAPL.parquet contem coluna nao-nula
       apos primeiro report disponivel.
 
-- [~] **14.2** Documentar a justificativa do fallback "+45 dias" para
+- [x] **14.2** Documentar a justificativa do fallback "+45 dias" para
       `reported_date` ausente em `02_data/DATA_CONTRACTS.md` ou
       `02_data/DATA_SOURCES.md` (motivacao SEC 10-Q/10-K, cobertura,
       sensibilidade).
       **Aceite:** doc canonico atualizado.
 
-- [~] **14.3** Rebuild do dataset AAPL bundled com o PR (~segundos).
+- [x] **14.3** Rebuild do dataset AAPL bundled com o PR (~segundos).
       **Aceite:** `data/processed/dataset_tft_AAPL.parquet` regenerado;
       smoke teste basico passa.
 
