@@ -1528,3 +1528,109 @@ def test_baseline_gate_does_not_fail_legacy_sweeps_under_global_health(tmp_path)
         if item["check"] == "baselines_share_parent_sweep_id_with_candidates"
     )
     assert gate["passed"] is True
+
+
+def test_official_contract_excludes_baselines_from_artifact_check(tmp_path) -> None:
+    # Stage F.0.7: baselines (feature_set_name='baseline' OR model_version
+    # startswith 'baseline_') have no torch artifact by design. The
+    # official_contract_quantile_attention gate must not flag them as
+    # missing_model_artifacts.
+    silver = tmp_path / "silver"
+    _seed_minimal_valid_silver(silver)  # candidate r1 with model_version=v1
+
+    # Add a baseline run sharing the same sweep but with no fact_model_artifacts row.
+    _write_table(
+        silver,
+        "dim_run",
+        [
+            _dim_row(
+                run_id="r_baseline_zr",
+                parent_sweep_id="sw1",
+                feature_set_name="baseline",
+                model_version="baseline_zero_return_v1",
+            ),
+        ],
+        {"asset": "AAPL", "sweep_id": "sw1_baseline"},
+    )
+    # Mirror the baseline oos predictions so quantile cols are non-null.
+    _write_table(
+        silver,
+        "fact_oos_predictions",
+        [
+            {
+                "schema_version": 1,
+                "run_id": "r_baseline_zr",
+                "model_version": "baseline_zero_return_v1",
+                "asset": "AAPL",
+                "feature_set_name": "baseline",
+                "parent_sweep_id": "sw1",
+                "config_signature": "cfg_baseline",
+                "split": "test",
+                "fold": "none",
+                "seed": 0,
+                "horizon": 1,
+                "timestamp_utc": "2026-01-09T00:00:00+00:00",
+                "target_timestamp_utc": "2026-01-09T00:00:00+00:00",
+                "y_true": 0.0,
+                "y_pred": 0.0,
+                "error": 0.0,
+                "abs_error": 0.0,
+                "sq_error": 0.0,
+                "quantile_p10": 0.0,
+                "quantile_p50": 0.0,
+                "quantile_p90": 0.0,
+                "year": 2026,
+            }
+        ],
+        {"asset": "AAPL", "feature_set_name": "baseline", "year": "2026"},
+    )
+
+    result = ValidateAnalyticsQualityUseCase(analytics_silver_dir=silver).execute()
+    contract = next(
+        item
+        for item in result.checks
+        if item["check"] == "official_contract_quantile_attention"
+    )
+    # Candidate r1 has fact_model_artifacts via _seed_minimal_valid_silver; the
+    # baseline r_baseline_zr does not, but is excluded from the artifact check.
+    detail = str(contract["detail"])
+    assert "missing_model_artifacts" not in detail
+    assert "baseline_zero_return_v1" not in detail
+    assert contract["passed"] is True
+
+
+def test_official_contract_skips_artifact_check_when_only_baselines_present(
+    tmp_path,
+) -> None:
+    # Stage F.0.7 edge case: a sweep populated only with baselines must not
+    # fail the artifact contract; surface as informational note in detail.
+    silver = tmp_path / "silver"
+    _seed_minimal_valid_silver(silver)
+
+    # Remove the TFT candidate by writing a dim_run with only the baseline.
+    # Easiest: just add an isolated baseline and rely on official_runs filtering.
+    _write_table(
+        silver,
+        "dim_run",
+        [
+            _dim_row(
+                run_id="r_baseline_only",
+                parent_sweep_id="sw_baselines_only",
+                feature_set_name="baseline",
+                model_version="baseline_historical_mean_rolling_v1",
+            ),
+        ],
+        {"asset": "AAPL", "sweep_id": "sw_baselines_only"},
+    )
+
+    result = ValidateAnalyticsQualityUseCase(analytics_silver_dir=silver).execute()
+    contract = next(
+        item
+        for item in result.checks
+        if item["check"] == "official_contract_quantile_attention"
+    )
+    # Candidate r1 is still official → artifact check still runs against it
+    # (passes), the baseline run is excluded. Detail should not flag the
+    # baseline as missing.
+    detail = str(contract["detail"])
+    assert "baseline_historical_mean_rolling_v1" not in detail

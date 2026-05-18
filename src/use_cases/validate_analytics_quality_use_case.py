@@ -961,6 +961,13 @@ class ValidateAnalyticsQualityUseCase:
         )
 
         # P0: official runs quantile/attention contract
+        # Baselines (feature_set_name='baseline' OR model_version startswith
+        # 'baseline_') by design do not own torch model artifacts (no
+        # checkpoint, no feature_importance, no attention). They participate
+        # in quantile contract (p10/p50/p90 must be present in oos predictions)
+        # but are excluded from the artifact contract — Stage F.0.7 (registered
+        # in docs/07_reports/smoke_confirmatory_2026-05-18.md and
+        # docs/05_checklists/PHASE_B_IMPLEMENTATION_CHECKLIST.md Stage F.0).
         contract_ok = True
         contract_issues: list[str] = []
         if not dim_run.empty:
@@ -968,6 +975,15 @@ class ValidateAnalyticsQualityUseCase:
                 dim_run.loc[dim_run["status"].astype(str).str.lower() == "ok", "run_id"].astype(str).tolist()
             ) if "status" in dim_run.columns else set()
             if official_runs:
+                if {"feature_set_name", "model_version"}.issubset(dim_run.columns):
+                    baseline_dim = dim_run[
+                        dim_run["feature_set_name"].astype(str).str.strip().str.lower().eq("baseline")
+                        | dim_run["model_version"].astype(str).str.strip().str.lower().str.startswith("baseline_")
+                    ]
+                    baseline_run_ids = set(baseline_dim["run_id"].astype(str).tolist())
+                else:
+                    baseline_run_ids = set()
+                official_candidates = official_runs - baseline_run_ids
                 if fact_oos_predictions.empty:
                     contract_ok = False
                     contract_issues.append("missing_fact_oos_predictions")
@@ -983,12 +999,18 @@ class ValidateAnalyticsQualityUseCase:
                                 contract_ok = False
                                 contract_issues.append(f"{q}_nan={nulls}")
 
-                if fact_model_artifacts.empty:
+                if not official_candidates:
+                    # Sweep with only baselines — artifact contract is vacuously
+                    # satisfied; surface as informational note in detail.
+                    contract_issues.append("artifact_check_skipped_baselines_only")
+                elif fact_model_artifacts.empty:
                     contract_ok = False
                     contract_issues.append("missing_fact_model_artifacts")
                 else:
-                    mar = fact_model_artifacts[fact_model_artifacts["run_id"].astype(str).isin(official_runs)]
-                    missing_mar = len(official_runs - set(mar["run_id"].astype(str).tolist()))
+                    mar = fact_model_artifacts[
+                        fact_model_artifacts["run_id"].astype(str).isin(official_candidates)
+                    ]
+                    missing_mar = len(official_candidates - set(mar["run_id"].astype(str).tolist()))
                     if missing_mar > 0:
                         contract_ok = False
                         contract_issues.append(f"missing_model_artifacts={missing_mar}")
