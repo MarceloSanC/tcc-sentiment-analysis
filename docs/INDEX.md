@@ -74,7 +74,8 @@ Documenta fontes externas, contratos de dados, feature sets e quality gates.
 Critico para rigor anti-leakage.
 
 - [`02_data/DATA_SOURCES.md`](02_data/DATA_SOURCES.md) : fontes externas (yfinance, finnhub, alpha
-  vantage) e caminho canonico de ingestao de cada uma.
+  vantage), caminho canonico de ingestao de cada uma e politica de fallback para
+  `reported_date` ausente em fundamentals.
 - [`02_data/DATA_CONTRACTS.md`](02_data/DATA_CONTRACTS.md) : `run_id`, fingerprints, `schema_version`,
   chaves logicas e regras de evolucao de schema.
 - [`02_data/FEATURE_SETS.md`](02_data/FEATURE_SETS.md) : registry de features por familia

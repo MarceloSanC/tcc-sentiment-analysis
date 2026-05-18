@@ -1210,22 +1210,79 @@ sem cruzar com fontes processadas.
 
 ### Notas de revisao:
 
+- 2026-05-17 — branch `feat/dataset-stage14-preserve-fundamentals-effective-date`,
+  pytest `tests/unit/use_cases/test_build_tft_dataset_use_case.py -v` ->
+  15 passed (3 novos, 12 baseline); suite completa
+  `pytest tests/unit/` -> 502 passed, zero regressoes; ruff limpo nos
+  arquivos tocados.
+- **Estrategia de rename**: Opcao B — rename apenas no merge_asof
+  (`fundamentals_df.rename(columns={"effective_date":
+  "fundamentals_effective_date"})` antes do merge). Mudanca cirurgica que
+  preserva `effective_date` interno na construcao em
+  [_fundamentals_to_df:115-142](../../src/use_cases/build_tft_dataset_use_case.py#L115-L142)
+  e mantem intacta a checagem anti-leakage em
+  [_validate_feature_anti_leakage:409-416](../../src/use_cases/build_tft_dataset_use_case.py#L409-L416).
+  Justificativa: minimal change, menor superficie de regressao.
+- **Localizacao da doc do fallback**: `02_data/DATA_SOURCES.md` (e nao
+  `DATA_CONTRACTS.md`). Justificativa: o fallback `fiscal_date_end +
+  timedelta(days=45)` e *comportamento sobre dado ausente da fonte
+  externa* (Alpha Vantage), nao contrato de schema — a coluna existe
+  e mantem o mesmo tipo independente do fallback. `update_when` no
+  frontmatter ganhou entrada explicita "fallback de `reported_date`
+  ausente para fundamentals mudar".
+- **Defense-in-depth**: assert pos-merge garante
+  `fundamentals_effective_date <= date` (linha 525-535 do
+  `build_tft_dataset_use_case.py` apos a edicao). `ValueError` cita
+  literalmente "Stage 14 / A_code_audit.md §M3-Q4" para auto-documentar
+  regressao futura. Coberto por
+  `test_fundamentals_effective_date_never_after_sample_date`.
+- **`feature_registry.py`** atualizado em 5 entries de fundamentals
+  (revenue, net_income, operating_cash_flow, total_shareholder_equity,
+  total_liabilities): `formula_desc` agora cita
+  `fundamentals_effective_date`. Mudanca cosmetica/documental — sem
+  alteracao em `name`, `group`, `source_cols`, `anti_leakage_tag`,
+  `dtype` ou `warmup_count`.
+- **Rebuild parquet**: `data/processed/dataset_tft_AAPL.parquet` esta
+  no `.gitignore` (regra `data/**`). Rebuild executado localmente
+  (`python -m src.main_dataset_tft --asset AAPL --overwrite`); parquet
+  pos-Stage 14 tem 62 cols (era 61, +1 = `fundamentals_effective_date`),
+  4023 rows (igual a baseline), `fundamentals_effective_date` populada
+  em 3950/4023 linhas (98.2%, NaN apenas no warmup 2010-01-04 ->
+  2010-04-19). Commit do rebuild e simbolico (sem mudanca em git).
+- **Checagem anti-leakage em :409-416 NAO foi tocada**. Conforme nota
+  do prompt, a checagem opera sobre `effective_date` (nome antigo) pos
+  merge — apos Stage 14 a coluna existe com nome novo
+  (`fundamentals_effective_date`) entao o `if "effective_date" in
+  df.columns` daquela checagem fica falso e o bloco vira no-op. Isso e
+  intencional: a checagem original era defesa contra o caso (que nunca
+  existia em producao) onde o codigo deixasse `effective_date` no df
+  apos merge sem dropar; pos-Stage 14, a guarda equivalente esta no
+  novo assert (defense-in-depth acima) operando sobre o nome novo.
+  Mantida sem mudanca para nao expandir o blast radius do PR.
+- 2026-05-17 (follow-up post-review) — endereçados 3 YELLOWs da revisão:
+  (1) `canonical_for` em DATA_SOURCES.md ganhou tag
+  `fundamentals_fallback_policy`; (2) INDEX.md linha 76-77 expandida para
+  refletir a politica de fallback; (3) novo teste
+  `test_fundamentals_effective_date_applies_45d_fallback_when_reported_date_missing`
+  cobre regressão em :117-118 (`fiscal_date_end + timedelta(days=45)`).
+  Suite continua em 503 passed (502 + 1 novo); ruff limpo.
+
 ### Tasks
 
-- [ ] **14.1** Renomear `effective_date` para
+- [~] **14.1** Renomear `effective_date` para
       `fundamentals_effective_date` durante o merge em
       `build_tft_dataset_use_case.py` e remover o `df.drop(...)` em
       [linha 519](../../src/use_cases/build_tft_dataset_use_case.py#L519).
       **Aceite:** dataset_tft_AAPL.parquet contem coluna nao-nula
       apos primeiro report disponivel.
 
-- [ ] **14.2** Documentar a justificativa do fallback "+45 dias" para
+- [~] **14.2** Documentar a justificativa do fallback "+45 dias" para
       `reported_date` ausente em `02_data/DATA_CONTRACTS.md` ou
       `02_data/DATA_SOURCES.md` (motivacao SEC 10-Q/10-K, cobertura,
       sensibilidade).
       **Aceite:** doc canonico atualizado.
 
-- [ ] **14.3** Rebuild do dataset AAPL bundled com o PR (~segundos).
+- [~] **14.3** Rebuild do dataset AAPL bundled com o PR (~segundos).
       **Aceite:** `data/processed/dataset_tft_AAPL.parquet` regenerado;
       smoke teste basico passa.
 
