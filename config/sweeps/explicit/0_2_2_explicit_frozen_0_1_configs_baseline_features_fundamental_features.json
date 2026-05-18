@@ -80,6 +80,25 @@
     "test_start": "20230101",
     "test_end": "20241231"
   },
+  "baselines": [
+    {
+      "name": "zero_return",
+      "config": {}
+    },
+    {
+      "name": "historical_mean_rolling",
+      "config": {
+        "window_days": 252
+      }
+    },
+    {
+      "name": "historical_quantiles_rolling",
+      "config": {
+        "window_days": 252,
+        "quantile_levels": [0.1, 0.5, 0.9]
+      }
+    }
+  ],
   "explicit_configs": [
     {
       "run_label": "frozen_rank01_cfg01_20260312_033058_BF",
