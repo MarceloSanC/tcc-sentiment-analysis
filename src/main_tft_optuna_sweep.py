@@ -131,7 +131,7 @@ def parse_args() -> argparse.Namespace:
         "--objective-metric",
         type=str,
         default=None,
-        choices=["robust_score", "mean_val_rmse", "mean_test_rmse", "joint_val_test_rmse"],
+        choices=["robust_score", "mean_val_rmse"],
         help="Objective metric for Optuna minimization.",
     )
     parser.add_argument(
