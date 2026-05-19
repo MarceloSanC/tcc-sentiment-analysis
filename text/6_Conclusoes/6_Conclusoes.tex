@@ -10,7 +10,23 @@
 % (contribuicao de familias H3). Preencher apos consolidacao dos artefatos.
 
 \section{Contribuições do trabalho}
-% TODO: consolidar contribuicoes metodologicas e aplicadas apos Fase B/C.
+As contribuições deste trabalho são organizadas em duas frentes: metodológicas, já consolidadas pelo desenho experimental e pela infraestrutura analítica do projeto, e empíricas, dependentes da execução confirmatória da Fase B e da análise de contribuição da Fase C.
+
+\subsection{Contribuições metodológicas}
+A primeira contribuição é a definição de uma política operacional de variante quantilica (raw e pós-guardrail) para avaliação probabilística com regressores quantílicos sujeitos a \textit{quantile crossing}. A política classifica cada tabela analítica em uma de três categorias (dual obrigatória, pós-guardrail apenas, raw apenas), conforme \texttt{docs/04\_evaluation/METRICS\_DEFINITIONS.md}, e declara a variante primária para cada hipótese. A justificativa formal segue resultado de Chernozhukov, Fernández-Val e Galichon (2010) sobre rearranjo monotônico de funções quantis sob perdas convexas simétricas em torno da mediana \cite{CHERNOZHUKOV2010REARRANGEMENT}, em conjunto com o enquadramento de regras de pontuação estritamente próprias \cite{GNEITING2007} e com a exigência de monotonicidade para medidas coerentes de risco \cite{JORION2007,ACERBI2002}.
+
+A segunda contribuição é a governança de coorte por \texttt{parent\_sweep\_id} como mecanismo explícito de comparabilidade entre execuções. Toda comparação confirmatória do candidato Temporal Fusion Transformer \textit{all-features} contra baselines pré-declarados é restrita a \textit{runs} da mesma coorte, com o mesmo \textit{scope spec} de \textit{splits} e horizontes, evitando que rankings e seleções misturem coortes heterogêneas. Esse mecanismo é operacionalizado em \texttt{docs/01\_architecture/ANALYTICS\_STORE\_ARCHITECTURE.md} e adotado como pré-condição de validade em qualquer teste estatístico pareado.
+
+A terceira contribuição é a separação operacional entre camadas imutáveis (fonte primária) e camadas reconstruíveis (analítica derivada), implementada como decisão arquitetural em \texttt{docs/01\_architecture/decisions/ADR-0001-analytics-store.md}. Essa arquitetura permite que conclusões sejam reproduzidas a partir de artefatos persistidos, sem retreinar modelos, e que reanálises com diferentes contratos (por exemplo, mudança de variante primária) sejam executadas em janela curta e auditável.
+
+A quarta contribuição é a hierarquia explícita de evidência para análise de contribuição de famílias de indicadores, documentada em \texttt{docs/04\_evaluation/EXPLAINABILITY.md}: \textit{Variable Selection Network} nativa do TFT \cite{LIMETAL2021TFT}, importância por permutação e ablação explicativa, com regra de consistência em pelo menos dois dos três métodos para sustentar afirmações de contribuição relativa. A hierarquia incorpora também a distinção formal entre contribuição preditiva condicional ao modelo e inferência causal, vedando claims causais a partir de evidência preditiva.
+
+A quinta contribuição é a adoção de pré-registro versionado como pré-condição bloqueante para a rodada confirmatória, conforme \texttt{docs/08\_governance/EXPERIMENT\_TRACKING\_POLICY.md}. O pré-registro fixa, antes da observação dos resultados, candidato, baselines, métrica primária, bandas de calibração, regra de desempate e contrato de variante quantilica, eliminando graus de liberdade que, na ausência da declaração antecipada, induzem \textit{p-hacking} e seleção adversa de baselines \cite{PINEAU2021REPRODUCIBILITY}.
+
+\subsection{Contribuições empíricas}
+% TODO: consolidar contribuicoes empiricas (calibracao observada por horizonte;
+% comparacao TFT vs baselines; contribuicao relativa de familias) apos Fase B/C.
+As contribuições empíricas reportam, sob o protocolo estatístico acima, a calibração probabilística observada por horizonte, a comparação pareada do candidato contra os baselines pré-declarados e a contribuição relativa das famílias de indicadores. Sua consolidação depende da execução confirmatória da Fase B e da análise de contribuição da Fase C, sob o pré-registro versionado, e será incorporada nesta seção após o fechamento das duas fases.
 
 \section{Limitações}
 As limitações deste trabalho são, em parte, decorrência direta do recorte assumido e devem ser interpretadas conjuntamente com os achados, independentemente do desfecho confirmatório das hipóteses.
