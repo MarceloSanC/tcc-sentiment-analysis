@@ -70,6 +70,38 @@ da Fase B/C:
 - Se VSN, permutation e ablation divergirem, a conclusao correta e instabilidade
   de contribuicao preditiva.
 
+## Contribuicoes metodologicas (independentes de Fase B/C)
+
+Estas contribuicoes ja estao consolidadas pelo desenho experimental e pela
+infraestrutura analitica, e devem ser reportadas no Capitulo 6 §6.2 mesmo
+antes do fechamento da Fase B/C. A lista canonica corresponde a §6.2 do
+`text/6_Conclusoes/6_Conclusoes.tex`:
+
+1. **Politica operacional de variante quantilica (raw + post-guardrail)** com
+   categorizacao A/B/C por tabela analitica e variante primaria declarada por
+   hipotese. Justificativa formal: Chernozhukov, Fernandez-Val & Galichon
+   (2010); Gneiting & Raftery (2007); Jorion (2007); Acerbi & Tasche (2002).
+   Documentacao canonica: `docs/04_evaluation/METRICS_DEFINITIONS.md` §Variante
+   quantilica.
+
+2. **Governanca de coorte por `parent_sweep_id`** como pre-condicao de
+   comparabilidade em testes pareados. Documentacao canonica:
+   `docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md`,
+   `docs/03_modeling/SWEEPS_AND_SELECTION.md` e
+   `docs/ai/AGENT_CORE.md` §Scope Governance.
+
+3. **Separacao entre camadas imutaveis e camadas reconstruiveis** no analytics
+   store (ADR-0001), permitindo reanalise sem retrain. Fronteira temporal
+   confirmatoria: pos-reset 2026-05-10.
+
+4. **Hierarquia explicita de evidencia para contribuicao de features**
+   (VSN -> permutation -> ablation), com regra de consistencia em pelo menos
+   dois dos tres metodos. Documentacao canonica:
+   `docs/04_evaluation/EXPLAINABILITY.md`.
+
+5. **Pre-registro versionado como bloqueante** para rodada confirmatoria.
+   Documentacao canonica: `docs/08_governance/EXPERIMENT_TRACKING_POLICY.md`.
+
 ## Trabalhos futuros
 
 - Ampliar a avaliacao para mais ativos reais, mantendo modelos especificos por
