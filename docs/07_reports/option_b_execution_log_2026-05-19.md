@@ -15,6 +15,22 @@ Append-only. Mais recente no topo.
 
 ---
 
+## [2026-05-20 01:34 UTC] Stage 20.4 — completion
+
+**Context:** Cross-pipeline regression guard fechando Gap 6 mecanicamente.
+**Outcome:**
+  - tests/integration/test_tft_baselines_y_true_alignment.py criado
+  - 3 test cases: parametrico (5 pares decision_idx,h), trading-day arithmetic,
+    boundary symmetry
+  - 7 tests passing
+**Principle:** §"Aceite" Stage 20.4 do plano + §4.6 (mechanical > procedural:
+  garantia via shared Persister, nao via convencao).
+**Outcome:** pytest tests/integration/test_tft_baselines_y_true_alignment.py
+  → 7 passed.
+**Next:** Stage 20.5 — atualizar MULTI_HORIZON.md.
+
+---
+
 ## [2026-05-20 01:33 UTC] Stage 20.3 — completion
 
 **Context:** Migrar `_emit_oos_rows` em run_baselines_use_case para usar
