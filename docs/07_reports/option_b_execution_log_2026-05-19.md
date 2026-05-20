@@ -15,6 +15,42 @@ Append-only. Mais recente no topo.
 
 ---
 
+## [2026-05-20 01:29 UTC] Stage 20.2 — completion
+
+**Context:** Migrar `_persist_fact_oos_predictions` em train_tft_model_use_case
+para usar MultiHorizonPredictionPersister em ambos call-sites (multi-horizon
+matrix path + legacy 1-horizon path).
+**Changes:**
+  - Adicionado parametro `max_encoder_length: int` em
+    `_persist_fact_oos_predictions`.
+  - Call-site em execute() (linha ~1393) passa
+    `metadata_config.get("max_encoder_length", TFT_TRAINING_DEFAULTS[...])`.
+  - decision_start_offset = max(max_encoder_length - 1, 0). Sample i mapeia
+    para decision_idx = decision_start_offset + i (no split_df coords).
+  - Ambos paths usam Persister.build_record() + record.to_dict().
+  - IncompletePredictionWindowError → continue (AGENT_CORE skip).
+  - Removida calendar arithmetic (Timedelta(days=h-1)). Removido tail(n)
+    workaround.
+**Tests adaptados:**
+  - test_persist_fact_oos_predictions_keeps_horizon_index_alignment_per_split:
+    timestamps estendidos para 40 dias (acomoda h=30); max_encoder_length=1;
+    assertions atualizadas — val_h7 target = val_ts[7] (2025-01-17, era
+    2025-01-16 calendar); test_h30 target = test_ts[30] (2025-03-12, era
+    2025-03-11 calendar). Decision_idx=0 verificado.
+  - test_persist_fact_oos_predictions_applies_quantile_guardrail_columns:
+    timestamps estendidos para 5 dias; max_encoder_length=1.
+  - test_persists_dim_run_identity_fields_when_analytics_repo_is_enabled:
+    df estendido para 7 timestamps; split_config nao-overlapping (val
+    20240601-20240602, test 20250102-20250103); training_config com
+    max_encoder_length=0.
+**Principle:** §4.3 (refactor preservando contrato: Persister centraliza
+  a convencao Opcao (a)) + §4.6 (Stage 20.2 e refactor MAS aplica fix Gap 6
+  intencional — timestamps em trading-days, year=decision_day).
+**Outcome:** .venv/bin/pytest tests/ → 543 passed. Commit em sequencia.
+**Next:** Stage 20.3 — migrar run_baselines_use_case + tighten schema required.
+
+---
+
 ## [2026-05-20 01:21 UTC] Stage 20.1 — decision (deviation from plan)
 
 **Context:** Stage 20.1 — adicionar decision_idx em FACT_OOS_PREDICTIONS_SCHEMA.

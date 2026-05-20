@@ -22,6 +22,11 @@ from src.domain.services.dataset_quality_gate import (
     DatasetQualityGateConfig,
 )
 from src.domain.services.feature_warmup_inspector import FeatureWarmupInspector
+from src.domain.services.multi_horizon_prediction_persister import (
+    IncompletePredictionWindowError,
+    MultiHorizonPredictionPersister,
+    RunContext,
+)
 from src.domain.services.quantile_guardrail_service import QuantileGuardrailService
 from src.infrastructure.schemas.analytics_store_schema import (
     ANALYTICS_SCHEMA_VERSION,
@@ -747,6 +752,7 @@ class TrainTFTModelUseCase:
         config_signature: str,
         fold_name: str | None,
         seed: int | None,
+        max_encoder_length: int,
         split_frames: dict[str, pd.DataFrame],
         split_predictions: dict[str, dict[str, list[float]]],
         overwrite: bool = False,
@@ -756,6 +762,11 @@ class TrainTFTModelUseCase:
         if not split_predictions:
             return
 
+        # Per ADR-0003 Opcao (a): sample i (from pytorch_forecasting dataloader)
+        # has its encoder_end at split_df row (max_encoder_length - 1) + i,
+        # which is the canonical decision_day for that sample.
+        decision_start_offset = max(int(max_encoder_length) - 1, 0)
+
         rows: list[dict[str, object]] = []
         for split_name, pred in split_predictions.items():
             if split_name not in split_frames:
@@ -763,6 +774,19 @@ class TrainTFTModelUseCase:
             split_df = split_frames[split_name].copy().sort_values("timestamp").reset_index(drop=True)
             if split_df.empty:
                 continue
+            dataset_timestamps = pd.to_datetime(split_df["timestamp"], utc=True).tolist()
+
+            run_context = RunContext(
+                schema_version=ANALYTICS_SCHEMA_VERSION,
+                run_id=run_id,
+                model_version=str(model_version),
+                asset=str(asset_id),
+                feature_set_name=str(feature_set_name),
+                config_signature=str(config_signature),
+                split=str(split_name),
+                fold=str(fold_name) if fold_name is not None else "none",
+                seed=int(seed) if seed is not None else 0,
+            )
 
             if "y_true_matrix" in pred and "y_pred_matrix" in pred:
                 horizons = [int(v) for v in pred.get("horizons", [])]
@@ -772,15 +796,14 @@ class TrainTFTModelUseCase:
                 q50_m = pred.get("quantile_p50_matrix", [])
                 q90_m = pred.get("quantile_p90_matrix", [])
 
-                n = min(len(y_true_m), len(y_pred_m), len(q10_m), len(q50_m), len(q90_m), len(split_df))
+                n = min(len(y_true_m), len(y_pred_m), len(q10_m), len(q50_m), len(q90_m))
                 if n == 0 or not horizons:
                     continue
-                split_tail = split_df.tail(n).reset_index(drop=True)
 
                 for i in range(n):
-                    ts = pd.to_datetime(split_tail.loc[i, "timestamp"], utc=True, errors="coerce")
-                    if pd.isna(ts):
-                        continue
+                    decision_idx = decision_start_offset + i
+                    if decision_idx >= len(dataset_timestamps):
+                        break
                     for h_idx, h in enumerate(horizons):
                         if (
                             h_idx >= len(y_true_m[i]) or h_idx >= len(y_pred_m[i]) or
@@ -793,89 +816,63 @@ class TrainTFTModelUseCase:
                         q50 = float(q50_m[i][h_idx])
                         q90 = float(q90_m[i][h_idx])
                         guardrail = QuantileGuardrailService.enforce_monotonic_triplet(q10, q50, q90)
-                        target_ts = ts + pd.Timedelta(days=max(int(h) - 1, 0))
-                        err = float(y_pred - y_true)
-                        rows.append(
-                            {
-                                "schema_version": ANALYTICS_SCHEMA_VERSION,
-                                "run_id": run_id,
-                                "model_version": str(model_version),
-                                "asset": str(asset_id),
-                                "feature_set_name": str(feature_set_name),
-                                "config_signature": str(config_signature),
-                                "split": str(split_name),
-                                "fold": str(fold_name) if fold_name is not None else "none",
-                                "seed": int(seed) if seed is not None else 0,
-                                "horizon": int(h),
-                                "timestamp_utc": str(ts.isoformat()),
-                                "target_timestamp_utc": str(target_ts.isoformat()),
-                                "y_true": y_true,
-                                "y_pred": y_pred,
-                                "error": err,
-                                "abs_error": float(abs(err)),
-                                "sq_error": float(err * err),
-                                "quantile_p10": q10,
-                                "quantile_p50": q50,
-                                "quantile_p90": q90,
-                                "quantile_p10_post_guardrail": guardrail.p10_post,
-                                "quantile_p50_post_guardrail": guardrail.p50_post,
-                                "quantile_p90_post_guardrail": guardrail.p90_post,
-                                "quantile_guardrail_applied": int(guardrail.applied),
-                                "year": int(target_ts.year),
-                            }
-                        )
+                        try:
+                            record = MultiHorizonPredictionPersister.build_record(
+                                decision_idx=decision_idx,
+                                h=int(h),
+                                y_true=y_true,
+                                y_pred=y_pred,
+                                q10=q10,
+                                q50=q50,
+                                q90=q90,
+                                q10_post=guardrail.p10_post,
+                                q50_post=guardrail.p50_post,
+                                q90_post=guardrail.p90_post,
+                                guardrail_applied=bool(guardrail.applied),
+                                dataset_timestamps=dataset_timestamps,
+                                run_context=run_context,
+                            )
+                        except IncompletePredictionWindowError:
+                            continue
+                        rows.append(record.to_dict())
                 continue
 
             # Backward-compatible path for legacy 1-horizon details.
-            y_true = [float(v) for v in pred.get("y_true", [])]
-            y_pred = [float(v) for v in pred.get("y_pred", [])]
-            q10 = [float(v) for v in pred.get("quantile_p10", [])]
-            q50 = [float(v) for v in pred.get("quantile_p50", [])]
-            q90 = [float(v) for v in pred.get("quantile_p90", [])]
-            horizons = [int(v) for v in pred.get("horizon", [])]
-            n = min(len(y_true), len(y_pred), len(q10), len(q50), len(q90), len(horizons), len(split_df))
+            y_true_list = [float(v) for v in pred.get("y_true", [])]
+            y_pred_list = [float(v) for v in pred.get("y_pred", [])]
+            q10_list = [float(v) for v in pred.get("quantile_p10", [])]
+            q50_list = [float(v) for v in pred.get("quantile_p50", [])]
+            q90_list = [float(v) for v in pred.get("quantile_p90", [])]
+            h_list = [int(v) for v in pred.get("horizon", [])]
+            n = min(len(y_true_list), len(y_pred_list), len(q10_list), len(q50_list), len(q90_list), len(h_list))
             if n == 0:
                 continue
-            split_tail = split_df.tail(n).reset_index(drop=True)
             for i in range(n):
-                ts = pd.to_datetime(split_tail.loc[i, "timestamp"], utc=True, errors="coerce")
-                if pd.isna(ts):
-                    continue
-                target_ts = ts + pd.Timedelta(days=max(horizons[i] - 1, 0))
-                err = float(y_pred[i] - y_true[i])
-                q10_raw = float(q10[i])
-                q50_raw = float(q50[i])
-                q90_raw = float(q90[i])
-                guardrail = QuantileGuardrailService.enforce_monotonic_triplet(q10_raw, q50_raw, q90_raw)
-                rows.append(
-                    {
-                        "schema_version": ANALYTICS_SCHEMA_VERSION,
-                        "run_id": run_id,
-                        "model_version": str(model_version),
-                        "asset": str(asset_id),
-                        "feature_set_name": str(feature_set_name),
-                        "config_signature": str(config_signature),
-                        "split": str(split_name),
-                        "fold": str(fold_name) if fold_name is not None else "none",
-                        "seed": int(seed) if seed is not None else 0,
-                        "horizon": int(horizons[i]),
-                        "timestamp_utc": str(ts.isoformat()),
-                        "target_timestamp_utc": str(target_ts.isoformat()),
-                        "y_true": float(y_true[i]),
-                        "y_pred": float(y_pred[i]),
-                        "error": err,
-                        "abs_error": float(abs(err)),
-                        "sq_error": float(err * err),
-                        "quantile_p10": q10_raw,
-                        "quantile_p50": q50_raw,
-                        "quantile_p90": q90_raw,
-                        "quantile_p10_post_guardrail": guardrail.p10_post,
-                        "quantile_p50_post_guardrail": guardrail.p50_post,
-                        "quantile_p90_post_guardrail": guardrail.p90_post,
-                        "quantile_guardrail_applied": int(guardrail.applied),
-                        "year": int(target_ts.year),
-                    }
+                decision_idx = decision_start_offset + i
+                if decision_idx >= len(dataset_timestamps):
+                    break
+                guardrail = QuantileGuardrailService.enforce_monotonic_triplet(
+                    q10_list[i], q50_list[i], q90_list[i]
                 )
+                try:
+                    record = MultiHorizonPredictionPersister.build_record(
+                        decision_idx=decision_idx,
+                        h=int(h_list[i]),
+                        y_true=y_true_list[i],
+                        y_pred=y_pred_list[i],
+                        q10=q10_list[i],
+                        q50=q50_list[i],
+                        q90=q90_list[i],
+                        q10_post=guardrail.p10_post,
+                        q50_post=guardrail.p50_post,
+                        q90_post=guardrail.p90_post,
+                        guardrail_applied=bool(guardrail.applied),
+                        dataset_timestamps=dataset_timestamps,
+                        run_context=run_context,
+                    )
+                except IncompletePredictionWindowError:
+                    continue
+                rows.append(record.to_dict())
 
         if rows:
             self.analytics_run_repository.append_fact_oos_predictions(
@@ -1398,6 +1395,12 @@ class TrainTFTModelUseCase:
                         config_signature=config_signature,
                         fold_name=metadata_config.get("fold"),
                         seed=metadata_config.get("seed") if isinstance(metadata_config.get("seed"), int) else None,
+                        max_encoder_length=int(
+                            metadata_config.get(
+                                "max_encoder_length",
+                                TFT_TRAINING_DEFAULTS["max_encoder_length"],
+                            )
+                        ),
                         split_frames={"train": train_df, "val": val_df, "test": test_df},
                         split_predictions=training_result.split_predictions,
                         overwrite=overwrite_on_collision,

@@ -892,11 +892,33 @@ def test_training_run_id_persisted_in_fact_model_artifacts_row(tmp_path: Path) -
 
 
 def test_persists_dim_run_identity_fields_when_analytics_repo_is_enabled() -> None:
+    # Per ADR-0003 Opcao (a): target_timestamp_utc = dataset_timestamps[decision_idx + h].
+    # FakeTrainer emits one prediction sample per split with h=1; need split_df
+    # of length >= 2 so target_idx=1 fits, and max_encoder_length=0 so decision_idx=0.
+    extended_df = pd.DataFrame(
+        {
+            "timestamp": pd.to_datetime(
+                [
+                    "2024-01-01", "2024-01-02", "2024-01-03",
+                    "2024-06-01", "2024-06-02",
+                    "2025-01-02", "2025-01-03",
+                ],
+                utc=True,
+            ),
+            "asset_id": ["AAPL"] * 7,
+            "time_idx": list(range(7)),
+            "target_return": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7],
+            "feature_a": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0],
+            "feature_b": [3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
+            "day_of_week": [0, 1, 2, 5, 6, 3, 4],
+            "month": [1, 1, 1, 6, 6, 1, 1],
+        }
+    )
     trainer = FakeTrainer()
     repo = FakeModelRepo()
     analytics = FakeAnalyticsRunRepo()
     use_case = TrainTFTModelUseCase(
-        dataset_repository=FakeDatasetRepository(_df()),
+        dataset_repository=FakeDatasetRepository(extended_df),
         model_trainer=trainer,
         model_repository=repo,
         analytics_run_repository=analytics,
@@ -904,11 +926,11 @@ def test_persists_dim_run_identity_fields_when_analytics_repo_is_enabled() -> No
 
     split_config = {
         "train_start": "20240101",
-        "train_end": "20240101",
-        "val_start": "20240102",
-        "val_end": "20240102",
+        "train_end": "20240103",
+        "val_start": "20240601",
+        "val_end": "20240602",
         "test_start": "20250102",
-        "test_end": "20250102",
+        "test_end": "20250103",
     }
     training_config = {
         "seed": 7,
@@ -917,6 +939,7 @@ def test_persists_dim_run_identity_fields_when_analytics_repo_is_enabled() -> No
         "fold": "wf_1",
         "pipeline_version": "0.1",
         "feature_set_name": "B",
+        "max_encoder_length": 0,
     }
 
     use_case.execute("AAPL", features=["feature_a"], split_config=split_config, training_config=training_config)
@@ -1048,17 +1071,15 @@ def test_persist_fact_oos_predictions_keeps_horizon_index_alignment_per_split() 
         analytics_run_repository=analytics,
     )
 
+    # ADR-0003 Opcao (a): target_timestamp_utc = dataset_timestamps[decision_idx + h].
+    # Sample i maps to decision_idx = (max_encoder_length - 1) + i. With
+    # max_encoder_length=1, sample 0 → decision_idx=0. Need len(timestamps) > max(h)
+    # so the largest horizon (h=30 here) can still index into the dataset.
+    val_ts = pd.date_range("2025-01-10", periods=40, freq="D", tz="UTC")
+    test_ts = pd.date_range("2025-02-10", periods=40, freq="D", tz="UTC")
     split_frames = {
-        "val": pd.DataFrame(
-            {
-                "timestamp": pd.to_datetime(["2025-01-10", "2025-01-11"], utc=True),
-            }
-        ),
-        "test": pd.DataFrame(
-            {
-                "timestamp": pd.to_datetime(["2025-02-10", "2025-02-11"], utc=True),
-            }
-        ),
+        "val": pd.DataFrame({"timestamp": val_ts}),
+        "test": pd.DataFrame({"timestamp": test_ts}),
     }
     split_predictions = {
         "val": {
@@ -1087,13 +1108,14 @@ def test_persist_fact_oos_predictions_keeps_horizon_index_alignment_per_split() 
         config_signature="sig_x",
         fold_name="wf_1",
         seed=7,
+        max_encoder_length=1,
         split_frames=split_frames,
         split_predictions=split_predictions,
     )
 
     assert analytics.oos_rows is not None
     rows = analytics.oos_rows
-    # 2 timestamps x 3 horizons x 2 splits
+    # 2 samples x 3 horizons x 2 splits (timestamps long enough for h=30)
     assert len(rows) == 12
 
     val_h7 = [
@@ -1106,7 +1128,9 @@ def test_persist_fact_oos_predictions_keeps_horizon_index_alignment_per_split() 
     assert val_h7[0]["quantile_p10"] == 97.0
     assert val_h7[0]["quantile_p50"] == 117.0
     assert val_h7[0]["quantile_p90"] == 137.0
-    assert val_h7[0]["target_timestamp_utc"].startswith("2025-01-16")
+    # decision_idx=0, h=7 → target = val_ts[7] = 2025-01-17
+    assert val_h7[0]["target_timestamp_utc"].startswith("2025-01-17")
+    assert int(val_h7[0]["decision_idx"]) == 0
 
     test_h30 = [
         r for r in rows
@@ -1118,7 +1142,9 @@ def test_persist_fact_oos_predictions_keeps_horizon_index_alignment_per_split() 
     assert test_h30[0]["quantile_p10"] == 320.0
     assert test_h30[0]["quantile_p50"] == 340.0
     assert test_h30[0]["quantile_p90"] == 360.0
-    assert test_h30[0]["target_timestamp_utc"].startswith("2025-03-11")
+    # decision_idx=0, h=30 → target = test_ts[30] = 2025-03-12
+    assert test_h30[0]["target_timestamp_utc"].startswith("2025-03-12")
+    assert int(test_h30[0]["decision_idx"]) == 0
 
 
 def test_persist_fact_oos_predictions_applies_quantile_guardrail_columns() -> None:
@@ -1130,13 +1156,8 @@ def test_persist_fact_oos_predictions_applies_quantile_guardrail_columns() -> No
         analytics_run_repository=analytics,
     )
 
-    split_frames = {
-        "test": pd.DataFrame(
-            {
-                "timestamp": pd.to_datetime(["2025-02-10"], utc=True),
-            }
-        )
-    }
+    test_ts = pd.date_range("2025-02-10", periods=5, freq="D", tz="UTC")
+    split_frames = {"test": pd.DataFrame({"timestamp": test_ts})}
     split_predictions = {
         "test": {
             "horizons": [1],
@@ -1156,6 +1177,7 @@ def test_persist_fact_oos_predictions_applies_quantile_guardrail_columns() -> No
         config_signature="sig_guardrail",
         fold_name="wf_1",
         seed=7,
+        max_encoder_length=1,
         split_frames=split_frames,
         split_predictions=split_predictions,
     )
@@ -1170,3 +1192,4 @@ def test_persist_fact_oos_predictions_applies_quantile_guardrail_columns() -> No
     assert row["quantile_p50_post_guardrail"] == 1.1
     assert row["quantile_p90_post_guardrail"] == 1.3
     assert row["quantile_guardrail_applied"] == 1
+    assert int(row["decision_idx"]) == 0
