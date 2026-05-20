@@ -1,0 +1,112 @@
+---
+title: ADR-0003 MultiHorizonPredictionPersister como domain service compartilhado
+scope: Decisao arquitetural de extrair a logica de persistencia de fact_oos_predictions
+  multi-horizonte (hoje duplicada e divergente em train_tft_model_use_case e
+  run_baselines_use_case) para um domain service unico que materializa
+  explicitamente a convencao target_timestamp / y_true / h-ahead. Status Accepted.
+update_when:
+  - decisao for revisada (status mudar de Accepted para Superseded)
+  - novo ADR derivado tornar este obsoleto
+  - convencao target_timestamp evoluir (ex: novo anchor decidido)
+canonical_for: [adr_0003, multi_horizon_prediction_persister, target_timestamp_convention]
+---
+
+# ADR-0003: MultiHorizonPredictionPersister
+
+## Status
+Accepted (2026-05-19)
+
+## Context
+
+`fact_oos_predictions` e persistido em dois lugares com convencoes divergentes:
+
+- [`train_tft_model_use_case.py:778-810`](../../../src/use_cases/train_tft_model_use_case.py#L778-L810) — TFT trainer; `split_tail = split_df.tail(n)` recupera o **decoder_end_day** como `timestamp_utc`, nao o **decision_day**.
+- [`run_baselines_use_case.py:225-280`](../../../src/use_cases/run_baselines_use_case.py#L225-L280) — baseline runner; usa `timestamps[i]` (decision_day) e `y_true_idx = i + h - 1`.
+
+Ambos materializam `target_ts = decision_ts + pd.Timedelta(days=h-1)` (calendar days num dataset trading-day — bug secundario E4 do investigation report).
+
+Consequencia documentada em
+[`docs/07_reports/tft_y_true_investigation_2026-05-18.md`](../../07_reports/tft_y_true_investigation_2026-05-18.md):
+TFT e baseline reportam `y_true` referentes a dias diferentes do dataset
+para o mesmo `target_timestamp_utc`. **0 de 685** linhas com `target_ts`
+coincidente em h=1 tem `y_true` igual. Bug raiz do Gap 6.
+
+A convencao em
+[`docs/03_modeling/MULTI_HORIZON.md:28-29`](../../03_modeling/MULTI_HORIZON.md#L28-L29)
+define `target_timestamp` como "timestamp do periodo alvo previsto,
+calculado por horizonte" mas **nao fixa o anchor** (decision_day,
+decoder_start, decoder_end). Ambiguidade permitiu as duas implementacoes
+coexistirem ate o smoke F.1 expor a divergencia.
+
+## Decision
+
+Extrair a logica para um domain service:
+
+```
+src/domain/services/multi_horizon_prediction_persister.py
+
+class MultiHorizonPredictionPersister:
+    def build_record(
+        self,
+        *,
+        decision_idx: int,
+        h: int,
+        y_true: float,
+        y_pred: float,
+        q10: float, q50: float, q90: float,
+        dataset_timestamps: list[pd.Timestamp],
+        run_context: RunContext,
+    ) -> PredictionRecord: ...
+```
+
+Convencao canonica fixada (material e auditavel):
+
+1. **Anchor de `timestamp_utc`**: `decision_day` = ultimo dia do encoder
+   = `dataset_timestamps[decision_idx]`. Nao decoder_end.
+2. **`target_timestamp_utc`**: `dataset_timestamps[decision_idx + h]`,
+   indexado em **trading days** (consulta no dataset, nao
+   `pd.Timedelta(days=h)`).
+3. **`y_true`**: `dataset.target_return[decision_idx + h - 1]` se h=1
+   significa "next-day return after decision" (literatura financeira,
+   Opcao (a) do investigation report). Se Marcelo decidir Opcao (b),
+   este ADR e atualizado para Superseded e ADR-0003bis explicita a
+   convencao alternativa.
+4. **Borda**: se `decision_idx + h > len(dataset_timestamps)`, levantar
+   `IncompletePredictionWindowError` em vez de emitir registro com
+   `y_true` invalido. AGENT_CORE: skip rows with missing supervision.
+
+Ambos os call-sites (TFT trainer e baseline runner) passam a chamar o
+mesmo `build_record`. Convencao deixa de ser implicita e distribuida
+e passa a viver em **um arquivo** com **testes proprios**.
+
+## Consequences
+
+**Positivas:**
+
+- Convencao `target_timestamp` materializada como entity do dominio,
+  auditavel via unit test.
+- Fix do Gap 6 vira mudanca de implementacao do persister (1 lugar),
+  nao 5 lugares.
+- `tft_baselines_timestamp_subset_alignment` (F.0.3) pode ser
+  fortalecido para comparar **valores** de `y_true` por
+  `(decision_idx, h)`, nao so set de timestamps.
+- Reduz blast-radius do `train_tft_model_use_case.py` (hoje 1482 LOC, 30
+  metodos) — persistencia sai do god object.
+
+**Negativas:**
+
+- Migracao requer reescrita de `fact_oos_predictions` historicos OU
+  bump de `schema_version` invalidando historico (decisao em F.2
+  pre-registro).
+- Smoke F.1 v3 nao sera byte-identical com F.1 v2 — diff esperado em
+  `timestamp_utc` (decoder_end → decision_day) e em `target_timestamp_utc`
+  (calendar → trading day arithmetic).
+- Adiciona um novo conceito ao dominio (`RunContext`, `PredictionRecord`)
+  que precisa estar documentado em `MULTI_HORIZON.md`.
+
+## Cross-link
+
+- Diagnostico: [`docs/07_reports/phase-gates/B_architectural_debt_2026-05-19.md`](../../07_reports/phase-gates/B_architectural_debt_2026-05-19.md) §"M-train_tft persistencia"
+- Investigacao raiz: [`docs/07_reports/tft_y_true_investigation_2026-05-18.md`](../../07_reports/tft_y_true_investigation_2026-05-18.md)
+- Implementacao: PHASE_B_IMPLEMENTATION_CHECKLIST.md §Stage 20
+- Doc canonico atualizado pos-merge: [`docs/03_modeling/MULTI_HORIZON.md`](../../03_modeling/MULTI_HORIZON.md) §"Convencao target_timestamp" (nova secao)
