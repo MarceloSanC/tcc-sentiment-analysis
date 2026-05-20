@@ -15,6 +15,25 @@ Append-only. Mais recente no topo.
 
 ---
 
+## [2026-05-20 09:04 UTC] Stage 22.1 — completion (skeleton)
+
+**Context:** Stage 22 — GoldBuilders modular skeleton per ADR-0005.
+**Outcome:**
+  - src/domain/services/gold_builders/ (__init__ + base.py)
+    com GoldBuilder (ABC), BuildContext, AnalyticsSnapshot,
+    GoldBuildersRegistry
+  - tests/unit/domain/services/gold_builders/test_base.py (5 tests)
+  - PrimaryQuantileContract Literal type ("raw" | "post_guardrail")
+  - GoldBuilder.applies_when default = True (sempre roda)
+**Scope adjustment:** Same as Stage 21 — SKELETON only. Migracao dos 26
+  builders concretos (ranking, pairwise, quantile, descriptive, confidence)
+  deferida para sessao subsequente. Bit-identical regression test require
+  cuidado especial e e melhor feita com mais foco que esta sessao permite.
+**Tests:** pytest tests/ → 559 passed; ruff clean nos novos arquivos.
+**Next:** Stage 22 PR (skeleton). Then Stage 23.
+
+---
+
 ## [2026-05-20 08:57 UTC] Stage 21.1 — completion (skeleton + decision)
 
 **Context:** Stage 21 — QualityCheckRegistry extraction. ADR-0004 verified.
