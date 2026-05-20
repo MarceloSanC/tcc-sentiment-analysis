@@ -15,6 +15,23 @@ Append-only. Mais recente no topo.
 
 ---
 
+## [2026-05-20 01:36 UTC] Stage 20.5 — completion
+
+**Context:** Atualizar docs/03_modeling/MULTI_HORIZON.md com convencao
+canonica Opcao (a).
+**Changes:**
+  - Nova §"Convencao canonica de target_timestamp e y_true" apos
+    §"Conceitos-chave"
+  - Conceito target_timestamp reescrito (de "Chave de alinhamento" para
+    referencia explicita ao Persister)
+  - Persistencia: tabela adicionou decision_idx + timestamp_utc rows
+  - Fonte da verdade: aponta para Persister como ponto unico de verdade
+**Cross-link:** ADR-0003, Persister source, schema, integration test.
+**Outcome:** Doc canonico atualizado.
+**Next:** Stage 20.6 — smoke regression.
+
+---
+
 ## [2026-05-20 01:34 UTC] Stage 20.4 — completion
 
 **Context:** Cross-pipeline regression guard fechando Gap 6 mecanicamente.
