@@ -15,6 +15,49 @@ Append-only. Mais recente no topo.
 
 ---
 
+## [2026-05-20 08:51 UTC] Stage 20.6 — completion
+
+**Context:** Smoke regression para validar Stage 20 nao quebra pipeline e
+fix Gap 6 mecanicamente.
+**Procedure:**
+  - Wipe silver/gold; archive intact (851M, ambos pre e pos)
+  - Re-run iterativo (3 ciclos) ajustando offset start/end de baselines
+**Decisao adicional (em 20.6, deviation dentro do escopo):** offset start
+  de baselines mudou de `max_encoder_length + max_prediction_length - 1`
+  para `max_encoder_length - 1`. Offset end mudou de 0 para
+  `max_prediction_length`. Razao: a calibracao antiga matchava o TFT
+  pre-Opcao (a) (decoder_end como anchor); com Opcao (a) (encoder_end
+  como anchor), o alinhamento e direto:
+  - First decision_idx = max_encoder_length - 1 (TFT primeiro sample)
+  - Last decision_idx = split_len - max_prediction_length - 1 (constrain
+    do pytorch_forecasting TimeSeriesDataSet: decoder window
+    decision_idx+1..decision_idx+max_prediction_length deve existir)
+  - Codigo: src/use_cases/run_baselines_test_pipeline_use_case.py linha
+    ~200-215
+  - 2 testes atualizados: assertions adaptadas para nova convencao
+**Smoke results:**
+  - TFT (1 epoch, max_encoder=60, max_pred=7): 2364 rows fact_oos_predictions
+  - Baselines (3 baselines): 7286 rows cada (zero_return,
+    historical_mean_rolling, historical_quantiles_rolling)
+  - Refresh + quality: **26/27 PASS**
+  - `oos_pairwise_target_alignment` PASS (era FAIL pre-Stage 20 = Gap 6 fix)
+  - `tft_baselines_timestamp_subset_alignment` PASS (era FAIL)
+  - Unico FAIL: `dm_mcs_persisted_executable` (report_stats_ready=False,
+    questao de DM/MCS bootstrap sufficiency, NAO alinhamento. Fora do escopo
+    Stage 20.)
+  - 4 configs (TFT + 3 baselines) emitem exatamente same row count per
+    (split, h): val=437, test=685.
+  - decision_idx column populated, range 59..4015 (consistent com full df idx)
+**Principle:** §4.5 (Liberdade quando ganho concreto) — offset adjustment
+  e parte natural do Gap 6 fix; sem isso, alignment gate falharia.
+**Outcome:**
+  - pytest tests/ → 550 passed
+  - smoke_confirmatory_2026-05-18.md secao "Post-Stage 20" adicionada
+  - archive intact: 851M pre = 851M pos
+**Next:** Stage 20.7 — open PR.
+
+---
+
 ## [2026-05-20 01:36 UTC] Stage 20.5 — completion
 
 **Context:** Atualizar docs/03_modeling/MULTI_HORIZON.md com convencao

@@ -550,6 +550,43 @@ Investigacoes de follow-up nao-bloqueantes (mantidas do run inicial):
 - Documentacao do `feature_set_name='BTSF'` automatico.
 - Lint-type-unit em PRs #20, #23, #25-28 (corrigidos em #29; main atual verde).
 
+## Post-Stage 20 (2026-05-20) — Gap 6 fechado mecanicamente
+
+Stage 20 (MultiHorizonPredictionPersister) materializou Opcao (a) do
+ADR-0003 e corrigiu o offset start/end dos baselines. Smoke executada:
+
+- TFT: `max_epochs=1`, `max_encoder_length=60`, `max_prediction_length=7`,
+  `evaluation_horizons=[1, 7]`, sweep `phase_a_smoke_20260518_v2`.
+- Baselines: `phase_a_smoke_20260518_v2.json` (zero_return,
+  historical_mean_rolling, historical_quantiles_rolling).
+- Refresh + quality: scope `cohort_decision`, prefix `phase_a_smoke_`,
+  `primary-quantile-contract=post_guardrail`.
+
+Rows por (config, split, horizon) — TFT + 3 baselines (4 configs):
+
+| split | h | rows/config |
+|---|---|---|
+| val | 1, 7 | 437 |
+| test | 1, 7 | 685 |
+| train | 1, 7 | 2504 (baselines somente; TFT nao avalia train por default) |
+
+Quality checks (post-Stage 20): **26/27 PASS**.
+
+| check | status | nota |
+|---|---|---|
+| `oos_pairwise_target_alignment` | PASS | era FAIL pre-Stage 20 (Gap 6 fechado mecanicamente) |
+| `tft_baselines_timestamp_subset_alignment` | PASS | era FAIL pre-Stage 20 |
+| `oos_unique_key`, `oos_horizon_coverage`, `oos_supervised_nulls`, `oos_quantile_order`, `oos_numeric_types`, `cardinality_config_fold_seed`, `quantile_guardrail_audit_persisted`, `required_metrics_nan`, e 17 outros | PASS | |
+| `dm_mcs_persisted_executable` | FAIL | `report_stats_ready=False` (DM/MCS bootstrap sample sufficiency; questao independente de alinhamento). Fora do escopo de Stage 20. |
+
+Conclusao: **Gap 6 fechado**. Stage 20 fixou a convencao Opcao (a)
+mecanicamente via Persister + offset adjustment em baselines test pipeline.
+Alignment gates passam. Remaining gap (`dm_mcs_persisted_executable`)
+e independente e sera tratado em Stage 23.
+
+`decision_idx` confirmado em columns de `fact_oos_predictions`,
+range 59..4015 (consistente com indexacao do full df).
+
 ## Referências cruzadas
 
 - Aceite literal: [PHASE_B_IMPLEMENTATION_CHECKLIST.md](../05_checklists/PHASE_B_IMPLEMENTATION_CHECKLIST.md) F.1

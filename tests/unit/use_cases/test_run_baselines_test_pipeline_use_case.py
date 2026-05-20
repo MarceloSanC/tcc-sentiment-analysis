@@ -117,10 +117,11 @@ def test_parent_sweep_id_derived_from_output_subdir(tmp_path: Path) -> None:
     assert "sw_smoke_v1" in dim["parent_sweep_id"].astype(str).tolist()
 
 
-def test_offset_start_aligns_with_max_encoder_length(tmp_path: Path) -> None:
-    """With max_encoder_length=30, the first emitted train target_timestamp
-    must be at calendar offset == 30 trading rows past the train_start row.
-    The dataset uses daily frequency so trading rows == calendar rows."""
+def test_offset_start_aligns_with_max_encoder_length_minus_one(tmp_path: Path) -> None:
+    """Per ADR-0003 Opcao (a) (Stage 20): the TFT trainer's first emitted
+    decision lands at decision_idx = max_encoder_length - 1 (encoder_end of
+    the first valid sample). Baselines align by starting at the same offset.
+    """
     silver = tmp_path / "silver"
     ds = tmp_path / "dataset.parquet"
     _write_dataset(ds)
@@ -145,19 +146,17 @@ def test_offset_start_aligns_with_max_encoder_length(tmp_path: Path) -> None:
     train_rows = oos[oos["split"] == "train"]
     assert not train_rows.empty
     first_ts = pd.Timestamp(train_rows["timestamp_utc"].min())
-    # Row 0 is 2024-01-01; row 30 (offset start) is 2024-01-31.
-    assert first_ts == pd.Timestamp("2024-01-31T00:00:00+00:00")
+    # Row 0 is 2024-01-01; offset_start = max_encoder_length - 1 = 29 means
+    # the first decision is row 29 (2024-01-30).
+    assert first_ts == pd.Timestamp("2024-01-30T00:00:00+00:00")
 
 
-def test_start_offset_includes_max_prediction_length_minus_one(tmp_path: Path) -> None:
-    """Empirical TFT alignment (validated against F.1 smoke 2026-05-18 re-run):
-    the start offset is `max_encoder_length + max_prediction_length - 1`
-    trading days, not just `max_encoder_length`. The extra
-    `max_prediction_length - 1` rows are skipped because the TFT
-    TimeSeriesDataSet requires a full decoder window from the first decision.
-
-    end_offset stays at 0 — the use case's per-horizon `y_true_idx >= len`
-    guard already drops impossible rows.
+def test_start_offset_per_opcao_a_drops_no_extra_prediction_window(tmp_path: Path) -> None:
+    """Per ADR-0003 Opcao (a) (Stage 20): offset_start = max_encoder_length - 1
+    only (no extra max_prediction_length - 1 padding). The end-side boundary
+    is enforced by MultiHorizonPredictionPersister
+    (IncompletePredictionWindowError), which drops impossible rows per
+    horizon at row-emission time.
     """
     silver = tmp_path / "silver"
     ds = tmp_path / "dataset.parquet"
@@ -172,8 +171,6 @@ def test_start_offset_includes_max_prediction_length_minus_one(tmp_path: Path) -
             "evaluation_horizons": [1],
         },
         "split_config": {
-            # Train 100 days so warmup history > 10, leaving val/test for the
-            # offset check.
             "train_start": "2024-01-01",
             "train_end": "2024-04-09",
             "val_start": "2024-04-10",
@@ -188,8 +185,11 @@ def test_start_offset_includes_max_prediction_length_minus_one(tmp_path: Path) -
     oos = _load_oos(silver)
     val_rows = oos[oos["split"] == "val"]
     # Val span: 2024-04-10 to 2024-05-31 inclusive = 52 rows.
-    # Combined start offset = max_encoder_length + max_pred - 1 = 10 + 6 = 16.
-    # Expected emitted (h=1) = 52 - 16 = 36.
+    # offset_start = max_encoder_length - 1 = 9.
+    # offset_end = max_prediction_length = 7 (mirrors TFT TimeSeriesDataSet:
+    # decoder spans decision_idx+1..decision_idx+max_prediction_length, so
+    # decision_idx must be <= split_len - max_prediction_length - 1).
+    # Expected emitted (h=1) = 52 - 9 - 7 = 36.
     assert len(val_rows) == 36
 
 
