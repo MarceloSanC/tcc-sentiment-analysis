@@ -71,6 +71,7 @@ def _oos_row(
     target_timestamp_utc: str = "2026-01-01T00:00:00+00:00",
     year: int = 2026,
     y_pred: float = 0.2,
+    decision_idx: int = 0,
 ) -> dict:
     return {
         "schema_version": ANALYTICS_SCHEMA_VERSION,
@@ -83,6 +84,7 @@ def _oos_row(
         "fold": "wf_1",
         "seed": 7,
         "horizon": 1,
+        "decision_idx": decision_idx,
         "timestamp_utc": timestamp_utc,
         "target_timestamp_utc": target_timestamp_utc,
         "y_true": 0.1,
@@ -380,6 +382,7 @@ def test_append_fact_oos_predictions(tmp_path) -> None:
             "fold": "wf_1",
             "seed": 7,
             "horizon": 1,
+            "decision_idx": 0,
             "timestamp_utc": "2026-01-01T00:00:00+00:00",
             "target_timestamp_utc": "2026-01-01T00:00:00+00:00",
             "y_true": 0.1,

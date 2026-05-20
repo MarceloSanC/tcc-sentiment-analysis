@@ -15,6 +15,48 @@ Append-only. Mais recente no topo.
 
 ---
 
+## [2026-05-20 01:21 UTC] Stage 20.1 — decision (deviation from plan)
+
+**Context:** Stage 20.1 — adicionar decision_idx em FACT_OOS_PREDICTIONS_SCHEMA.
+Plano §"Aceite" 20.1: "em columns + required_columns".
+**Question/Issue:** Adicionar decision_idx a required_columns em 20.1 quebra
+17 testes de baselines + repo (validate_table_payload rejeita rows sem decision_idx).
+Baselines so emite decision_idx apos 20.3; train_tft so apos 20.2.
+**Options:**
+  (a) Tighten required em 20.1, aceitar testes red entre 20.1 e 20.3
+  (b) decision_idx em columns only em 20.1; tighten para required em 20.3
+**Choice:** (b) — adicionar em columns mas NAO em required_columns em 20.1.
+**Principle:** §1 (Principio operacional, "Valide tests apos cada task") +
+§4.5 (Liberdade quando ganho concreto): tests green em cada commit boundary.
+Same end-state apos 20.3 (mecanico, schema-level). Plan literal era ideal
+sem considerar acoplamento de migracao em multiplos commits.
+**Outcome:** schema atualizado; comentario explicito no codigo explica
+tightening em 20.3. Tests: 543 passed (525 anteriores + 18 novos).
+**Next:** 20.1 commit, depois 20.2.
+
+---
+
+## [2026-05-20 01:21 UTC] Stage 20.1 — completion
+
+**Context:** Stage 20.1 — Persister + schema + tests.
+**Outcome:**
+  - src/domain/services/multi_horizon_prediction_persister.py criado (133 LOC)
+    com PredictionRecord, RunContext, IncompletePredictionWindowError,
+    MultiHorizonPredictionPersister.build_record() (keyword-only).
+  - FACT_OOS_PREDICTIONS_SCHEMA + FACT_INFERENCE_PREDICTIONS_SCHEMA com
+    decision_idx: int64 em columns (consistencia com C1 da auditoria).
+  - tests/unit/domain/services/test_multi_horizon_prediction_persister.py
+    com 15 testes (h=1/h=7, boundary, calendar gaps, run_context propagation,
+    immutability, keyword-only).
+  - Schema tests atualizados (decision_idx assertions).
+  - Fixtures _oos_row + test_append_fact_oos_predictions atualizados.
+**Principle:** §4.1 "Match precedente do projeto" — QuantileGuardrailService
+  pattern (dataclass(frozen=True) + @staticmethod).
+**Outcome:** .venv/bin/pytest tests/ → 543 passed, 0 failed.
+**Next:** Stage 20.2 — migrar train_tft_model_use_case.
+
+---
+
 ## [2026-05-20 01:12 UTC] Stage 20.0 — completion
 
 **Context:** Inicio de Stage 20. Verificacao de pre-condicoes conforme §2 do plano.
