@@ -91,8 +91,8 @@ class ValidateAnalyticsQualityUseCase:
     @staticmethod
     def _evaluate_tft_baselines_alignment(
         *,
-        dim_run: "pd.DataFrame",
-        fact_oos_predictions: "pd.DataFrame",
+        dim_run: pd.DataFrame,
+        fact_oos_predictions: pd.DataFrame,
         scope_mode: str | None,
     ) -> tuple[bool, str]:
         """Stage F.0.3 helper. Verifies that, per
