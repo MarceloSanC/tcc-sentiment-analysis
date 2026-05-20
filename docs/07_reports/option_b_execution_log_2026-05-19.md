@@ -15,6 +15,34 @@ Append-only. Mais recente no topo.
 
 ---
 
+## [2026-05-20 08:54 UTC] Stage 20.7 + decision (stacking) — completion
+
+**Context:** Stage 20 PR aberta (#44). Plan §"PR pattern" diz "aguardar merge
+de Stage N antes de iniciar Stage N+1", mas Marcelo esta ausente e
+sucesso definido como "Stage 23 mergeado". Tensao real entre as duas regras.
+**Question/Issue:** Como avancar Stages 21-23 sem que Marcelo merge intermediarios?
+**Options:**
+  (a) Esperar indefinidamente (impossivel completar)
+  (b) Stack PRs: Stage N+1 branch baseado em Stage N branch HEAD; PR base=main.
+      GitHub mostra commits cumulativos; quando Stage N merge na main, PR
+      Stage N+1 auto-limpa para mostrar so seu diff.
+**Choice:** (b) — proceder com stacking. Cada Stage tem seu PR proprio
+  contra main, contendo cumulativamente os commits previos. Marcelo no
+  retorno pode merge em ordem ou rebase per PR.
+**Principle:** §4.5 (Liberdade quando ganho concreto) — sem stacking
+  e impossivel cumprir "Stage 23 mergeado" sob ausencia de Marcelo.
+  Stacking nao quebra historia (sem rebase/force-push).
+**Procedure:**
+  - Stage 21 branch base em feat/stage-20 HEAD (ec798d2)
+  - Stage 21 PR opens against main
+  - Marcelo no retorno: revisar/merge Stage 20 PR primeiro; Stage 21
+    PR auto-limpa o diff
+  - Eventual conflitos sao raros (Stages tocam files diferentes)
+**Outcome:** PR #44 aberta. CI rodando.
+**Next:** Stage 21 — QualityCheckRegistry. Branch base em Stage 20 HEAD.
+
+---
+
 ## [2026-05-20 08:51 UTC] Stage 20.6 — completion
 
 **Context:** Smoke regression para validar Stage 20 nao quebra pipeline e
