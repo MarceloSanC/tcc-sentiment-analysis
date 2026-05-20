@@ -6,7 +6,6 @@ import pytest
 from src.domain.services.multi_horizon_prediction_persister import (
     IncompletePredictionWindowError,
     MultiHorizonPredictionPersister,
-    PredictionRecord,
     RunContext,
 )
 from src.infrastructure.schemas.analytics_store_schema import (
