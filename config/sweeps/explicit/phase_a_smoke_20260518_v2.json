@@ -1,0 +1,66 @@
+{
+  "schema_version": "1.0",
+  "test_type": "explicit_configs",
+  "output_subdir": "phase_a_smoke_20260518_v2",
+  "features": "BASELINE_FEATURES,TECHNICAL_FEATURES,SENTIMENT_FEATURES,FUNDAMENTAL_FEATURES",
+  "feature_sets": [],
+  "continue_on_error": false,
+  "merge_tests": false,
+  "max_runs": null,
+  "compute_confidence_interval": false,
+  "generate_comparison_plots": false,
+  "replica_seeds": [20260517],
+  "walk_forward": {
+    "enabled": false,
+    "folds": []
+  },
+  "training_config": {
+    "max_encoder_length": 60,
+    "max_prediction_length": 7,
+    "evaluation_horizons": [1, 7],
+    "batch_size": 64,
+    "max_epochs": 5,
+    "learning_rate": 0.0005,
+    "hidden_size": 32,
+    "attention_head_size": 2,
+    "dropout": 0.1,
+    "hidden_continuous_size": 8,
+    "seed": 20260517,
+    "early_stopping_patience": 5,
+    "early_stopping_min_delta": 0.0,
+    "warmup_policy": "drop_leading",
+    "compute_feature_importance": true,
+    "prediction_mode": "quantile",
+    "quantile_levels": [0.1, 0.5, 0.9],
+    "store_split_timestamps_ref": true,
+    "evaluate_train_split": false
+  },
+  "split_config": {
+    "train_start": "20101018",
+    "train_end": "20201231",
+    "val_start": "20210101",
+    "val_end": "20221231",
+    "test_start": "20230101",
+    "test_end": "20251231"
+  },
+  "baselines": [
+    {
+      "name": "zero_return",
+      "config": {}
+    },
+    {
+      "name": "historical_mean_rolling",
+      "config": {"window_days": 30}
+    },
+    {
+      "name": "historical_quantiles_rolling",
+      "config": {"window_days": 252, "quantile_levels": [0.1, 0.5, 0.9]}
+    }
+  ],
+  "explicit_configs": [
+    {
+      "run_label": "smoke_btsf_all_features",
+      "training_config": {}
+    }
+  ]
+}

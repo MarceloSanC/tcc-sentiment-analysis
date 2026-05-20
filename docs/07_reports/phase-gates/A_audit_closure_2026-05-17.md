@@ -361,3 +361,80 @@ independente (relatorio APPROVE_WITH_CAVEATS de sessao de auditoria
 independente; 5/5 spot-checks de mapping passaram). Cada acao YELLOW/RED
 do audit tem ou Stage que a fechou, ou destino declarado (F.1, F.2,
 Fase C, future work, P1 nao-bloqueante).
+
+## Findings post-closure (descobertos via F.1 smoke 2026-05-18)
+
+Verificacao independente (closure original) deu APPROVE_WITH_CAVEATS em
+2026-05-17. F.1 smoke executado em 2026-05-18 descobriu 5 gaps que
+nenhuma das revisoes anteriores pegou (Stage 12 review, closure mapping,
+revisao independente do closure). Registro honesto:
+
+- **Gap 1 — Stage 12 sem CLI canonico**: `RunBaselinesUseCase` foi
+  mergeada em PR #30 sem `main_run_baselines.py` ou equivalente.
+  Stage 12 review aceitou entrypoint opcional; smoke evidenciou que e
+  obrigatorio para reprodutibilidade publica.
+
+- **Gap 2 — TFT vs baselines `target_timestamp_utc` misaligned por
+  warmup**: TFT encoder warmup 60d reduz amostra (685/437 timestamps em
+  test/val); baselines sem warmup (751/503). Gate
+  `oos_pairwise_target_alignment` falhou; `gold_dm_pairwise_results` e
+  `gold_mcs_results` ficaram vazios para o par TFT-vs-baseline. Stage 12
+  review (Gap 4 §7 do prompt) antecipou o risco mas nao incluiu teste
+  cross-stage exigindo intersecao exata.
+
+- **Gap 3 — Bug pre-existente em `main_refresh_analytics_store --help`**:
+  `%` nao escapado em help strings (linhas 145, 174) levanta
+  `ValueError: unsupported format character ')'`. Bug fora de qualquer
+  Stage; introduzido em refresh CLI pre-Stage 7. So afetava `--help`,
+  nao execucao normal — escapou de todas as revisoes anteriores.
+
+- **Gap 4 — `gold_confidence_calibrated_by_horizon` falsa-positivo em
+  point baselines**: Stage 12 introduziu baselines com `prediction_mode
+  ='point'` (zero_return, historical_mean_rolling) que produzem
+  `confidence_calibrated=NaN` por design (sem metricas probabilisticas).
+  O gate contava esses NaN como `bad_confidence`. F.1 smoke registrou
+  `bad_confidence=8` correspondendo exatamente a 2 point baselines × 2
+  splits × 2 horizons. Causa fora do alinhamento warmup; gap distinto
+  dos Gap 1-2.
+
+- **Gap 5 — `official_contract_quantile_attention` exigia artefato torch
+  de baselines**: Stage 10 introduziu `fact_model_artifacts` como FK
+  obrigatoria para runs official. Stage 12 baselines nao tem checkpoint,
+  feature_importance ou attention — por design. Stage 12 review nao
+  endereçou contrato cross-Stage 10. F.1 smoke registrou
+  `missing_model_artifacts=3`, exatamente os 3 baselines.
+
+- **Gap 6 — TFT y_true convention bug em decisoes boundary (descoberto
+  via re-run do F.1 smoke pos-Stage F.0)**: TFT trainer emite
+  `y_true_m[i][h_idx]` que empiricamente retorna `target_return[i]`
+  (return no decision_ts) ao inves de `target_return[i + h - 1]`
+  (return h-1 dias no futuro). Isso fica visivel nas decisoes
+  boundary de h>=2 onde `i + h - 1 >= dataset_len` — TFT emite a
+  predicao mesmo assim com y_true do dia atual, contrariando o
+  comentario do proprio Stage 12 que afirma "actuals_matrix[i, h-1]
+  is the target_return at the future step (h-1 ahead)". Re-run do
+  smoke 2026-05-18 v2 com Stage F.0.2 alinhamento mostrou TFT
+  emitindo 685 timestamps para test/h=7 (incluindo decisoes onde
+  target_ts > dataset_end), enquanto baselines emitiram 679
+  (corretamente filtrando rows sem y_true real). Symdiff=6 nas
+  ultimas 6 decisoes do test split. Resultado: pre-existing bug em
+  Stage 11 trainer ou pytorch_forecasting TimeSeriesDataSet —
+  necessita Stage proprio para investigar e corrigir antes de F.1
+  poder PASS pleno.
+
+Esses **6 gaps** (5 originais + Gap 6 descoberto durante re-run F.0.5)
+**nao invalidam o closure mapping** dos Stages 1-14 em si — todos os
+P0 transversais permanecem fechados, todos RED zerados. Sao gaps **na
+cobertura dos reviews**, nao nos Stages mergeados. Gap 6 e o unico
+que aponta para bug latente em Stage 11 trainer; demais sao de
+cobertura cross-Stage (Stage 12 ↔ Stages 9/10) e bug pre-existente em
+CLI. Plano de fix em
+[`POST_CLOSURE_FIXES_CHECKLIST.md` Stage F.0](../../05_checklists/POST_CLOSURE_FIXES_CHECKLIST.md)
+(migrado de PHASE_B_IMPLEMENTATION_CHECKLIST.md em 2026-05-19);
+Gap 6 promovido a follow-up bloqueante de F.1 PASS pleno (proximo
+Stage de codigo, possivelmente Stage 15 ou Stage F.0.10).
+
+Evidencia completa do smoke em
+[`docs/07_reports/smoke_confirmatory_2026-05-18.md`](../smoke_confirmatory_2026-05-18.md).
+Re-rodada do smoke pos-Stage F.0 (data: 2026-05-18 re-run) anexa
+secao final nesse mesmo relatorio.

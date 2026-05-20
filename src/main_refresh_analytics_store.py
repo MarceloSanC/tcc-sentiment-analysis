@@ -142,7 +142,7 @@ def parse_args() -> argparse.Namespace:
         "--block-a-max-crossing-bruto-rate",
         type=float,
         default=0.001,
-        help="Block A threshold for crossing bruto rate (default: 0.001 = 0.10%).",
+        help="Block A threshold for crossing bruto rate (default: 0.001 = 0.10%%).",
     )
     parser.add_argument(
         "--block-a-max-negative-interval-width-count",
@@ -171,7 +171,7 @@ def parse_args() -> argparse.Namespace:
         "--degeneracy-max-p10-eq-p90-rate",
         type=float,
         default=0.05,
-        help="Maximum allowed raw p10==p90 rate for quantile groups (default: 0.05 = 5%).",
+        help="Maximum allowed raw p10==p90 rate for quantile groups (default: 0.05 = 5%%).",
     )
     args = parser.parse_args()
     scope_flags_used = bool(

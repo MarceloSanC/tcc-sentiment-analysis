@@ -88,6 +88,87 @@ class ValidateAnalyticsQualityUseCase:
     def _record(checks: list[dict[str, object]], name: str, passed: bool, detail: str) -> None:
         checks.append({"check": name, "passed": bool(passed), "detail": detail})
 
+    @staticmethod
+    def _evaluate_tft_baselines_alignment(
+        *,
+        dim_run: "pd.DataFrame",
+        fact_oos_predictions: "pd.DataFrame",
+        scope_mode: str | None,
+    ) -> tuple[bool, str]:
+        """Stage F.0.3 helper. Verifies that, per
+        (parent_sweep_id, split, horizon), TFT candidate runs and baseline
+        runs emit identical `target_timestamp_utc` sets. fact_oos_predictions
+        lacks parent_sweep_id directly; we enrich via dim_run join.
+
+        Active only under `scope_mode='cohort_decision'` (legacy global_health
+        silvers may legitimately mix baseline and candidate runs without the
+        Stage 12 alignment contract).
+        """
+        if scope_mode != "cohort_decision":
+            return True, "skipped(not_cohort_decision)"
+        if dim_run.empty or fact_oos_predictions.empty:
+            return True, "skipped(empty_silver)"
+        if not {"feature_set_name", "model_version"}.issubset(dim_run.columns):
+            return False, "missing_required_dim_run_columns"
+        if "parent_sweep_id" not in dim_run.columns:
+            return False, "missing_parent_sweep_id_in_dim_run"
+
+        dim_view = dim_run.copy()
+        fset_lower = dim_view["feature_set_name"].astype(str).str.strip().str.lower()
+        mver_lower = dim_view["model_version"].astype(str).str.strip().str.lower()
+        dim_view["_is_baseline"] = fset_lower.eq("baseline") | mver_lower.str.startswith(
+            "baseline_"
+        )
+        # fact_oos already carries parent_sweep_id only in some
+        # writers/tests; prefer the column on fact_oos when present and only
+        # merge missing fields from dim_run.
+        join_cols = ["run_id", "_is_baseline"]
+        if "parent_sweep_id" not in fact_oos_predictions.columns:
+            join_cols.append("parent_sweep_id")
+        join_view = dim_view[join_cols].drop_duplicates("run_id")
+        oos_view = fact_oos_predictions.merge(join_view, on="run_id", how="left")
+        oos_view["_is_baseline"] = (
+            oos_view["_is_baseline"].fillna(False).astype(bool)
+        )
+        grp_cols = [
+            c
+            for c in ["asset", "parent_sweep_id", "split", "horizon"]
+            if c in oos_view.columns
+        ]
+        if "parent_sweep_id" not in grp_cols:
+            return True, "skipped(parent_sweep_id_join_failed)"
+
+        issues: list[str] = []
+        for keys, grp in oos_view.groupby(grp_cols, dropna=False):
+            kv = dict(zip(grp_cols, keys if isinstance(keys, tuple) else (keys,)))
+            sweep_val = str(kv.get("parent_sweep_id"))
+            if not sweep_val or sweep_val.lower() in {"none", "nan", "null", "<na>"}:
+                continue
+            tft_ts = set(
+                grp.loc[~grp["_is_baseline"], "target_timestamp_utc"]
+                .dropna()
+                .astype(str)
+                .tolist()
+            )
+            bas_ts = set(
+                grp.loc[grp["_is_baseline"], "target_timestamp_utc"]
+                .dropna()
+                .astype(str)
+                .tolist()
+            )
+            if not tft_ts or not bas_ts:
+                continue
+            if tft_ts != bas_ts:
+                issues.append(
+                    f"sweep={sweep_val}|split={kv.get('split')}"
+                    f"|h={kv.get('horizon')}|tft_n={len(tft_ts)}"
+                    f"|baseline_n={len(bas_ts)}"
+                    f"|symdiff={len(tft_ts.symmetric_difference(bas_ts))}"
+                )
+        if issues:
+            return False, ", ".join(issues)
+        return True, "ok"
+
     def _resolve_scope_spec(self) -> ScopeSpec:
         legacy_scope_used = bool(
             self.block_a_parent_sweep_prefixes or self.block_a_splits or self.block_a_horizons
@@ -841,6 +922,20 @@ class ValidateAnalyticsQualityUseCase:
                     conf = gold_conf[gold_conf["split"].astype(str).isin(["val", "test"])].copy()
                     conf["horizon"] = pd.to_numeric(conf["horizon"], errors="coerce")
                     conf["confidence_calibrated"] = pd.to_numeric(conf["confidence_calibrated"], errors="coerce")
+                    # Stage F.0.6: `confidence_calibrated` is a probabilistic
+                    # metric (depends on PICP). Point baselines (zero_return,
+                    # historical_mean_rolling) and any run where Stage 9 marks
+                    # `is_quantile_genuine=False` legitimately produce NaN
+                    # confidence — filtering them out prevents false-positive
+                    # `bad_confidence` rows that triggered the F.1 smoke
+                    # 2026-05-18 failure (8 rows, 4 per point baseline).
+                    if "is_quantile_genuine" in conf.columns:
+                        is_genuine = conf["is_quantile_genuine"]
+                        # is_quantile_genuine arrives as bool, object("True"/"False"),
+                        # or NaN depending on writer. Coerce to bool with strict
+                        # interpretation: only True counts as quantile-genuine.
+                        is_genuine_bool = is_genuine.astype(str).str.strip().str.lower().eq("true")
+                        conf = conf[is_genuine_bool].copy()
                     bad_conf = int(conf["confidence_calibrated"].isna().sum())
                     non_finite = int(conf["confidence_calibrated"].isin([float("inf"), float("-inf")]).sum())
                     horizon_misses: list[str] = []
@@ -960,7 +1055,32 @@ class ValidateAnalyticsQualityUseCase:
             baseline_parity_detail,
         )
 
+        # Stage F.0.3: defense-in-depth gate enforcing that the set of
+        # target_timestamp_utc emitted by TFT candidate runs equals the set
+        # emitted by baseline runs, per (parent_sweep_id, split, horizon).
+        # Without that alignment the pairwise builder excludes TFT from
+        # gold_dm_pairwise_results / gold_mcs_results (observed in F.1
+        # smoke 2026-05-18). Active only under cohort_decision scope.
+        alignment_ok, alignment_detail = self._evaluate_tft_baselines_alignment(
+            dim_run=dim_run,
+            fact_oos_predictions=fact_oos_predictions,
+            scope_mode=scope_spec.scope_mode,
+        )
+        self._record(
+            checks,
+            "tft_baselines_timestamp_subset_alignment",
+            alignment_ok,
+            alignment_detail,
+        )
+
         # P0: official runs quantile/attention contract
+        # Baselines (feature_set_name='baseline' OR model_version startswith
+        # 'baseline_') by design do not own torch model artifacts (no
+        # checkpoint, no feature_importance, no attention). They participate
+        # in quantile contract (p10/p50/p90 must be present in oos predictions)
+        # but are excluded from the artifact contract — Stage F.0.7 (registered
+        # in docs/07_reports/smoke_confirmatory_2026-05-18.md and
+        # docs/05_checklists/PHASE_B_IMPLEMENTATION_CHECKLIST.md Stage F.0).
         contract_ok = True
         contract_issues: list[str] = []
         if not dim_run.empty:
@@ -968,6 +1088,15 @@ class ValidateAnalyticsQualityUseCase:
                 dim_run.loc[dim_run["status"].astype(str).str.lower() == "ok", "run_id"].astype(str).tolist()
             ) if "status" in dim_run.columns else set()
             if official_runs:
+                if {"feature_set_name", "model_version"}.issubset(dim_run.columns):
+                    baseline_dim = dim_run[
+                        dim_run["feature_set_name"].astype(str).str.strip().str.lower().eq("baseline")
+                        | dim_run["model_version"].astype(str).str.strip().str.lower().str.startswith("baseline_")
+                    ]
+                    baseline_run_ids = set(baseline_dim["run_id"].astype(str).tolist())
+                else:
+                    baseline_run_ids = set()
+                official_candidates = official_runs - baseline_run_ids
                 if fact_oos_predictions.empty:
                     contract_ok = False
                     contract_issues.append("missing_fact_oos_predictions")
@@ -983,12 +1112,18 @@ class ValidateAnalyticsQualityUseCase:
                                 contract_ok = False
                                 contract_issues.append(f"{q}_nan={nulls}")
 
-                if fact_model_artifacts.empty:
+                if not official_candidates:
+                    # Sweep with only baselines — artifact contract is vacuously
+                    # satisfied; surface as informational note in detail.
+                    contract_issues.append("artifact_check_skipped_baselines_only")
+                elif fact_model_artifacts.empty:
                     contract_ok = False
                     contract_issues.append("missing_fact_model_artifacts")
                 else:
-                    mar = fact_model_artifacts[fact_model_artifacts["run_id"].astype(str).isin(official_runs)]
-                    missing_mar = len(official_runs - set(mar["run_id"].astype(str).tolist()))
+                    mar = fact_model_artifacts[
+                        fact_model_artifacts["run_id"].astype(str).isin(official_candidates)
+                    ]
+                    missing_mar = len(official_candidates - set(mar["run_id"].astype(str).tolist()))
                     if missing_mar > 0:
                         contract_ok = False
                         contract_issues.append(f"missing_model_artifacts={missing_mar}")

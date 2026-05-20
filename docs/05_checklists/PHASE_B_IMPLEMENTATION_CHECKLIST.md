@@ -1,6 +1,6 @@
 ---
 title: Phase B Implementation Checklist (Pre-Experiment Engineering)
-scope: Passo a passo tecnico de implementacao das alteracoes de codigo exigidas pelo gate de Phase A (docs/07_reports/phase-gates/A_code_audit.md). Cada Stage = 1 PR; cada task dentro do Stage = 1 commit. Caminho C eh estado-alvo; Caminho B eh intermediario aceitavel. Para definicoes canonicas, ver 01_architecture/ANALYTICS_STORE_ARCHITECTURE.md e o proprio A_code_audit.md.
+scope: Passo a passo tecnico de implementacao das alteracoes de codigo exigidas pelo gate de Phase A (docs/07_reports/phase-gates/A_code_audit.md). Cada Stage = 1 PR; cada task dentro do Stage = 1 commit. Caminho C eh estado-alvo; Caminho B eh intermediario aceitavel. Para definicoes canonicas, ver 01_architecture/ANALYTICS_STORE_ARCHITECTURE.md e o proprio A_code_audit.md. Fixes descobertos APOS o closure (via smoke F.1) sao rastreados em POST_CLOSURE_FIXES_CHECKLIST.md.
 update_when:
   - status (checkbox) de uma task for atualizado
   - novo achado da auditoria for promovido para implementacao
@@ -20,6 +20,13 @@ canonical_for: [phase_b_implementation_checklist, phase_b_pre_experiment_enginee
 Este checklist traduz as Acoes do `A_code_audit.md` em PRs e commits. Cada Stage
 abaixo eh um PR atomico; cada task numerada eh um commit que pode ser revisado
 isoladamente.
+
+**Escopo:** pre-experiment engineering planejado upfront a partir de
+`A_code_audit.md`. Stages 1-19 + Stage final F.1/F.2/F.3. Fixes
+descobertos **apos** o closure parcial da Fase A (via smoke F.1 ou
+suas re-rodadas) sao rastreados em
+[`POST_CLOSURE_FIXES_CHECKLIST.md`](POST_CLOSURE_FIXES_CHECKLIST.md)
+para preservar este arquivo como snapshot do escopo original.
 
 ## Convencao
 
@@ -1475,6 +1482,246 @@ documentar caminho oficial.
 
 ---
 
+## Stages de refator (debito arquitetural revelado pelo F.0 E2E)
+
+Stages 20-22 abordam debito estrutural produzido pela execucao dos
+Stages 1-14 + F.0, identificado em
+[`B_architectural_debt_2026-05-19.md`](../07_reports/phase-gates/B_architectural_debt_2026-05-19.md).
+Registro de descoberta vive em
+[`POST_CLOSURE_FIXES_CHECKLIST.md`](POST_CLOSURE_FIXES_CHECKLIST.md) §"Stage F.A"
+(origem: smoke F.1 iteration); execucao vive aqui (porte: Stage 15+ → promotion
+rule do POST_CLOSURE). Os 3 Stages sao **pre-requisito do fix do Gap 6**
+(TFT y_true convention) — extrair os god objects antes torna o fix uma
+mudanca cirurgica em 1 arquivo, em vez de blast-radius em 5.
+
+---
+
+## Stage 20 — MultiHorizonPredictionPersister (refactor de habilitacao)
+
+**Objetivo:** extrair a logica de persistencia multi-horizonte hoje
+duplicada e divergente em
+[`train_tft_model_use_case.py:778-810`](../../src/use_cases/train_tft_model_use_case.py#L778-L810)
+e [`run_baselines_use_case.py:225-280`](../../src/use_cases/run_baselines_use_case.py#L225-L280)
+para um domain service que materializa **explicitamente a convencao
+target_timestamp / y_true / h-ahead**. Pre-requisito do fix do Gap 6.
+
+**Cross-link:**
+[`ADR-0003-multi-horizon-prediction-persister.md`](../01_architecture/decisions/ADR-0003-multi-horizon-prediction-persister.md);
+[`B_architectural_debt_2026-05-19.md`](../07_reports/phase-gates/B_architectural_debt_2026-05-19.md) §"M-train_tft persistencia";
+[`tft_y_true_investigation_2026-05-18.md`](../07_reports/tft_y_true_investigation_2026-05-18.md).
+
+### Notas de revisao:
+
+- 2026-05-19: Stage criado a partir do debito identificado em
+  `B_architectural_debt_2026-05-19.md`. Bloqueia fix do Gap 6
+  (registrado como candidate Stage 23 ou Stage F.0.10 promovido).
+
+### Tasks
+
+- [ ] **20.0** ADR-0003 mergeado (doc-only PR, precede codigo).
+      **Aceite:** ADR define anchor canonico de `target_timestamp`
+      (decision_day), trading-day arithmetic, signature
+      `build_record(decision_idx, h, y_true, y_pred, q10, q50, q90,
+      dataset_timestamps, run_context)`, e politica de borda
+      (`IncompletePredictionWindowError`).
+
+- [ ] **20.1** Criar `src/domain/services/multi_horizon_prediction_persister.py`
+      com `MultiHorizonPredictionPersister`, `PredictionRecord`,
+      `RunContext`, `IncompletePredictionWindowError`.
+      **Aceite:** testes unitarios em
+      `tests/unit/domain/services/test_multi_horizon_prediction_persister.py`
+      cobrindo: (a) anchor `decision_day` em todos h ∈ {1, 7, 30};
+      (b) trading-day arithmetic (`target_ts =
+      dataset_timestamps[decision_idx + h]`); (c) erro explicito
+      `IncompletePredictionWindowError` quando
+      `decision_idx + h > len(dataset_timestamps)`.
+
+- [ ] **20.2** Migrar `train_tft_model_use_case` para usar o persister.
+      **Aceite:** linhas 770-810 viram chamada unica ao persister;
+      `pytest tests/` green; teste de regressao de Stage 11.3
+      (`_manual_forward_quantiles_and_actuals` H>1) continua passando.
+
+- [ ] **20.3** Migrar `run_baselines_use_case` para usar o persister.
+      **Aceite:** linhas 225-280 viram chamada unica; comentario
+      enganoso de linhas 244-248 removido; testes em
+      `tests/unit/use_cases/test_run_baselines_use_case.py` adaptados.
+
+- [ ] **20.4** Teste de regressao cross-pipeline pareando
+      `(decision_idx, h)` entre TFT e baseline.
+      **Aceite:** novo teste em
+      `tests/integration/test_tft_baselines_y_true_alignment.py` confirma
+      `y_true_TFT(decision_idx, h) == y_true_baseline(decision_idx, h)`
+      em >= 99.9% das linhas em dataset sintetico. **Fecha a porta para
+      a categoria de divergencia que produziu o Gap 6.**
+
+- [ ] **20.5** Atualizar `docs/03_modeling/MULTI_HORIZON.md` declarando
+      a convencao canonica (referenciando ADR-0003) e remover
+      ambiguidade da definicao atual de `target_timestamp`.
+      **Aceite:** doc canonico fixa anchor, h-ahead semantics e
+      trading-day arithmetic.
+
+- [ ] **20.6** Smoke regression: F.1 (re-rodada) ainda PASS no gate
+      `tft_baselines_timestamp_subset_alignment` (F.0.3) e nos demais
+      gates nao-Gap-6.
+      **Aceite:** relatorio anexo em
+      `docs/07_reports/smoke_confirmatory_2026-05-18.md` secao
+      "Post-Stage 20".
+
+---
+
+## Stage 21 — QualityCheckRegistry (refactor de habilitacao)
+
+**Objetivo:** extrair os ~20 quality checks heterogeneos hoje
+empilhados em [`validate_analytics_quality_use_case.py`](../../src/use_cases/validate_analytics_quality_use_case.py)
+para um registry de classes `QualityCheck` independentes, com
+`applies_when(scope)` explicito e teste isolado por check.
+
+**Cross-link:**
+[`ADR-0004-quality-check-registry.md`](../01_architecture/decisions/ADR-0004-quality-check-registry.md);
+[`B_architectural_debt_2026-05-19.md`](../07_reports/phase-gates/B_architectural_debt_2026-05-19.md) §"M-validate_quality".
+
+### Notas de revisao:
+
+- 2026-05-19: Stage criado. Caso clinico E2 (commits `584373e` + `ab79996`)
+  documentado no diagnostico.
+
+### Tasks
+
+- [ ] **21.0** ADR-0004 mergeado (doc-only PR, precede codigo).
+      **Aceite:** ADR define contrato `QualityCheck` (name,
+      applies_when, run), `CheckResult`, `AnalyticsSnapshot`,
+      `QualityCheckRegistry`.
+
+- [ ] **21.1** Criar `src/domain/services/quality_checks/base.py` com
+      ABC `QualityCheck`, `CheckResult`, `AnalyticsSnapshot`,
+      `QualityCheckRegistry`.
+      **Aceite:** registry default povoavel; testes em
+      `tests/unit/domain/services/quality_checks/test_base.py`.
+
+- [ ] **21.2** Migrar cluster `cardinality.py` (cardinality_config_fold_seed,
+      min_samples_by_split, run_id_execution_consistency,
+      inference_predictions_continuity, feature_contrib_local_continuity).
+      **Aceite:** 5 checks migrados; testes movidos para
+      `tests/unit/domain/services/quality_checks/test_cardinality.py`;
+      `execute()` chama via registry em vez de inline.
+
+- [ ] **21.3** Migrar cluster `alignment.py`
+      (tft_baselines_timestamp_subset_alignment,
+      oos_pairwise_target_alignment).
+      **Aceite:** 2 checks migrados; F.0.3 gate continua falhando
+      corretamente para Gap 6 ate Stage 20 fechar.
+
+- [ ] **21.4** Migrar cluster `calibration.py`
+      (gold_confidence_calibrated_by_horizon, dm_mcs_persisted_executable,
+      gold_metrics_by_config_n_oos_contract).
+      **Aceite:** 3 checks migrados; filtro `is_quantile_genuine` (F.0.6)
+      preservado.
+
+- [ ] **21.5** Migrar cluster `contracts.py`
+      (official_contract_quantile_attention, required_metrics_nan,
+      baseline_present_per_candidate_sweep, referential_integrity).
+      **Aceite:** 4 checks migrados; exclusao de baselines do artifact
+      contract (F.0.7) preservada.
+
+- [ ] **21.6** `ValidateAnalyticsQualityUseCase.execute()` vira
+      orquestrador: itera `registry.applicable(scope)`.
+      **Aceite:** classe principal reduz para ~200 LOC; comportamento
+      bit-for-bit identico — smoke regression em `dim_run`
+      `parent_sweep_id=phase_a_smoke_20260518_v2` produz mesmos 27
+      checks com mesmos verdicts.
+
+- [ ] **21.7** Atualizar
+      [`docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md`](../01_architecture/ANALYTICS_STORE_ARCHITECTURE.md)
+      documentando o registry como ponto de extensao oficial.
+      **Aceite:** doc canonico explica como adicionar novo check sem
+      tocar `execute()`.
+
+---
+
+## Stage 22 — GoldBuilders modulares (refactor de habilitacao)
+
+**Objetivo:** extrair os 26 builders gold hoje inline em
+[`refresh_analytics_store_use_case.py`](../../src/use_cases/refresh_analytics_store_use_case.py)
+para pacote `src/domain/services/gold_builders/` organizado por
+categoria semantica.
+
+**Cross-link:**
+[`ADR-0005-gold-builders-modularization.md`](../01_architecture/decisions/ADR-0005-gold-builders-modularization.md);
+[`B_architectural_debt_2026-05-19.md`](../07_reports/phase-gates/B_architectural_debt_2026-05-19.md) §"M5-refresh".
+
+### Notas de revisao:
+
+- 2026-05-19: Stage criado. Maior dos 3 refators (~2.600 LOC
+  reorganizados); diff comportamentalmente neutro garantido por smoke
+  regression byte-identical entre cada task.
+- Se a revisao indicar que diff e grande demais para 1 PR, dividir em
+  Stage 22a (22.0 + 22.1 + 22.2 + 22.3) + Stage 22b (22.4 + 22.5 + 22.6
+  + 22.7 + 22.8). Comecar como 1 Stage; dividir so se necessario.
+
+### Tasks
+
+- [ ] **22.0** ADR-0005 mergeado (doc-only PR, precede codigo).
+      **Aceite:** ADR define contrato `GoldBuilder`, estrutura do
+      pacote `gold_builders/` (5 categorias), e politica de
+      `requires: list[str]` explicito.
+
+- [ ] **22.1** Criar `src/domain/services/gold_builders/base.py` com
+      ABC `GoldBuilder`, `BuildContext`, `AnalyticsSnapshot` (reusar do
+      Stage 21 se mergeado).
+      **Aceite:** skeleton do pacote; `__init__.py` com registry default;
+      testes em `tests/unit/domain/services/gold_builders/test_base.py`.
+
+- [ ] **22.2** Migrar categoria `ranking.py` (runs_long,
+      ranking_by_config, consistency_topk).
+      **Aceite:** 3 builders migrados; refresh continua produzindo
+      output byte-identical para `gold_runs_long`,
+      `gold_ranking_by_config`, `gold_consistency_topk`.
+
+- [ ] **22.3** Migrar categoria `pairwise.py` (dm_pairwise_results,
+      mcs_results, paired_oos_intersection_by_horizon).
+      **Aceite:** 3 builders migrados; refresh byte-identical.
+
+- [ ] **22.4** Migrar categoria `quantile.py` (quantile_guardrail_audit,
+      quantile_degeneracy_report, prediction_metrics_by_run_split_horizon
+      + single_contract variant, prediction_metrics_by_config).
+      **Aceite:** 4 builders migrados; gate de degeneracao (Stage 11)
+      continua aplicando.
+
+- [ ] **22.5** Migrar categoria `descriptive.py` (ic95,
+      feature_set_impact, model_decision_final).
+      **Aceite:** 3 builders migrados.
+
+- [ ] **22.6** Migrar categoria `confidence.py`
+      (confidence_calibrated_by_horizon,
+      metrics_by_config_n_oos_contract).
+      **Aceite:** 2 builders migrados; filtro `is_quantile_genuine`
+      (F.0.6) preservado se nao migrado em outra categoria.
+
+- [ ] **22.7** `RefreshAnalyticsStoreUseCase` vira orquestrador:
+      itera `gold_builders_registry.applicable(scope_spec)`.
+      **Aceite:** classe principal reduz para ~400 LOC (de 2.568); pinball,
+      IQR, prob_up viram helpers em `gold_builders/_metrics.py`.
+
+- [ ] **22.8** Smoke regression byte-identical: F.1 v2 (mesmo input)
+      produz todos os 10 gold tables com o mesmo conteudo bit-for-bit
+      antes vs depois.
+      **Aceite:** script de diff anexo em
+      `docs/07_reports/smoke_confirmatory_2026-05-18.md` secao
+      "Post-Stage 22"; diff vazio em todas as 10 tabelas.
+
+---
+
+## Stage F.0 — movido para POST_CLOSURE_FIXES_CHECKLIST.md
+
+Stage F.0 (fixes pre-smoke descobertos via F.1 2026-05-18) foi migrado
+em 2026-05-19 para
+[`POST_CLOSURE_FIXES_CHECKLIST.md`](POST_CLOSURE_FIXES_CHECKLIST.md) §"Stage F.0",
+preservando este arquivo como snapshot do pre-experiment engineering
+planejado upfront. Conteudo identico (F.0.0 ... F.0.9); rastreabilidade
+git via branch `feat/stage-f0-pre-smoke-fixes`.
+
+---
+
 ## Stage final — Smoke confirmatorio + pre-registro (B+C)
 
 ### Notas de revisao:
@@ -1494,6 +1741,11 @@ documentar caminho oficial.
   Closure mapping validado por sessao independente de revisao
   (veredicto APPROVE_WITH_CAVEATS; 5/5 spot-checks de mapping
   passaram; 4 caveats incorporados no closure final).
+- 2026-05-18: F.1 smoke veredicto FAIL; gaps documentados em
+  [`smoke_confirmatory_2026-05-18.md`](../07_reports/smoke_confirmatory_2026-05-18.md);
+  Stage F.0 criado para desbloquear; F.1 re-rodara apos F.0 merged.
+- 2026-05-19: Stage F.0 (e futuras ondas post-closure) migrado para
+  [`POST_CLOSURE_FIXES_CHECKLIST.md`](POST_CLOSURE_FIXES_CHECKLIST.md).
 
 ### Tasks
 
@@ -1543,4 +1795,7 @@ documentar caminho oficial.
 | 13 | M1-Q4 (HPO objective) | RED |
 | 14 | M3-Q4 (effective_date) | YELLOW |
 | 15-19 | Lei 1 (write-time, refresh deprecado) | future direction |
+| 20 | B_architectural_debt §M-train_tft persistencia (ADR-0003) | YELLOW (post-F.0) |
+| 21 | B_architectural_debt §M-validate_quality (ADR-0004) | YELLOW (post-F.0) |
+| 22 | B_architectural_debt §M5-refresh (ADR-0005) | YELLOW (post-F.0) |
 | Final | Gate de saida da Fase A | — |
