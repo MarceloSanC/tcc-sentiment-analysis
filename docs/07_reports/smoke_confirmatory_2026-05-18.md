@@ -587,6 +587,35 @@ e independente e sera tratado em Stage 23.
 `decision_idx` confirmado em columns de `fact_oos_predictions`,
 range 59..4015 (consistente com indexacao do full df).
 
+## F.1 v3 PASS pleno (post-Stage 22 + Stage 23 fix, 2026-05-20)
+
+Stage 23 fix em `_build_gold_oos_quality_report` (refresh_analytics_store_use_case.py
+linha ~1480): merge `fact_oos_predictions + dim_run` agora usa
+`suffixes=("", "_dim")`, preservando `asset` column do fact_oos side. Pre-fix,
+o merge perdeu `asset` (collision com dim_run), causando `gold_quality_statistics_report`
+emitir `quality_passed_all=False` e `statistics_ready=False` mesmo com todos os
+checks upstream PASS.
+
+Pos-fix:
+- `gold_quality_statistics_report` mostra `asset=AAPL`, `statistics_ready=True`
+  para test split (h=1 e h=7).
+- `dm_mcs_persisted_executable` agora PASS.
+
+**27/27 quality checks PASS, zero FAIL** (validacao final F.1 v3).
+
+| # | Criterio F.1 | Status |
+|---|---|---|
+| 1 | `% p10==p90 < 5%` (block_quantile_degeneracy_gate) | **PASS** |
+| 2 | Zero violacoes probabilisticas (MPIW >= 0, crossing rate OK) | **PASS** |
+| 3 | Gold cohort-aware (~25 tabelas com parent_sweep_id) | **PASS** |
+| 4 | pytest tests/ (559 passed) | **PASS** |
+| 5 | CI verde em PRs mergeados | pendente merge Stages 20-23 |
+| 6 | Refresh + quality sem erro (27/27 PASS) | **PASS** |
+
+Conclusao: Stage 23 fecha F.1 PASS pleno. Fase B tecnicamente pronta para
+abrir formalmente apos merge dos PRs #44-#47 e conclusao de F.2 (pre-registro,
+separado de Stage 23).
+
 ## Referências cruzadas
 
 - Aceite literal: [PHASE_B_IMPLEMENTATION_CHECKLIST.md](../05_checklists/PHASE_B_IMPLEMENTATION_CHECKLIST.md) F.1

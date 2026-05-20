@@ -1477,7 +1477,18 @@ class RefreshAnalyticsStoreUseCase:
 
         if not dim_run.empty and "run_id" in dim_run.columns:
             keep = [c for c in ["run_id", "asset", "feature_set_name", "config_signature", "parent_sweep_id", "split_signature", "split_fingerprint"] if c in dim_run.columns]
-            df = df.merge(dim_run[keep].drop_duplicates("run_id"), on="run_id", how="left")
+            # Stage 23 fix: pre-existing collision when fact_oos_predictions and dim_run
+            # both carry `asset`/`feature_set_name`/`config_signature` produced
+            # asset=None in the gold report (downstream gold_quality_statistics_report
+            # then read quality_passed_all=False even when all checks passed). Keep
+            # the fact_oos side as canonical (suffixes=("", "_dim")) so groupby finds
+            # the actual asset value.
+            df = df.merge(
+                dim_run[keep].drop_duplicates("run_id"),
+                on="run_id",
+                how="left",
+                suffixes=("", "_dim"),
+            )
 
         key_cols = ["run_id", "split", "horizon", "timestamp_utc", "target_timestamp_utc"]
         dup_mask = df.duplicated(subset=key_cols, keep=False)

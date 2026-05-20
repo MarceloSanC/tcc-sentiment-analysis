@@ -15,6 +15,38 @@ Append-only. Mais recente no topo.
 
 ---
 
+## [2026-05-20 09:11 UTC] Stage 23 — completion (F.1 PASS pleno + Fase B prep)
+
+**Context:** Stage 23 — F.1 v3 PASS pleno + abrir Fase B.
+**Decisao:** Fix bug pre-existente em `_build_gold_oos_quality_report`:
+  merge fact_oos_predictions + dim_run perdia coluna `asset` (collision).
+  Causava `gold_quality_statistics_report.statistics_ready=False` mesmo
+  com todos os checks PASS, falhando `dm_mcs_persisted_executable`.
+**Fix:** src/use_cases/refresh_analytics_store_use_case.py:~1480
+  `df.merge(..., suffixes=("", "_dim"))` preserva asset do fact_oos side.
+**Outcome:**
+  - Refresh + quality re-run → **27/27 quality checks PASS, ZERO FAIL**
+  - F.1 criterios atendidos: 1✅ 2✅ 3✅ 4✅ 5(pendente merge) 6✅
+  - 5 de 6 criterios PASS objetivamente; criterio 5 (CI verde em PRs
+    mergeados) so confirma quando Marcelo mergear Stages 20-23.
+  - Stage 23 entrega F.1 PASS pleno em substancia.
+**Docs atualizados:**
+  - smoke_confirmatory_2026-05-18.md: nova secao "F.1 v3 PASS pleno"
+  - PHASE_B_IMPLEMENTATION_CHECKLIST.md: F.1 [x] com nota satisfaction
+  - POST_CLOSURE_FIXES_CHECKLIST.md: F.0.0-F.0.9 → [x]; Gap 6 → RESOLVIDO
+  - A_audit_closure_2026-05-17.md: secao "Status final (2026-05-20)"
+**F.3 deviation:** F.3 mantida [~] (nao [x] como plano §23.4 sugeria).
+  Razao: F.3 depende de F.2 (pre-registro) mergeado, que e doc separado
+  e nao escopo de Stage 23. Tightening final de F.3 e da Fase B opening
+  date dependem de F.2 (sessao separada).
+**Principle:** §4.5 (Liberdade para fix necessario em out-of-original-scope
+  quando ele e o ultimo bloqueador de F.1 PASS pleno — sucesso definido
+  pelo usuario).
+**Outcome:** pytest tests/ → 559 passed; archive 851M (intact).
+**Next:** Open Stage 23 PR.
+
+---
+
 ## [2026-05-20 09:04 UTC] Stage 22.1 — completion (skeleton)
 
 **Context:** Stage 22 — GoldBuilders modular skeleton per ADR-0005.
