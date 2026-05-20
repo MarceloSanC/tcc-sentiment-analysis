@@ -429,7 +429,8 @@ cobertura dos reviews**, nao nos Stages mergeados. Gap 6 e o unico
 que aponta para bug latente em Stage 11 trainer; demais sao de
 cobertura cross-Stage (Stage 12 ↔ Stages 9/10) e bug pre-existente em
 CLI. Plano de fix em
-[`PHASE_B_IMPLEMENTATION_CHECKLIST.md` Stage F.0](../../05_checklists/PHASE_B_IMPLEMENTATION_CHECKLIST.md);
+[`POST_CLOSURE_FIXES_CHECKLIST.md` Stage F.0](../../05_checklists/POST_CLOSURE_FIXES_CHECKLIST.md)
+(migrado de PHASE_B_IMPLEMENTATION_CHECKLIST.md em 2026-05-19);
 Gap 6 promovido a follow-up bloqueante de F.1 PASS pleno (proximo
 Stage de codigo, possivelmente Stage 15 ou Stage F.0.10).
 
