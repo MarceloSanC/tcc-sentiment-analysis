@@ -407,10 +407,7 @@ FACT_OOS_PREDICTIONS_SCHEMA = AnalyticsTableSchema(
         "feature_set_name",
         "split",
         "horizon",
-        # decision_idx will be tightened to required at Stage 20.3 (after both
-        # writers — train_tft + baselines — go through MultiHorizonPredictionPersister
-        # and start emitting the column). Keeping it as a declared column only
-        # in 20.1 lets the intermediate commits stay green.
+        "decision_idx",
         "timestamp_utc",
         "target_timestamp_utc",
         "y_true",

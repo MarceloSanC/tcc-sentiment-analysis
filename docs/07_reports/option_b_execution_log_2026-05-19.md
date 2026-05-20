@@ -15,6 +15,36 @@ Append-only. Mais recente no topo.
 
 ---
 
+## [2026-05-20 01:33 UTC] Stage 20.3 — completion
+
+**Context:** Migrar `_emit_oos_rows` em run_baselines_use_case para usar
+MultiHorizonPredictionPersister. Tighten FACT_OOS_PREDICTIONS_SCHEMA
+para decision_idx em required_columns (apos ambos writers emitirem).
+**Changes:**
+  - `_emit_oos_rows` constroi RunContext per-split e
+    `dataset_timestamps = [pd.Timestamp(t) for t in timestamps]` (full df).
+  - decision_idx = i (indice de chronological df) — baselines nao tem
+    encoder offset.
+  - Removida calendar arithmetic (Timedelta(days=h-1)) + check defensiva
+    `target_ts <= decision_ts` (Persister enforce target_pos > decision_idx).
+  - Removido comentario 244-248 enganoso (apontava para train_tft linha
+    790, semantica antiga).
+  - FACT_OOS_PREDICTIONS_SCHEMA.required_columns += decision_idx.
+**Tests adaptados (behavior change esperada, Gap 6 fix):**
+  - test_historical_mean_skips_rows_without_warmup_window: esperado 19
+    (era 20). Razao: ultima decision (i=49) nao tem target h=1 valido
+    (target_idx=50 out of bounds). Comportamento mais correto.
+  - test_baseline_y_true_skips_rows_beyond_horizon_at_end_of_dataset:
+    last decision_ts (i=19, n=20) emite zero rows (era {1}). Penultimate
+    (i=18) emite h=1 mas nao h=2. Reflete Opcao (a) precisa.
+**Principle:** §4.6 (refactor + fix intencional). Behavior change e o
+  Gap 6 fix per ADR-0003.
+**Outcome:** pytest tests/ → 543 passed. Stage 20 core migration completa
+  (both writers usam Persister, schema decision_idx required).
+**Next:** Stage 20.4 — cross-pipeline regression test.
+
+---
+
 ## [2026-05-20 01:29 UTC] Stage 20.2 — completion
 
 **Context:** Migrar `_persist_fact_oos_predictions` em train_tft_model_use_case

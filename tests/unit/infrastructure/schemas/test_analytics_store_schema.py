@@ -222,13 +222,13 @@ def test_quantile_columns_are_mandatory_in_oos_schema() -> None:
 
 
 def test_decision_idx_column_in_fact_oos_predictions_schema() -> None:
-    """Per ADR-0003 / Stage 20.1: decision_idx is the schema-level anchor for Opcao (a).
-
-    Tightened to required at Stage 20.3 once both writers emit it via the
-    MultiHorizonPredictionPersister.
+    """Per ADR-0003 / Stage 20.1+20.3: decision_idx is the schema-level anchor
+    for Opcao (a) and is required after both writers (train_tft + baselines)
+    emit it via MultiHorizonPredictionPersister.
     """
     assert "decision_idx" in FACT_OOS_PREDICTIONS_SCHEMA.columns
     assert FACT_OOS_PREDICTIONS_SCHEMA.columns["decision_idx"] == "int64"
+    assert "decision_idx" in FACT_OOS_PREDICTIONS_SCHEMA.required_columns
 
 
 def test_decision_idx_column_in_fact_inference_predictions_schema() -> None:
