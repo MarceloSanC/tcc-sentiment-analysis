@@ -752,15 +752,43 @@ class MultiHorizonPredictionPersister:
 
 ### Task 20.2 — Migrar train_tft_model_use_case
 
-**Objetivo:** substituir linhas 770-810 por chamada ao Persister.
+**Objetivo:** substituir os **dois call-sites** de `fact_oos_predictions`
+em `train_tft_model_use_case.py` por chamadas ao Persister.
+
+**Escopo (validado empiricamente 2026-05-19):**
+
+`train_tft_model_use_case.py` tem 4 `rows.append`, mas apenas **2 sao
+de `fact_oos_predictions`**:
+
+| Linha | Path | Tabela alvo | No escopo? |
+|---|---|---|---|
+| ~798 | multi-horizon (loop com `horizons`) | `fact_oos_predictions` | **SIM** |
+| ~850 | backward-compat 1-horizon legacy | `fact_oos_predictions` | **SIM** |
+| ~927 | epoch loss tracking | `fact_epoch_metrics` | **NAO** |
+| ~957 | per-split RMSE/MAE/DA | `fact_split_metrics` | **NAO** |
+
+**Ambos os sites em escopo tem o mesmo bug** (`split_tail =
+split_df.tail(n)` + `pd.Timedelta(days=h-1)`). Persister centraliza
+fix nos dois. Lines 927/957 ficam intactas (tabelas diferentes,
+contrato diferente).
+
+Numeros de linha aproximados — verificar com grep antes de editar
+(line drift natural entre criacao do plano e execucao):
+
+```bash
+grep -n "rows.append" src/use_cases/train_tft_model_use_case.py
+# Confirmar que site no path multi-horizon e site no path legacy
+# 1-horizon ambos estao na lista. Outros 2 sao fact_epoch_metrics
+# e fact_split_metrics (verificar contexto com sed -n 'L-15,L+2p').
+```
 
 **Arquivos:**
-- `src/use_cases/train_tft_model_use_case.py` (modificar)
+- `src/use_cases/train_tft_model_use_case.py` (modificar — 2 sites)
 - `tests/unit/use_cases/test_train_tft_model_use_case.py` (adaptar)
 
-**O que mudar:**
+**O que mudar (path multi-horizon, linha ~798):**
 
-Atual (linhas 770-810, abreviado):
+Atual (abreviado):
 
 ```python
 n = min(len(y_true_m), len(y_pred_m), ..., len(split_df))
@@ -846,10 +874,34 @@ for i in range(n):
 - **Q: max_encoder_length disponivel no escopo?**
   - Verificar variavel ou recuperar de config.
 
+**Path legacy 1-horizon (linha ~850):**
+
+Mesmo padrao do path multi-horizon, mas mais simples: `horizons[i]` e
+um unico inteiro por sample (nao loop). Aplicar mesma logica:
+
+- Calcular `decision_idx = decision_start_offset + i` (mesma formula)
+- Chamar `MultiHorizonPredictionPersister.build_record(...)` com
+  `h=horizons[i]`
+- `try/except IncompletePredictionWindowError` para boundary
+- `rows.append(record.to_dict())`
+
+Decisao a registrar em log se aplicavel: este path e "backward-compatible
+para 1-horizon legacy" — vale checar se ainda e exercido por algum
+caminho do projeto (`grep -rn` por callers que produzem `pred` sem
+`y_pred_matrix`). Se nao for mais usado, considerar marcar como
+deprecated no commit message. Conservador: migrar sem remover.
+
 **Commit:** `refactor(train-tft): use MultiHorizonPredictionPersister for fact_oos_predictions (Stage 20.2)`
 
+Pode ser dividido em 2 commits se preferir granularidade:
+- `refactor(train-tft): migrate multi-horizon path to Persister (Stage 20.2a)`
+- `refactor(train-tft): migrate legacy 1-horizon path to Persister (Stage 20.2b)`
+
 **Aceite:**
-- Linhas 770-810 reduzidas a ~30 LOC (call ao Persister).
+- Ambos call-sites de `fact_oos_predictions` (multi-horizon + legacy)
+  usam Persister.
+- `rows.append` para `fact_epoch_metrics` (linha ~927) e
+  `fact_split_metrics` (linha ~957) intactos.
 - `pytest tests/unit/use_cases/test_train_tft_model_use_case.py -v` green.
 - Schema produzido tem coluna `decision_idx`.
 - **NOTA:** Testes que validavam `timestamp_utc == decoder_end` agora
