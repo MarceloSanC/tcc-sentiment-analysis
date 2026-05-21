@@ -803,10 +803,13 @@ def _build_model_decision_final(
     for col in ["pairwise_ready_dm", "pairwise_ready_mcs", "target_exact_alignment"]:
         if col not in out.columns:
             out[col] = False
+    _dm = out["pairwise_ready_dm"]
+    _mcs = out["pairwise_ready_mcs"]
+    _tgt = out["target_exact_alignment"]
     out["academic_decision_ready"] = (
-        out["pairwise_ready_dm"].fillna(False).astype(bool)
-        & out["pairwise_ready_mcs"].fillna(False).astype(bool)
-        & out["target_exact_alignment"].fillna(False).astype(bool)
+        _dm.where(_dm.notna(), False).astype(bool)
+        & _mcs.where(_mcs.notna(), False).astype(bool)
+        & _tgt.where(_tgt.notna(), False).astype(bool)
     )
 
     return out.sort_values(
