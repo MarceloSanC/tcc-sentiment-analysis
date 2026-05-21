@@ -202,11 +202,12 @@ def test_historical_mean_skips_rows_without_warmup_window(tmp_path: Path) -> Non
         baselines=["historical_mean_rolling"],
     )
     oos = _load_oos(silver)
-    # Total days = 50, but first 30 rows have history < 30 -> skipped (i counted
-    # from 0; index i=30 has history target_returns[:30] of length 30 -> first
-    # eligible). Therefore n_rows == 50 - 30 == 20.
-    assert result.n_rows_per_baseline["historical_mean_rolling"] == 20
-    assert len(oos) == 20
+    # Total days = 50; first 30 rows skipped for warmup (history < 30).
+    # Per ADR-0003 Opcao (a) the last decision_idx (i=49) cannot emit h=1
+    # either (target = dataset_timestamps[50] is out of bounds). Eligible
+    # range: 30 <= i <= 48 -> 19 rows.
+    assert result.n_rows_per_baseline["historical_mean_rolling"] == 19
+    assert len(oos) == 19
 
 
 def test_baseline_target_timestamp_ordering(tmp_path: Path) -> None:
@@ -488,8 +489,9 @@ def test_baseline_y_true_aligns_with_tft_multi_horizon_convention(tmp_path: Path
 
 
 def test_baseline_y_true_skips_rows_beyond_horizon_at_end_of_dataset(tmp_path: Path) -> None:
-    # F1 follow-up: at the last index of the dataset, h=2 has no future ground
-    # truth (i + h - 1 >= len(df)) and must be skipped (no y_true=NaN silently).
+    # ADR-0003 Opcao (a): at decision_idx=i, target_timestamp = dataset_timestamps[i + h].
+    # For the last decision_ts (i=19, n_days=20), h=1 needs index 20 and h=2
+    # needs index 21 — both out of bounds. Both must be skipped.
     silver = tmp_path / "silver"
     ds = tmp_path / "ds.parquet"
     _write_deterministic_dataset(ds, n_days=20)
@@ -506,12 +508,20 @@ def test_baseline_y_true_skips_rows_beyond_horizon_at_end_of_dataset(tmp_path: P
         baselines=["zero_return"],
     )
     oos = _load_oos(silver)
-    # The last decision_ts (2024-01-20, i=19) emits h=1 (y_true=target_returns[19]=20)
-    # but must skip h=2 (would need target_returns[20], absent).
     last_ts = "2024-01-20T00:00:00+00:00"
     rows_last = oos[oos["timestamp_utc"] == last_ts]
     horizons_at_last = set(rows_last["horizon"].astype(int))
-    assert horizons_at_last == {1}, f"expected only h=1 at last decision_ts, got {horizons_at_last}"
+    assert horizons_at_last == set(), (
+        f"expected no rows at last decision_ts (both horizons out of dataset), "
+        f"got {horizons_at_last}"
+    )
+    # Penultimate decision_ts (i=18) can emit h=1 (target=i+1=19) but not h=2.
+    penult_ts = "2024-01-19T00:00:00+00:00"
+    rows_penult = oos[oos["timestamp_utc"] == penult_ts]
+    horizons_at_penult = set(rows_penult["horizon"].astype(int))
+    assert horizons_at_penult == {1}, (
+        f"expected only h=1 at penultimate decision_ts, got {horizons_at_penult}"
+    )
 
 
 def test_baseline_empty_list_returns_noop_result(tmp_path: Path) -> None:

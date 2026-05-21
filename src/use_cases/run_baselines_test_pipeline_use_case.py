@@ -198,19 +198,18 @@ class RunBaselinesTestPipelineUseCase:
         seeds = _extract_seeds(config)
         training = config.get("training_config") or {}
         max_pred = int(training.get("max_prediction_length") or 1)
-        # Empirical alignment (validated against F.1 smoke 2026-05-18 re-run):
-        # the TFT trainer's first emitted decision per split lands at
-        # `max_encoder_length + max_prediction_length - 1` trading rows
-        # past split_start, not just `max_encoder_length`. The extra
-        # `max_prediction_length - 1` rows are skipped because the TFT
-        # TimeSeriesDataSet requires a full decoder window to be available
-        # from the first decision.
+        # Per ADR-0003 Opcao (a) (Stage 20):
+        # - Start: TFT trainer's first valid sample has encoder_end at row
+        #   (max_encoder_length - 1) of the split. Baselines align to that.
+        # - End: TFT's pytorch_forecasting TimeSeriesDataSet only produces
+        #   samples whose full decoder window exists — i.e. last valid
+        #   decision_idx is `split_len - max_prediction_length - 1` (decoder
+        #   spans decision_idx+1..decision_idx+max_prediction_length, all
+        #   must exist). Baselines drop the same trailing rows to keep
+        #   timestamp sets aligned per (decision_idx, h).
         base_offset = _resolve_offset_days(config, per_config)
-        offset_start = base_offset + max(max_pred - 1, 0)
-        # TFT emits up to the last row of each split (the use case's own
-        # `y_true_idx >= len(target_returns)` guard already drops impossible
-        # rows per horizon for the baseline). No explicit end-side offset.
-        offset_end = 0
+        offset_start = max(base_offset - 1, 0)
+        offset_end = max(max_pred, 0)
 
         horizons_raw = training.get("evaluation_horizons")
         if horizons_raw is None:

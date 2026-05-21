@@ -25,11 +25,44 @@ avaliados separadamente. Nao cobre as metricas em si (ver
   frente o modelo emite em uma unica forward pass.
 - **`evaluation_horizons`:** lista de horizontes efetivamente avaliados (subset
   de `[1, ..., max_prediction_length]`).
-- **`target_timestamp`:** timestamp do periodo alvo previsto. Chave de
-  alinhamento em comparacoes pareadas; calculado por horizonte.
+- **`target_timestamp`:** `dataset_timestamps[decision_idx + h]`. Indexado
+  em trading days (consulta no dataset, nao `pd.Timedelta`). Ver §"Convencao
+  canonica de target_timestamp e y_true" abaixo.
 - **N efetivo (nao-sobreposto):** numero de observacoes verdadeiramente
   independentes por horizonte. Para h+30 com janelas diarias, `N_overlapped /
   30` aproxima o N estatisticamente util.
+
+## Convencao canonica de target_timestamp e y_true
+
+Fixada em [ADR-0003](../01_architecture/decisions/ADR-0003-multi-horizon-prediction-persister.md)
+Opcao (a) e materializada em
+[`src/domain/services/multi_horizon_prediction_persister.py`](../../src/domain/services/multi_horizon_prediction_persister.py):
+
+- **Anchor:** `timestamp_utc = decision_day = dataset_timestamps[decision_idx]`.
+  E o ultimo dia do encoder (nao decoder_end, nao calendar arithmetic).
+- **target_timestamp:** `target_timestamp_utc = dataset_timestamps[decision_idx + h]`,
+  indexado em **trading days** (consulta no dataset). Pula weekends/holidays
+  naturalmente porque o dataset ja e trading-day indexed.
+- **y_true:** `dataset.target_return[decision_idx + h - 1]`. Convencao
+  financeira: `h=1` significa "return realizado no dia seguinte a decisao",
+  consistente com literatura. `target_return[t] = log(close[t+1]/close[t])`
+  por `src/use_cases/build_tft_dataset_use_case.py:563`.
+- **decision_idx:** coluna `int64` em `fact_oos_predictions` que mapeia
+  diretamente para `time_idx` do dataset. Materializa o invariante no schema
+  (nao apenas no codigo). Required em
+  [`analytics_store_schema.py`](../../src/infrastructure/schemas/analytics_store_schema.py)
+  `FACT_OOS_PREDICTIONS_SCHEMA.required_columns`.
+- **Borda:** se `decision_idx + h >= len(dataset_timestamps)`, levantar
+  `IncompletePredictionWindowError` e pular a linha. AGENT_CORE: skip rows
+  with missing supervision.
+
+Persistencia: ambos os pipelines (TFT trainer e baseline runner) usam
+`MultiHorizonPredictionPersister.build_record()` para emitir registros.
+Convencao deixa de ser implicita e distribuida; vira objeto explicito
+do dominio com testes proprios em
+[`tests/unit/domain/services/test_multi_horizon_prediction_persister.py`](../../tests/unit/domain/services/test_multi_horizon_prediction_persister.py)
+e guard cross-pipeline em
+[`tests/integration/test_tft_baselines_y_true_alignment.py`](../../tests/integration/test_tft_baselines_y_true_alignment.py).
 
 ## Decisoes e escolhas
 - **Horizontes principais: h+1, h+7, h+30.** *Why:* cobrem curto, medio e
@@ -54,7 +87,9 @@ avaliados separadamente. Nao cobre as metricas em si (ver
 | Coluna | Tipo | Descricao |
 |---|---|---|
 | `horizon` | `int64` | numero de passos a frente (1, 7, 30) |
-| `target_timestamp_utc` | `timestamp[utc]` | timestamp alvo previsto |
+| `decision_idx` | `int64` | indice no dataset original (time_idx) do dia de decisao. Materializa Opcao (a) (ADR-0003). |
+| `timestamp_utc` | `timestamp[utc]` | decision_day = `dataset_timestamps[decision_idx]` |
+| `target_timestamp_utc` | `timestamp[utc]` | `dataset_timestamps[decision_idx + h]` (trading-day indexed) |
 | `y_true`, `y_pred` | `float64` | valor real e previsao pontual no horizonte |
 | `quantile_p10/p50/p90` | `float64` | quantis raw |
 | `quantile_p10/p50/p90_post_guardrail` | `float64` | quantis monotonicos |
@@ -69,12 +104,21 @@ Grao logico de `fact_oos_predictions`:
 - `target_timestamp` monotonico por (`run_id`, `split`, `horizon`).
 
 ## Fonte da verdade (codigo)
+- `src/domain/services/multi_horizon_prediction_persister.py` — domain
+  service unico que materializa a convencao canonica (Opcao (a) ADR-0003)
+  para `fact_oos_predictions`. Ambos pipelines (TFT + baselines) emitem
+  rows via `MultiHorizonPredictionPersister.build_record(...)`.
 - `src/use_cases/train_tft_model_use_case.py` — define
   `evaluation_horizons` e propaga para o trainer
+- `src/use_cases/run_baselines_use_case.py` — runner statistical baselines
+  (zero_return, historical_mean_rolling, historical_quantiles_rolling)
+  com mesma convencao via Persister
 - `src/adapters/pytorch_forecasting_tft_trainer.py` — emissao de predicoes
   multi-horizonte (`selected_horizons`, `selected_idx`)
 - `src/use_cases/refresh_analytics_store_use_case.py` — calculo de metricas
   por horizonte e intersecao pareada
+- `src/infrastructure/schemas/analytics_store_schema.py` — `decision_idx`
+  required em `FACT_OOS_PREDICTIONS_SCHEMA`
 
 ## Documentos relacionados
 - `04_evaluation/METRICS_DEFINITIONS.md` — formulas das metricas por horizonte

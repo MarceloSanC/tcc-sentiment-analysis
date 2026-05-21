@@ -12,6 +12,11 @@ from typing import Any, Literal
 import numpy as np
 import pandas as pd
 
+from src.domain.services.multi_horizon_prediction_persister import (
+    IncompletePredictionWindowError,
+    MultiHorizonPredictionPersister,
+    RunContext,
+)
 from src.domain.services.quantile_guardrail_service import QuantileGuardrailService
 from src.infrastructure.schemas.analytics_store_schema import ANALYTICS_SCHEMA_VERSION
 from src.interfaces.analytics_run_repository import AnalyticsRunRepository
@@ -204,6 +209,7 @@ class RunBaselinesUseCase:
         skipped_warmup = 0
         target_returns = df["target_return"].to_numpy(dtype="float64")
         timestamps = df["timestamp"].to_numpy()
+        dataset_timestamps = [pd.Timestamp(t) for t in timestamps]
 
         # Indices in chronological order; history at index i is strictly target_returns[:i].
         for split_name, (start, end) in split_definitions.items():
@@ -220,8 +226,20 @@ class RunBaselinesUseCase:
                 idxs = idxs[n_start:]
             if n_end:
                 idxs = idxs[:-n_end] if n_end < len(idxs) else []
+
+            run_context = RunContext(
+                schema_version=ANALYTICS_SCHEMA_VERSION,
+                run_id=run_id,
+                model_version=str(model_version),
+                asset=str(asset),
+                feature_set_name=str(feature_set_name),
+                config_signature=str(config_signature),
+                split=str(split_name),
+                fold="none",
+                seed=int(seed) if seed is not None else 0,
+            )
+
             for i in idxs:
-                decision_ts = pd.Timestamp(timestamps[i])
                 history = target_returns[:i]
                 prediction = self._compute_prediction(
                     baseline_name=baseline_name,
@@ -237,54 +255,34 @@ class RunBaselinesUseCase:
                     h_int = int(h)
                     if h_int < 1:
                         continue
-                    target_ts = decision_ts + pd.Timedelta(days=max(h_int - 1, 0))
-                    if target_ts <= decision_ts and h_int > 1:
-                        # Defensive: per the convention target_ts >= decision_ts for h>=2.
-                        continue
-                    # y_true must align with the TFT multi-horizon convention: actuals_matrix[i, h-1]
-                    # is the target_return at the future step (h-1 ahead). See
-                    # src/adapters/pytorch_forecasting_tft_trainer.py:480-544 (actuals from dataloader is
-                    # [batch, horizon]) + src/use_cases/train_tft_model_use_case.py:790 (y_true_m[i][h_idx]).
-                    # Using target_returns[i] for all horizons would mis-pair candidate vs baseline at h>=2.
+                    # ADR-0003 Opcao (a): y_true = target_return[decision_idx + h - 1].
                     y_true_idx = i + h_int - 1
                     if y_true_idx >= len(target_returns):
-                        # No future ground truth available for this horizon at this decision_ts.
                         continue
                     y_true_value = target_returns[y_true_idx]
                     if not np.isfinite(y_true_value):
                         # AGENT_CORE Non-Negotiable: skip rows with missing supervision.
                         continue
                     guardrail = QuantileGuardrailService.enforce_monotonic_triplet(q10, q50, q90)
-                    err = float(y_pred - y_true_value)
-                    rows.append(
-                        {
-                            "schema_version": ANALYTICS_SCHEMA_VERSION,
-                            "run_id": run_id,
-                            "model_version": str(model_version),
-                            "asset": str(asset),
-                            "feature_set_name": str(feature_set_name),
-                            "config_signature": str(config_signature),
-                            "split": str(split_name),
-                            "fold": "none",
-                            "seed": int(seed) if seed is not None else 0,
-                            "horizon": h_int,
-                            "timestamp_utc": str(decision_ts.isoformat()),
-                            "target_timestamp_utc": str(target_ts.isoformat()),
-                            "y_true": float(y_true_value),
-                            "y_pred": float(y_pred),
-                            "error": err,
-                            "abs_error": float(abs(err)),
-                            "sq_error": float(err * err),
-                            "quantile_p10": float(q10),
-                            "quantile_p50": float(q50),
-                            "quantile_p90": float(q90),
-                            "quantile_p10_post_guardrail": guardrail.p10_post,
-                            "quantile_p50_post_guardrail": guardrail.p50_post,
-                            "quantile_p90_post_guardrail": guardrail.p90_post,
-                            "quantile_guardrail_applied": int(guardrail.applied),
-                            "year": int(target_ts.year),
-                        }
-                    )
+                    try:
+                        record = MultiHorizonPredictionPersister.build_record(
+                            decision_idx=i,
+                            h=h_int,
+                            y_true=float(y_true_value),
+                            y_pred=float(y_pred),
+                            q10=float(q10),
+                            q50=float(q50),
+                            q90=float(q90),
+                            q10_post=guardrail.p10_post,
+                            q50_post=guardrail.p50_post,
+                            q90_post=guardrail.p90_post,
+                            guardrail_applied=bool(guardrail.applied),
+                            dataset_timestamps=dataset_timestamps,
+                            run_context=run_context,
+                        )
+                    except IncompletePredictionWindowError:
+                        continue
+                    rows.append(record.to_dict())
         return rows, skipped_warmup
 
     def _persist_dim_run(

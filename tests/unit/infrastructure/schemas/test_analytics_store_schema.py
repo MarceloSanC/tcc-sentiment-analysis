@@ -221,6 +221,25 @@ def test_quantile_columns_are_mandatory_in_oos_schema() -> None:
     assert "model_version" in required
 
 
+def test_decision_idx_column_in_fact_oos_predictions_schema() -> None:
+    """Per ADR-0003 / Stage 20.1+20.3: decision_idx is the schema-level anchor
+    for Opcao (a) and is required after both writers (train_tft + baselines)
+    emit it via MultiHorizonPredictionPersister.
+    """
+    assert "decision_idx" in FACT_OOS_PREDICTIONS_SCHEMA.columns
+    assert FACT_OOS_PREDICTIONS_SCHEMA.columns["decision_idx"] == "int64"
+    assert "decision_idx" in FACT_OOS_PREDICTIONS_SCHEMA.required_columns
+
+
+def test_decision_idx_column_in_fact_inference_predictions_schema() -> None:
+    """Mirror column on inference table (not required yet; inference writer
+    migrated post-Stage 20 per ADR-0003 §C1).
+    """
+    assert "decision_idx" in FACT_INFERENCE_PREDICTIONS_SCHEMA.columns
+    assert FACT_INFERENCE_PREDICTIONS_SCHEMA.columns["decision_idx"] == "int64"
+    assert "decision_idx" not in FACT_INFERENCE_PREDICTIONS_SCHEMA.required_columns
+
+
 def test_analytics_table_coverage_matches_checklist_core_tables() -> None:
     names = set(ANALYTICS_TABLE_SCHEMAS.keys())
     expected = {
