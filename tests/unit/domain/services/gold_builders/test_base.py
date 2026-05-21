@@ -104,13 +104,22 @@ def test_gold_builder_requirement_error_is_runtime_error() -> None:
 def test_normalize_parent_sweep_id_strips_trailing_dot_zero() -> None:
     df = pd.DataFrame({"parent_sweep_id": ["123.0", "ok", None]})
     out = normalize_parent_sweep_id_for_merge(df)
-    assert out["parent_sweep_id"].tolist() == ["123", "ok", None]
+    result = out["parent_sweep_id"].tolist()
+    assert len(result) == 3
+    assert result[0] == "123"
+    assert result[1] == "ok"
+    assert pd.isna(result[2])
 
 
 def test_normalize_parent_sweep_id_drops_sentinel_strings() -> None:
     df = pd.DataFrame({"parent_sweep_id": ["nan", "<NA>", "null", "abc"]})
     out = normalize_parent_sweep_id_for_merge(df)
-    assert out["parent_sweep_id"].tolist() == [None, None, None, "abc"]
+    result = out["parent_sweep_id"].tolist()
+    assert len(result) == 4
+    assert pd.isna(result[0])
+    assert pd.isna(result[1])
+    assert pd.isna(result[2])
+    assert result[3] == "abc"
 
 
 def test_normalize_parent_sweep_id_noop_when_column_missing() -> None:
