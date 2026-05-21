@@ -1,12 +1,21 @@
-"""Test-only adapters mapping the legacy `RefreshAnalyticsStoreUseCase._build_gold_*`
-direct-args signatures to the new R-22 `GoldBuilder.build(snapshot, ctx)`
-API.
+"""Transitional bridge between legacy direct-args test signatures and
+the new R-22 ``GoldBuilder`` API.
 
-Wires DataFrames into a `GoldBuilderSnapshot` + `BuildContext` and
-calls the production builder so existing unit tests keep their
-direct-input ergonomics without the cluster files needing extra public
-functions. The helpers live under `tests/_helpers/` and are NOT
-imported by production code.
+Maps the legacy ``RefreshAnalyticsStoreUseCase._build_gold_*``
+direct-args call shape to ``GoldBuilder.build(snapshot, ctx)`` by
+wiring DataFrames into a :class:`GoldBuilderSnapshot` plus a
+:class:`BuildContext` and invoking the production builder. This keeps
+the existing unit-test ergonomics without forcing the cluster files
+to expose extra public functions.
+
+Slated for removal once existing test files
+(``test_refresh_analytics_store_use_case.py``,
+``test_inference_to_gold_parent_sweep_id.py``) are refactored to
+construct ``GoldBuilderSnapshot`` and ``BuildContext`` directly.
+Tracked as a follow-up in
+``docs/07_reports/option_b_execution_log_2026-05-19.md`` under the
+R-22 fix-up section. The helpers live under ``tests/_helpers/`` and
+are NOT imported by production code.
 """
 from __future__ import annotations
 
