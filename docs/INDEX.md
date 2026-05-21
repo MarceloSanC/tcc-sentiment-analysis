@@ -82,6 +82,9 @@ Critico para rigor anti-leakage.
   (PRICE/TECHNICAL/SENTIMENT/FUNDAMENTAL), warmup e tags anti-leakage.
 - [`02_data/QUALITY_GATES.md`](02_data/QUALITY_GATES.md) : checks aplicados durante refresh do analytics
   store (integridade, cobertura, contratos quantilicos).
+- [`02_data/DATA_PIPELINE_WALKTHROUGH.md`](02_data/DATA_PIPELINE_WALKTHROUGH.md) : walk-through pedagogico
+  exaustivo do pipeline (raw -> processed -> silver -> gold) — inputs/outputs/calculos com refs file:line
+  por celula (stage x scope) e lacunas conhecidas.
 
 ### `03_modeling/` — Treino, Inferencia e Estrategia
 Como os modelos sao treinados, inferidos e versionados. Politica de sweeps e
