@@ -1,0 +1,298 @@
+{
+  "column_stats": {
+    "asset": {
+      "n_null": 0,
+      "nunique": 1
+    },
+    "confidence_calibrated": {
+      "max": 0.2786241413194653,
+      "mean": 0.2114293975581379,
+      "min": 0.12525254630202973,
+      "n_null": 14185,
+      "sum": 0.8457175902325516
+    },
+    "confidence_calibrated_post_guardrail": {
+      "max": 0.2786241413194653,
+      "mean": 0.2114293975581379,
+      "min": 0.12525254630202973,
+      "n_null": 14185,
+      "sum": 0.8457175902325516
+    },
+    "confidence_calibrated_raw": {
+      "max": 0.9686964005890242,
+      "mean": 0.8534870679892037,
+      "min": 0.0,
+      "n_null": 12835,
+      "sum": 1155.6214900573818
+    },
+    "config_signature": {
+      "n_null": 0,
+      "nunique": 6902
+    },
+    "coverage_error_post_guardrail": {
+      "max": -0.5745098039215687,
+      "mean": -0.6290998217468806,
+      "min": -0.698989898989899,
+      "n_null": 14185,
+      "sum": -2.5163992869875225
+    },
+    "coverage_error_raw": {
+      "max": 0.16392785571142277,
+      "mean": -0.04606800219496443,
+      "min": -0.8,
+      "n_null": 12835,
+      "sum": -62.376074971981836
+    },
+    "coverage_nominal": {
+      "max": 0.8,
+      "mean": 0.8,
+      "min": 0.8,
+      "n_null": 0,
+      "sum": 11351.2
+    },
+    "feature_set_name": {
+      "n_null": 0,
+      "nunique": 13
+    },
+    "horizon": {
+      "max": 7.0,
+      "mean": 1.000845725562055,
+      "min": 1.0,
+      "n_null": 0,
+      "sum": 14201.0
+    },
+    "mean_pinball_post_guardrail": {
+      "max": 0.011530236034567456,
+      "mean": 0.009899100852835692,
+      "min": 0.008066130954806664,
+      "n_null": 14185,
+      "sum": 0.03959640341134277
+    },
+    "mean_pinball_raw": {
+      "max": 0.012753962083538973,
+      "mean": 0.004689946405094344,
+      "min": 0.0032864342812463634,
+      "n_null": 12835,
+      "sum": 6.350187432497742
+    },
+    "mpiw_post_guardrail": {
+      "max": 0.01175932316839987,
+      "mean": 0.009859136937430504,
+      "min": 0.007989320180830404,
+      "n_null": 14185,
+      "sum": 0.039436547749722016
+    },
+    "mpiw_raw": {
+      "max": 0.0669182503786014,
+      "mean": 0.03884708104939233,
+      "min": -0.00863307189908536,
+      "n_null": 12835,
+      "sum": 52.598947740877215
+    },
+    "n_samples": {
+      "max": 2767.0,
+      "mean": 543.3419550355909,
+      "min": 99.0,
+      "n_null": 0,
+      "sum": 7709479.0
+    },
+    "parent_sweep_id": {
+      "n_null": 12835,
+      "nunique": 13
+    },
+    "picp_post_guardrail": {
+      "max": 0.22549019607843138,
+      "mean": 0.17090017825311943,
+      "min": 0.10101010101010101,
+      "n_null": 14185,
+      "sum": 0.6836007130124777
+    },
+    "picp_raw": {
+      "max": 0.9639278557114228,
+      "mean": 0.7539319978050356,
+      "min": 0.0,
+      "n_null": 12835,
+      "sum": 1020.8239250280183
+    },
+    "pinball_q10_post_guardrail": {
+      "max": 0.010557009515057395,
+      "mean": 0.009260332501070959,
+      "min": 0.007989554233862176,
+      "n_null": 14185,
+      "sum": 0.037041330004283834
+    },
+    "pinball_q10_raw": {
+      "max": 0.013612810617861196,
+      "mean": 0.003659287948048703,
+      "min": 0.002427745502868647,
+      "n_null": 12835,
+      "sum": 4.954675881657944
+    },
+    "pinball_q50_post_guardrail": {
+      "max": 0.01256863334356699,
+      "mean": 0.011018692625869044,
+      "min": 0.009295906968641337,
+      "n_null": 14185,
+      "sum": 0.04407477050347618
+    },
+    "pinball_q50_raw": {
+      "max": 0.012715049052282913,
+      "mean": 0.006870125215291108,
+      "min": 0.004949588532597035,
+      "n_null": 12835,
+      "sum": 9.30214954150416
+    },
+    "pinball_q90_post_guardrail": {
+      "max": 0.011707263786052918,
+      "mean": 0.009418277431567078,
+      "min": 0.006780282192987357,
+      "n_null": 14185,
+      "sum": 0.03767310972626831
+    },
+    "pinball_q90_raw": {
+      "max": 0.01238146773383675,
+      "mean": 0.003540426051943219,
+      "min": 0.00231644131611926,
+      "n_null": 12835,
+      "sum": 4.793736874331119
+    },
+    "pred_interval_width_post_guardrail": {
+      "max": 0.01175932316839987,
+      "mean": 0.009859136937430504,
+      "min": 0.007989320180830404,
+      "n_null": 14185,
+      "sum": 0.039436547749722016
+    },
+    "pred_interval_width_raw": {
+      "max": 0.0669182503786014,
+      "mean": 0.03884708104939233,
+      "min": -0.00863307189908536,
+      "n_null": 12835,
+      "sum": 52.598947740877215
+    },
+    "prob_down": {
+      "max": 0.5455332037505692,
+      "mean": 0.38726159867703347,
+      "min": 0.2301543806290386,
+      "n_null": 14185,
+      "sum": 1.5490463947081339
+    },
+    "prob_down_post_guardrail": {
+      "max": 0.5455332037505692,
+      "mean": 0.38726159867703347,
+      "min": 0.2301543806290386,
+      "n_null": 14185,
+      "sum": 1.5490463947081339
+    },
+    "prob_down_raw": {
+      "max": 0.6558926457094163,
+      "mean": 0.4919624122104964,
+      "min": 0.0,
+      "n_null": 12835,
+      "sum": 666.1171061330122
+    },
+    "prob_up": {
+      "max": 0.7698456193709614,
+      "mean": 0.6127384013229665,
+      "min": 0.45446679624943076,
+      "n_null": 14185,
+      "sum": 2.450953605291866
+    },
+    "prob_up_post_guardrail": {
+      "max": 0.7698456193709614,
+      "mean": 0.6127384013229665,
+      "min": 0.45446679624943076,
+      "n_null": 14185,
+      "sum": 2.450953605291866
+    },
+    "prob_up_raw": {
+      "max": 1.0,
+      "mean": 0.5080375877895036,
+      "min": 0.3441073542905837,
+      "n_null": 12835,
+      "sum": 687.8828938669878
+    },
+    "run_id": {
+      "n_null": 0,
+      "nunique": 6902
+    },
+    "split": {
+      "n_null": 0,
+      "nunique": 3
+    }
+  },
+  "columns": [
+    "run_id",
+    "asset",
+    "feature_set_name",
+    "parent_sweep_id",
+    "config_signature",
+    "split",
+    "horizon",
+    "n_samples",
+    "pinball_q10_raw",
+    "pinball_q50_raw",
+    "pinball_q90_raw",
+    "mean_pinball_raw",
+    "picp_raw",
+    "mpiw_raw",
+    "pred_interval_width_raw",
+    "coverage_error_raw",
+    "confidence_calibrated_raw",
+    "pinball_q10_post_guardrail",
+    "pinball_q50_post_guardrail",
+    "pinball_q90_post_guardrail",
+    "mean_pinball_post_guardrail",
+    "picp_post_guardrail",
+    "mpiw_post_guardrail",
+    "pred_interval_width_post_guardrail",
+    "coverage_error_post_guardrail",
+    "confidence_calibrated_post_guardrail",
+    "prob_up_raw",
+    "prob_up_post_guardrail",
+    "prob_down_raw",
+    "prob_down_post_guardrail",
+    "coverage_nominal",
+    "prob_up",
+    "prob_down",
+    "confidence_calibrated"
+  ],
+  "dtypes": {
+    "asset": "object",
+    "confidence_calibrated": "float64",
+    "confidence_calibrated_post_guardrail": "float64",
+    "confidence_calibrated_raw": "float64",
+    "config_signature": "object",
+    "coverage_error_post_guardrail": "float64",
+    "coverage_error_raw": "float64",
+    "coverage_nominal": "float64",
+    "feature_set_name": "object",
+    "horizon": "int64",
+    "mean_pinball_post_guardrail": "float64",
+    "mean_pinball_raw": "float64",
+    "mpiw_post_guardrail": "float64",
+    "mpiw_raw": "float64",
+    "n_samples": "int64",
+    "parent_sweep_id": "object",
+    "picp_post_guardrail": "float64",
+    "picp_raw": "float64",
+    "pinball_q10_post_guardrail": "float64",
+    "pinball_q10_raw": "float64",
+    "pinball_q50_post_guardrail": "float64",
+    "pinball_q50_raw": "float64",
+    "pinball_q90_post_guardrail": "float64",
+    "pinball_q90_raw": "float64",
+    "pred_interval_width_post_guardrail": "float64",
+    "pred_interval_width_raw": "float64",
+    "prob_down": "float64",
+    "prob_down_post_guardrail": "float64",
+    "prob_down_raw": "float64",
+    "prob_up": "float64",
+    "prob_up_post_guardrail": "float64",
+    "prob_up_raw": "float64",
+    "run_id": "object",
+    "split": "object"
+  },
+  "n_cols": 34,
+  "n_rows": 14189
+}

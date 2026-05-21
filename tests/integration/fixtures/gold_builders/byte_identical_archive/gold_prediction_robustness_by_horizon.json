@@ -1,0 +1,112 @@
+{
+  "column_stats": {
+    "asset": {
+      "n_null": 0,
+      "nunique": 1
+    },
+    "ci95_high": {
+      "max": 4.086436036507933,
+      "mean": 0.5407727553228064,
+      "min": -0.8,
+      "n_null": 0,
+      "sum": 26433.513052934104
+    },
+    "ci95_low": {
+      "max": 4.086436036507933,
+      "mean": 0.5407727553228064,
+      "min": -0.8,
+      "n_null": 0,
+      "sum": 26433.513052934104
+    },
+    "config_signature": {
+      "n_null": 0,
+      "nunique": 6901
+    },
+    "feature_set_name": {
+      "n_null": 0,
+      "nunique": 13
+    },
+    "horizon": {
+      "max": 7.0,
+      "mean": 1.0034369182299872,
+      "min": 1.0,
+      "n_null": 0,
+      "sum": 49049.0
+    },
+    "iqr": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 0,
+      "sum": 0.0
+    },
+    "mean": {
+      "max": 4.086436036507933,
+      "mean": 0.5407727553228064,
+      "min": -0.8,
+      "n_null": 0,
+      "sum": 26433.513052934104
+    },
+    "median": {
+      "max": 4.086436036507933,
+      "mean": 0.5407727553228064,
+      "min": -0.8,
+      "n_null": 0,
+      "sum": 26433.513052934104
+    },
+    "metric": {
+      "n_null": 0,
+      "nunique": 28
+    },
+    "n_runs": {
+      "max": 1.0,
+      "mean": 1.0,
+      "min": 1.0,
+      "n_null": 0,
+      "sum": 48881.0
+    },
+    "parent_sweep_id": {
+      "n_null": 37350,
+      "nunique": 13
+    },
+    "std": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 0,
+      "sum": 0.0
+    }
+  },
+  "columns": [
+    "asset",
+    "feature_set_name",
+    "parent_sweep_id",
+    "config_signature",
+    "horizon",
+    "metric",
+    "n_runs",
+    "mean",
+    "std",
+    "median",
+    "iqr",
+    "ci95_low",
+    "ci95_high"
+  ],
+  "dtypes": {
+    "asset": "object",
+    "ci95_high": "float64",
+    "ci95_low": "float64",
+    "config_signature": "object",
+    "feature_set_name": "object",
+    "horizon": "int64",
+    "iqr": "float64",
+    "mean": "float64",
+    "median": "float64",
+    "metric": "object",
+    "n_runs": "int64",
+    "parent_sweep_id": "object",
+    "std": "float64"
+  },
+  "n_cols": 13,
+  "n_rows": 48881
+}

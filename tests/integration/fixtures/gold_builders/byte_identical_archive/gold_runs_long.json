@@ -1,0 +1,145 @@
+{
+  "column_stats": {
+    "asset": {
+      "n_null": 0,
+      "nunique": 1
+    },
+    "config_signature": {
+      "n_null": 0,
+      "nunique": 6902
+    },
+    "created_at_utc": {
+      "n_null": 0,
+      "nunique": 6902
+    },
+    "directional_accuracy": {
+      "max": 0.5956175298804781,
+      "mean": 0.5157919758334408,
+      "min": 0.41649484536082476,
+      "n_null": 0,
+      "sum": 7318.572345100692
+    },
+    "feature_set_hash": {
+      "n_null": 0,
+      "nunique": 13
+    },
+    "feature_set_name": {
+      "n_null": 0,
+      "nunique": 13
+    },
+    "fold": {
+      "n_null": 14189,
+      "nunique": 0
+    },
+    "mae": {
+      "max": 0.025397399440407753,
+      "mean": 0.013652327893183304,
+      "min": 0.009880691766738892,
+      "n_null": 0,
+      "sum": 193.7128804763779
+    },
+    "mape": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 0,
+      "sum": 0.0
+    },
+    "model_version": {
+      "n_null": 0,
+      "nunique": 6902
+    },
+    "n_samples": {
+      "max": 2769.0,
+      "mean": 550.9957713721898,
+      "min": 125.0,
+      "n_null": 0,
+      "sum": 7818079.0
+    },
+    "parent_sweep_id": {
+      "n_null": 12837,
+      "nunique": 13
+    },
+    "rmse": {
+      "max": 0.03672182559967041,
+      "mean": 0.019095655566135097,
+      "min": 0.013323971070349216,
+      "n_null": 0,
+      "sum": 270.9482568278909
+    },
+    "run_id": {
+      "n_null": 0,
+      "nunique": 6902
+    },
+    "seed": {
+      "max": 20260501.0,
+      "mean": 2894.9179646204807,
+      "min": 7.0,
+      "n_null": 0,
+      "sum": 41075991.0
+    },
+    "smape": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 0,
+      "sum": 0.0
+    },
+    "split": {
+      "n_null": 0,
+      "nunique": 3
+    },
+    "status": {
+      "n_null": 0,
+      "nunique": 1
+    },
+    "trial_number": {
+      "n_null": 14189,
+      "nunique": 0
+    }
+  },
+  "columns": [
+    "run_id",
+    "asset",
+    "feature_set_name",
+    "feature_set_hash",
+    "config_signature",
+    "model_version",
+    "parent_sweep_id",
+    "trial_number",
+    "fold",
+    "seed",
+    "split",
+    "rmse",
+    "mae",
+    "mape",
+    "smape",
+    "directional_accuracy",
+    "n_samples",
+    "status",
+    "created_at_utc"
+  ],
+  "dtypes": {
+    "asset": "object",
+    "config_signature": "object",
+    "created_at_utc": "object",
+    "directional_accuracy": "float64",
+    "feature_set_hash": "object",
+    "feature_set_name": "object",
+    "fold": "object",
+    "mae": "float64",
+    "mape": "float64",
+    "model_version": "object",
+    "n_samples": "int64",
+    "parent_sweep_id": "object",
+    "rmse": "float64",
+    "run_id": "object",
+    "seed": "int64",
+    "smape": "float64",
+    "split": "object",
+    "status": "object",
+    "trial_number": "object"
+  },
+  "n_cols": 19,
+  "n_rows": 14189
+}

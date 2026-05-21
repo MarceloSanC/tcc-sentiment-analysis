@@ -1,0 +1,94 @@
+{
+  "column_stats": {
+    "asset": {
+      "n_null": 0,
+      "nunique": 1
+    },
+    "ci95_high": {
+      "max": 0.5944333996023857,
+      "mean": 0.1821421337408442,
+      "min": 0.009880691766738892,
+      "n_null": 0,
+      "sum": 3771.43502123792
+    },
+    "ci95_low": {
+      "max": 0.5944333996023857,
+      "mean": 0.1821421337408442,
+      "min": 0.009880691766738892,
+      "n_null": 0,
+      "sum": 3771.43502123792
+    },
+    "config_signature": {
+      "n_null": 0,
+      "nunique": 6902
+    },
+    "feature_set_name": {
+      "n_null": 0,
+      "nunique": 13
+    },
+    "mean": {
+      "max": 0.5944333996023857,
+      "mean": 0.1821421337408442,
+      "min": 0.009880691766738892,
+      "n_null": 0,
+      "sum": 3771.43502123792
+    },
+    "metric": {
+      "n_null": 0,
+      "nunique": 3
+    },
+    "n": {
+      "max": 1.0,
+      "mean": 1.0,
+      "min": 1.0,
+      "n_null": 0,
+      "sum": 20706.0
+    },
+    "parent_sweep_id": {
+      "n_null": 18678,
+      "nunique": 13
+    },
+    "se": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 0,
+      "sum": 0.0
+    },
+    "std": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 0,
+      "sum": 0.0
+    }
+  },
+  "columns": [
+    "asset",
+    "feature_set_name",
+    "parent_sweep_id",
+    "config_signature",
+    "metric",
+    "n",
+    "mean",
+    "std",
+    "se",
+    "ci95_low",
+    "ci95_high"
+  ],
+  "dtypes": {
+    "asset": "object",
+    "ci95_high": "float64",
+    "ci95_low": "float64",
+    "config_signature": "object",
+    "feature_set_name": "object",
+    "mean": "float64",
+    "metric": "object",
+    "n": "int64",
+    "parent_sweep_id": "object",
+    "se": "float64",
+    "std": "float64"
+  },
+  "n_cols": 11,
+  "n_rows": 20706
+}

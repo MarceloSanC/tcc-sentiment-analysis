@@ -1,0 +1,127 @@
+{
+  "column_stats": {
+    "aligned_timestamps": {
+      "max": 691.0,
+      "mean": 490.331415679639,
+      "min": 482.0,
+      "n_null": 0,
+      "sum": 8693576.0
+    },
+    "asset": {
+      "n_null": 0,
+      "nunique": 1
+    },
+    "dm_stat": {
+      "max": 7.318520107748494,
+      "mean": 0.01654932307735882,
+      "min": -6.836081169992077,
+      "n_null": 0,
+      "sum": 293.4194981615718
+    },
+    "horizon": {
+      "max": 1.0,
+      "mean": 1.0,
+      "min": 1.0,
+      "n_null": 0,
+      "sum": 17730.0
+    },
+    "left_config": {
+      "n_null": 0,
+      "nunique": 1082
+    },
+    "mean_loss_diff_left_minus_right": {
+      "max": 0.00011080822576888339,
+      "mean": 1.2531527847603618e-07,
+      "min": -0.00010010621804144469,
+      "n_null": 0,
+      "sum": 0.0022218398873801214
+    },
+    "n": {
+      "max": 691.0,
+      "mean": 490.331415679639,
+      "min": 482.0,
+      "n_null": 0,
+      "sum": 8693576.0
+    },
+    "n_configs": {
+      "max": 50.0,
+      "mean": 39.47941342357586,
+      "min": 4.0,
+      "n_null": 0,
+      "sum": 699970.0
+    },
+    "parent_sweep_id": {
+      "n_null": 10830,
+      "nunique": 12
+    },
+    "pvalue_adj_holm": {
+      "max": 1.0,
+      "mean": 0.9902381315513328,
+      "min": 1.428923646074054e-10,
+      "n_null": 0,
+      "sum": 17556.92207240513
+    },
+    "pvalue_two_sided": {
+      "max": 0.9999647918873686,
+      "mean": 0.5538096263518041,
+      "min": 2.5068835896036035e-13,
+      "n_null": 0,
+      "sum": 9819.044675217487
+    },
+    "right_config": {
+      "n_null": 0,
+      "nunique": 1083
+    },
+    "significant_adj_0_05": {
+      "max": 1.0,
+      "mean": 0.006429780033840948,
+      "min": 0.0,
+      "n_null": 0,
+      "sum": 114.0
+    },
+    "split": {
+      "n_null": 0,
+      "nunique": 1
+    },
+    "split_signature": {
+      "n_null": 0,
+      "nunique": 10
+    }
+  },
+  "columns": [
+    "left_config",
+    "right_config",
+    "n",
+    "mean_loss_diff_left_minus_right",
+    "dm_stat",
+    "pvalue_two_sided",
+    "asset",
+    "parent_sweep_id",
+    "split_signature",
+    "split",
+    "horizon",
+    "aligned_timestamps",
+    "n_configs",
+    "pvalue_adj_holm",
+    "significant_adj_0_05"
+  ],
+  "dtypes": {
+    "aligned_timestamps": "int64",
+    "asset": "object",
+    "dm_stat": "float64",
+    "horizon": "int64",
+    "left_config": "object",
+    "mean_loss_diff_left_minus_right": "float64",
+    "n": "int64",
+    "n_configs": "int64",
+    "parent_sweep_id": "object",
+    "pvalue_adj_holm": "float64",
+    "pvalue_two_sided": "float64",
+    "right_config": "object",
+    "significant_adj_0_05": "bool",
+    "split": "object",
+    "split_signature": "object"
+  },
+  "n_cols": 15,
+  "n_rows": 17730
+}

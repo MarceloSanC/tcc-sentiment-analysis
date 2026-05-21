@@ -1,0 +1,85 @@
+{
+  "column_stats": {
+    "aligned_timestamps": {
+      "max": 691.0,
+      "mean": 493.75907883082374,
+      "min": 482.0,
+      "n_null": 0,
+      "sum": 557454.0
+    },
+    "asset": {
+      "n_null": 0,
+      "nunique": 1
+    },
+    "config_label": {
+      "n_null": 0,
+      "nunique": 1129
+    },
+    "horizon": {
+      "max": 1.0,
+      "mean": 1.0,
+      "min": 1.0,
+      "n_null": 0,
+      "sum": 1129.0
+    },
+    "mean_loss": {
+      "max": 0.0006551643860058243,
+      "mean": 0.00037201140483487683,
+      "min": 0.0001779230614944388,
+      "n_null": 0,
+      "sum": 0.42000087605857594
+    },
+    "n_configs": {
+      "max": 50.0,
+      "mean": 32.764393268379095,
+      "min": 4.0,
+      "n_null": 0,
+      "sum": 36991.0
+    },
+    "parent_sweep_id": {
+      "n_null": 454,
+      "nunique": 12
+    },
+    "selected_in_mcs_alpha_0_05": {
+      "max": 1.0,
+      "mean": 0.9716563330380869,
+      "min": 0.0,
+      "n_null": 0,
+      "sum": 1097.0
+    },
+    "split": {
+      "n_null": 0,
+      "nunique": 1
+    },
+    "split_signature": {
+      "n_null": 0,
+      "nunique": 10
+    }
+  },
+  "columns": [
+    "config_label",
+    "selected_in_mcs_alpha_0_05",
+    "mean_loss",
+    "asset",
+    "parent_sweep_id",
+    "split_signature",
+    "split",
+    "horizon",
+    "aligned_timestamps",
+    "n_configs"
+  ],
+  "dtypes": {
+    "aligned_timestamps": "int64",
+    "asset": "object",
+    "config_label": "object",
+    "horizon": "int64",
+    "mean_loss": "float64",
+    "n_configs": "int64",
+    "parent_sweep_id": "object",
+    "selected_in_mcs_alpha_0_05": "bool",
+    "split": "object",
+    "split_signature": "object"
+  },
+  "n_cols": 10,
+  "n_rows": 1129
+}
