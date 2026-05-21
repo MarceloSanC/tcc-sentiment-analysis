@@ -13,7 +13,13 @@ canonical_for: [adr_0004, quality_check_registry, validate_analytics_quality_arc
 # ADR-0004: QualityCheckRegistry
 
 ## Status
-Accepted (2026-05-19)
+Accepted (2026-05-19); **Implemented** em Stage R-21 (PR ainda aberta em
+2026-05-21). Migracao completa dos 27 checks (count corrigido vs ~20
+estimados no Context) para 4 cluster files; orchestrator reduzido de
+1.152 LOC para 307 LOC. Bit-identical verificado empiricamente contra
+`data/analytics_archive_pre_phase_b/silver` em ambos `scope_mode`
+(`cohort_decision` + `global_health`), com fixtures gravadas em
+`tests/integration/fixtures/quality_checks/`.
 
 ## Context
 
@@ -113,5 +119,7 @@ novo check = criar 1 classe + 1 arquivo de teste, sem tocar nos outros 19.
 ## Cross-link
 
 - Diagnostico: [`docs/07_reports/phase-gates/B_architectural_debt_2026-05-19.md`](../../07_reports/phase-gates/B_architectural_debt_2026-05-19.md) §"M-validate_quality"
-- Implementacao: PHASE_B_IMPLEMENTATION_CHECKLIST.md §Stage 21
+- Implementacao: PHASE_B_IMPLEMENTATION_CHECKLIST.md §Stage 21 + Stage R-21 (remediation plan)
 - Caso clinico: commits `584373e` (F.0.3 inicial) + `ab79996` (re-fix do mesmo F.0.3)
+- Stage R-21 implementacao final: [`docs/ai/STAGE_20_23_REMEDIATION_PLAN.md`](../../ai/STAGE_20_23_REMEDIATION_PLAN.md) §"Stage R-21"
+- Extension point (como adicionar check novo): [`docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md`](../ANALYTICS_STORE_ARCHITECTURE.md) §"Quality check extension point"

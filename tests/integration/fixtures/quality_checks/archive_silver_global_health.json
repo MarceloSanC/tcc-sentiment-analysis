@@ -1,0 +1,141 @@
+{
+  "passed": false,
+  "n_checks": 27,
+  "checks": [
+    {
+      "check": "required_tables_presence",
+      "passed": true,
+      "detail": "ok | scope_mode=global_health, scope_parent_sweep_prefixes=[], scope_splits=[], scope_horizons=[]"
+    },
+    {
+      "check": "inference_predictions_continuity",
+      "passed": true,
+      "detail": "ok | scope_mode=global_health, scope_parent_sweep_prefixes=[], scope_splits=[], scope_horizons=[]"
+    },
+    {
+      "check": "feature_contrib_local_continuity",
+      "passed": true,
+      "detail": "ok | scope_mode=global_health, scope_parent_sweep_prefixes=[], scope_splits=[], scope_horizons=[]"
+    },
+    {
+      "check": "run_id_execution_consistency",
+      "passed": true,
+      "detail": "run_id_null=0, duplicate_run_id=0, duplicate_execution_id=0 | scope_mode=global_health, scope_parent_sweep_prefixes=[], scope_splits=[], scope_horizons=[]"
+    },
+    {
+      "check": "referential_integrity",
+      "passed": true,
+      "detail": "ok | scope_mode=global_health, scope_parent_sweep_prefixes=[], scope_splits=[], scope_horizons=[]"
+    },
+    {
+      "check": "required_metrics_nan",
+      "passed": true,
+      "detail": "ok | scope_mode=global_health, scope_parent_sweep_prefixes=[], scope_splits=[], scope_horizons=[]"
+    },
+    {
+      "check": "temporal_consistency",
+      "passed": true,
+      "detail": "ok | scope_mode=global_health, scope_parent_sweep_prefixes=[], scope_splits=[], scope_horizons=[]"
+    },
+    {
+      "check": "oos_unique_key",
+      "passed": true,
+      "detail": "ok | scope_mode=global_health, scope_parent_sweep_prefixes=[], scope_splits=[], scope_horizons=[]"
+    },
+    {
+      "check": "oos_numeric_types",
+      "passed": true,
+      "detail": "ok | scope_mode=global_health, scope_parent_sweep_prefixes=[], scope_splits=[], scope_horizons=[]"
+    },
+    {
+      "check": "oos_horizon_coverage",
+      "passed": true,
+      "detail": "ok | scope_mode=global_health, scope_parent_sweep_prefixes=[], scope_splits=[], scope_horizons=[]"
+    },
+    {
+      "check": "oos_supervised_nulls",
+      "passed": true,
+      "detail": "ok | scope_mode=global_health, scope_parent_sweep_prefixes=[], scope_splits=[], scope_horizons=[]"
+    },
+    {
+      "check": "oos_interval_width_non_negative",
+      "passed": true,
+      "detail": "ok | scope_mode=global_health, scope_parent_sweep_prefixes=[], scope_splits=[], scope_horizons=[]"
+    },
+    {
+      "check": "oos_quantile_order",
+      "passed": true,
+      "detail": "ok | scope_mode=global_health, scope_parent_sweep_prefixes=[], scope_splits=[], scope_horizons=[]"
+    },
+    {
+      "check": "oos_quantile_block_a_acceptance",
+      "passed": false,
+      "detail": "total_rows=7709479, order_rows=7709479, crossing_bruto_count=823, crossing_bruto_rate=0.00010675, negative_interval_width_count=350, post_guardrail_rows=402, crossing_post_guardrail_rate=0.00000000, issues=negative_interval_width_count=350>max=0 | scope_mode=global_health, scope_parent_sweep_prefixes=[], scope_splits=[], scope_horizons=[]"
+    },
+    {
+      "check": "block_quantile_degeneracy_gate",
+      "passed": false,
+      "detail": "groups=34, quantile_groups=31, point_groups_ignored=0, unknown_mode_groups_diagnostic_only=3, small_quantile_groups_diagnostic_only=4, min_rows_for_gate=1000, max_p10_eq_p90_rate=0.05000000, top_groups=parent_sweep_id=None,split=test,horizon=1,prediction_mode=quantile,n_rows=3085776,p10_eq_p90_rate=1.00000000,p10_eq_p50_eq_p90_rate=1.00000000|parent_sweep_id=None,split=val,horizon=1,prediction_mode=quantile,n_rows=3084741,p10_eq_p90_rate=1.00000000,p10_eq_p50_eq_p90_rate=1.00000000|parent_sweep_id=None,split=train,horizon=1,prediction_mode=quantile,n_rows=862640,p10_eq_p90_rate=1.00000000,p10_eq_p50_eq_p90_rate=1.00000000|parent_sweep_id=None,split=val,horizon=1,prediction_mode=None,n_rows=499,p10_eq_p90_rate=1.00000000,p10_eq_p50_eq_p90_rate=1.00000000|parent_sweep_id=None,split=test,horizon=1,prediction_mode=None,n_rows=498,p10_eq_p90_rate=1.00000000,p10_eq_p50_eq_p90_rate=1.00000000, issues=parent_sweep_id=None,split=test,horizon=1,prediction_mode=quantile:n_rows=3085776,p10_eq_p90_rate=1.00000000|parent_sweep_id=None,split=train,horizon=1,prediction_mode=quantile:n_rows=862640,p10_eq_p90_rate=1.00000000|parent_sweep_id=None,split=val,horizon=1,prediction_mode=quantile:n_rows=3084741,p10_eq_p90_rate=1.00000000 | scope_mode=global_health, scope_parent_sweep_prefixes=[], scope_splits=[], scope_horizons=[]"
+    },
+    {
+      "check": "oos_pairwise_target_alignment",
+      "passed": false,
+      "detail": "asset=AAPL|sweep=0_2_3_explicit_frozen_0_1_configs_baseline_features|split_sig=None|split=test|h=1|configs=15|min_ts=499|max_ts=502, asset=AAPL|sweep=0_2_3_explicit_frozen_0_1_configs_baseline_features|split_sig=None|split=val|h=1|configs=15|min_ts=499|max_ts=502, asset=AAPL|sweep=0_2_3_explicit_frozen_0_1_configs_baseline_features_fundamental_features|split_sig=None|split=test|h=1|configs=75|min_ts=490|max_ts=503, asset=AAPL|sweep=0_2_3_explicit_frozen_0_1_configs_baseline_features_fundamental_features|split_sig=None|split=val|h=1|configs=75|min_ts=490|max_ts=503, asset=AAPL|sweep=0_2_3_explicit_frozen_0_1_configs_baseline_features_sentiment_features|split_sig=None|split=test|h=1|configs=75|min_ts=498|max_ts=503, asset=AAPL|sweep=0_2_3_explicit_frozen_0_1_configs_baseline_features_sentiment_features|split_sig=None|split=val|h=1|configs=75|min_ts=498|max_ts=503, asset=AAPL|sweep=0_2_3_explicit_frozen_0_1_configs_baseline_features_technical_features|split_sig=None|split=test|h=1|configs=45|min_ts=498|max_ts=501, asset=AAPL|sweep=0_2_3_explicit_frozen_0_1_configs_baseline_features_technical_features|split_sig=None|split=val|h=1|configs=45|min_ts=498|max_ts=501, asset=AAPL|sweep=0_2_3_explicit_frozen_0_1_configs_baseline_features_technical_features_fundamental_features|split_sig=None|split=test|h=1|configs=75|min_ts=498|max_ts=503, asset=AAPL|sweep=0_2_3_explicit_frozen_0_1_configs_baseline_features_technical_features_fundamental_features|split_sig=None|split=val|h=1|configs=75|min_ts=498|max_ts=503, asset=AAPL|sweep=0_2_3_explicit_frozen_0_1_configs_baseline_features_technical_features_sentiment_features|split_sig=None|split=test|h=1|configs=45|min_ts=499|max_ts=502, asset=AAPL|sweep=0_2_3_explicit_frozen_0_1_configs_baseline_features_technical_features_sentiment_features|split_sig=None|split=val|h=1|configs=45|min_ts=499|max_ts=502, asset=AAPL|sweep=0_2_3_explicit_frozen_0_1_configs_baseline_features_technical_features_sentiment_features_fundamental_features|split_sig=None|split=test|h=1|configs=75|min_ts=498|max_ts=502, asset=AAPL|sweep=0_2_3_explicit_frozen_0_1_configs_baseline_features_technical_features_sentiment_features_fundamental_features|split_sig=None|split=val|h=1|configs=75|min_ts=498|max_ts=502, asset=AAPL|sweep=0_2_3_explicit_frozen_0_1_configs_sentiment_features|split_sig=None|split=test|h=1|configs=60|min_ts=499|max_ts=502, asset=AAPL|sweep=0_2_3_explicit_frozen_0_1_configs_sentiment_features|split_sig=None|split=val|h=1|configs=60|min_ts=499|max_ts=502, asset=AAPL|sweep=0_2_3_explicit_frozen_0_1_configs_technical_features|split_sig=None|split=test|h=1|configs=75|min_ts=499|max_ts=503, asset=AAPL|sweep=0_2_3_explicit_frozen_0_1_configs_technical_features|split_sig=None|split=val|h=1|configs=75|min_ts=499|max_ts=503, asset=AAPL|sweep=0_2_3_explicit_frozen_0_1_configs_technical_features_fundamental_features|split_sig=None|split=test|h=1|configs=30|min_ts=500|max_ts=503, asset=AAPL|sweep=0_2_3_explicit_frozen_0_1_configs_technical_features_fundamental_features|split_sig=None|split=val|h=1|configs=30|min_ts=500|max_ts=503, asset=AAPL|sweep=0_2_3_explicit_frozen_0_1_configs_technical_features_sentiment_features|split_sig=None|split=test|h=1|configs=30|min_ts=500|max_ts=503, asset=AAPL|sweep=0_2_3_explicit_frozen_0_1_configs_technical_features_sentiment_features|split_sig=None|split=val|h=1|configs=30|min_ts=500|max_ts=503, asset=AAPL|sweep=0_2_3_explicit_frozen_0_1_configs_technical_features_sentiment_features_fundamental_features|split_sig=None|split=test|h=1|configs=75|min_ts=489|max_ts=503, asset=AAPL|sweep=0_2_3_explicit_frozen_0_1_configs_technical_features_sentiment_features_fundamental_features|split_sig=None|split=val|h=1|configs=75|min_ts=489|max_ts=503 | scope_mode=global_health, scope_parent_sweep_prefixes=[], scope_splits=[], scope_horizons=[]"
+    },
+    {
+      "check": "inference_predictions_unique_key",
+      "passed": true,
+      "detail": "ok | scope_mode=global_health, scope_parent_sweep_prefixes=[], scope_splits=[], scope_horizons=[]"
+    },
+    {
+      "check": "inference_predictions_numeric_types",
+      "passed": true,
+      "detail": "ok | scope_mode=global_health, scope_parent_sweep_prefixes=[], scope_splits=[], scope_horizons=[]"
+    },
+    {
+      "check": "inference_predictions_quantile_order",
+      "passed": true,
+      "detail": "ok | scope_mode=global_health, scope_parent_sweep_prefixes=[], scope_splits=[], scope_horizons=[]"
+    },
+    {
+      "check": "cardinality_config_fold_seed",
+      "passed": false,
+      "detail": "duplicate_groups=1 | scope_mode=global_health, scope_parent_sweep_prefixes=[], scope_splits=[], scope_horizons=[]"
+    },
+    {
+      "check": "min_samples_by_split",
+      "passed": true,
+      "detail": "below_min_train=0, below_min_val=0, below_min_test=0 | scope_mode=global_health, scope_parent_sweep_prefixes=[], scope_splits=[], scope_horizons=[]"
+    },
+    {
+      "check": "dm_mcs_persisted_executable",
+      "passed": true,
+      "detail": "feasible_dm=0, feasible_mcs=0, missing_dm=0, missing_mcs=0, report_stats_ready=False | scope_mode=global_health, scope_parent_sweep_prefixes=[], scope_splits=[], scope_horizons=[]"
+    },
+    {
+      "check": "gold_confidence_calibrated_by_horizon",
+      "passed": true,
+      "detail": "bad_confidence=0, non_finite=0, missing_expected_horizons=0 | scope_mode=global_health, scope_parent_sweep_prefixes=[], scope_splits=[], scope_horizons=[]"
+    },
+    {
+      "check": "gold_metrics_by_config_n_oos_contract",
+      "passed": false,
+      "detail": "missing_by_config_columns=['parent_sweep_id'] | scope_mode=global_health, scope_parent_sweep_prefixes=[], scope_splits=[], scope_horizons=[]"
+    },
+    {
+      "check": "baselines_share_parent_sweep_id_with_candidates",
+      "passed": true,
+      "detail": "skipped(not_cohort_decision) | scope_mode=global_health, scope_parent_sweep_prefixes=[], scope_splits=[], scope_horizons=[]"
+    },
+    {
+      "check": "tft_baselines_timestamp_subset_alignment",
+      "passed": true,
+      "detail": "skipped(not_cohort_decision) | scope_mode=global_health, scope_parent_sweep_prefixes=[], scope_splits=[], scope_horizons=[]"
+    },
+    {
+      "check": "official_contract_quantile_attention",
+      "passed": true,
+      "detail": "ok | scope_mode=global_health, scope_parent_sweep_prefixes=[], scope_splits=[], scope_horizons=[]"
+    }
+  ]
+}

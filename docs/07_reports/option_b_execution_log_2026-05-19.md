@@ -15,6 +15,143 @@ Append-only. Mais recente no topo.
 
 ---
 
+## [2026-05-21 08:50 UTC] Stage R-21 — completion (registry migration; bit-identical empirico)
+
+**Context:** Stage R-21 do plano de remediacao. RED-3 + RED-4 da
+auditoria (Stage 21 mergeado em main como skeleton-only — registry zero
+imports em producao; god-object `validate_analytics_quality_use_case.py`
+1.152 LOC intacto). Marcelo decisao: **Opcao (1)** migracao COMPLETA.
+
+**Mapeamento real:** monolito tinha **27 checks** (plano §0 estimou 30;
+contagem precisa via `grep -c "self._record(" src/use_cases/validate_analytics_quality_use_case.py`).
+Distribuicao por cluster:
+
+- **cardinality** (7 checks): `required_tables_presence`,
+  `inference_predictions_continuity`, `feature_contrib_local_continuity`,
+  `run_id_execution_consistency`, `required_metrics_nan`,
+  `cardinality_config_fold_seed`, `min_samples_by_split`
+- **alignment** (3 checks): `oos_pairwise_target_alignment`,
+  `baselines_share_parent_sweep_id_with_candidates`,
+  `tft_baselines_timestamp_subset_alignment`
+- **calibration** (5 checks): `oos_quantile_block_a_acceptance`,
+  `block_quantile_degeneracy_gate`, `dm_mcs_persisted_executable`,
+  `gold_confidence_calibrated_by_horizon`,
+  `gold_metrics_by_config_n_oos_contract`
+- **contracts** (12 checks): `referential_integrity`,
+  `temporal_consistency`, `oos_unique_key`, `oos_numeric_types`,
+  `oos_horizon_coverage`, `oos_supervised_nulls`,
+  `oos_interval_width_non_negative`, `oos_quantile_order`,
+  `inference_predictions_unique_key`,
+  `inference_predictions_numeric_types`,
+  `inference_predictions_quantile_order`,
+  `official_contract_quantile_attention`
+
+**Decisao R-21.x: applies_when default True para TODOS os 27 checks
+migrados.**
+- **Question/Issue:** Plano §R-21.7.bis tem matriz parameterizada com
+  `(TftBaselinesAlignment, "global_health", False)` etc., sugerindo que
+  `applies_when=False` deveria filtrar checks do output sob certas modes.
+  Mas o monolito *emite* esses checks sob global_health com detail
+  `"skipped(not_cohort_decision)"` — filtrar via `applies_when=False`
+  quebraria bit-identical (lista de checks ficaria mais curta).
+- **Options:** (a) `applies_when=True` sempre + skip-detail interno
+  (matches monolith); (b) `applies_when=False` para non-applicable +
+  orchestrator emite stub `CheckResult(passed=True, detail="skipped(...)")`
+  para preservar bit-identical.
+- **Choice:** (a). Justificativa: simplicidade + zero risco de divergencia
+  + a matriz do plano e aspiracional (future architecture); o teste
+  `test_all_default_checks_apply_under_both_scope_modes` confirma que
+  todos os 27 sao emitidos em ambos os modes (com texto skip apropriado
+  para alignment + baselines_share sob global_health).
+- **Principle:** §3.1 do plano de remediacao (bit-identical em R-21),
+  §3.3 (mechanical > procedural).
+
+**Mudancas estruturais:**
+- [`src/domain/services/quality_checks/base.py`](../../src/domain/services/quality_checks/base.py)
+  estendido: `AnalyticsSnapshot` ganha `gold_tables`,
+  `expected_horizons_by_run`, `analytics_gold_dir`,
+  `scope_gold(table, with_run_id_filter)`, `has_gold_dir()`,
+  `has_gold()`, `get_gold()`. Module-level `scope_table()` helper
+  extraido do monolito.
+- 4 cluster files NOVOS (totalizando 1.322 LOC):
+  - [`cardinality.py`](../../src/domain/services/quality_checks/cardinality.py) (253 LOC)
+  - [`alignment.py`](../../src/domain/services/quality_checks/alignment.py) (212 LOC)
+  - [`calibration.py`](../../src/domain/services/quality_checks/calibration.py) (343 LOC)
+  - [`contracts.py`](../../src/domain/services/quality_checks/contracts.py) (514 LOC)
+- [`src/domain/services/quality_checks/__init__.py`](../../src/domain/services/quality_checks/__init__.py)
+  ganha `build_default_registry()` factory com os 27 checks na ordem
+  canonica do monolito (preserva bit-identical contract per ADR-0004).
+- [`src/use_cases/validate_analytics_quality_use_case.py`](../../src/use_cases/validate_analytics_quality_use_case.py)
+  reduzido de **1.152 LOC → 307 LOC** (-845 LOC, -73%). DI via
+  `registry=` parameter no `__init__`. `_load_snapshot()` consolida
+  load + scope + expected_horizons. `execute()` agora:
+
+  ```python
+  snapshot = self._load_snapshot()
+  scope_detail = self._scope_detail(snapshot.scope_spec)
+  applicable = self._registry.applicable(snapshot.scope_spec)
+  results = [check.run(snapshot) for check in applicable]
+  return AnalyticsQualityResult(passed=all(r.passed for r in results),
+      checks=[{"check": r.name, "passed": r.passed,
+               "detail": f"{r.detail} | {scope_detail}"} for r in results])
+  ```
+
+**R-21.7 — Bit-identical smoke (2-mode) PASSOU empiricamente.**
+Procedimento:
+1. `git stash` mudancas; `git checkout main -- src/use_cases/...py
+   src/domain/services/quality_checks/` para restaurar o monolito.
+2. Rodar `ValidateAnalyticsQualityUseCase` contra
+   `data/analytics_archive_pre_phase_b/silver` (851M de F.1 smoke data
+   real) em ambos os modes. Output: 27 checks cada, gravados em
+   `/tmp/quality_pre_r21_{mode}.json`.
+3. `git stash pop`. Rodar com a versao registry contra mesmo silver.
+   Output gravado em `/tmp/quality_post_r21_{mode}.json`.
+4. Diff: **`pre.checks == post.checks` → True em ambos os modes.**
+   Bit-identical empirico verificado.
+
+Fixtures `pre` salvas em
+[`tests/integration/fixtures/quality_checks/archive_silver_{cohort_decision,global_health}.json`](../../tests/integration/fixtures/quality_checks/)
+(7.3KB + 11KB). Sentinel test
+[`tests/integration/test_quality_registry_bit_identical_archive.py`](../../tests/integration/test_quality_registry_bit_identical_archive.py)
+roda o registry contra o archive e compara byte-byte — falha imediatamente
+se qualquer regressao for introduzida no futuro.
+
+**R-21.7.bis — Tests adicionais (15 tests):**
+- [`tests/unit/domain/services/quality_checks/test_registry_order.py`](../../tests/unit/domain/services/quality_checks/test_registry_order.py) (7 tests):
+  ordem dos 27 checks contra `EXPECTED_CHECK_NAMES`, count exato,
+  nomes unicos, sem nome vazio, applies_when retorna True para todos
+  em ambos os modes.
+- [`tests/unit/domain/services/quality_checks/test_snapshot.py`](../../tests/unit/domain/services/quality_checks/test_snapshot.py) (8 tests):
+  helpers `has`/`get`/`has_gold`/`get_gold`/`has_gold_dir`/`scope_gold`,
+  `scope_table` para parent_sweep_prefixes/splits/horizons/run_ids.
+
+**Validacao final:**
+- `.venv/bin/pytest tests/ -q --ignore=tests/integration/test_quality_registry_bit_identical_archive.py`:
+  **580 passed** (565 em main + 15 R-21.7.bis).
+- `.venv/bin/pytest tests/integration/test_quality_registry_bit_identical_archive.py -v`:
+  **2 passed** (~1m40s no primeiro run com archive load).
+- `.venv/bin/ruff check src/ tests/`: clean.
+- `du -sh data/analytics_archive_pre_phase_b/`: **851M** intacto.
+
+**Docs atualizados:**
+- ADR-0004 status → "Accepted; **Implemented** em Stage R-21 (PR ainda
+  aberta)"; count corrigido (~20 → 27); cross-link adicional para
+  remediation plan + extension point.
+- ANALYTICS_STORE_ARCHITECTURE.md ganha secao "Quality check extension
+  point" com exemplo de classe `MyNewCheck` + nota sobre DI via
+  `registry=` parameter.
+
+**Principle aplicado:** §3.1 (bit-identical), §3.3 (mechanical >
+procedural — registry order enforced via test fixture), §3.4 (match
+precedente: `QuantileGuardrailService` style ja documenta
+`@staticmethod` + frozen dataclass; aqui usei ABC + class-level `name`
+para checks + factory para registry).
+
+**Outcome:** Commit pendente, PR contra main pendente. Pre-condicao R-22
+satisfeita (R-21 mergeado evita drift entre validate e refresh modulars).
+
+---
+
 ## [2026-05-21 01:15 UTC] Stage R-E — completion (regression test do suffix fix)
 
 **Context:** Stage R-E do plano de remediacao. RED-6 da auditoria flagou que
