@@ -2354,6 +2354,77 @@ def test_pred_interval_negative_unchanged_by_stage9_filter() -> None:
     # E probabilisticas mantidas em metrics_by_run -- comportamento esperado.
 
 
+def test_build_gold_oos_quality_report_preserves_asset_after_dim_run_merge() -> None:
+    """Stage R-E regression guard: when both fact_oos_predictions and dim_run
+    carry an `asset` column, the merge inside `_build_gold_oos_quality_report`
+    must preserve `asset` (not coerce to NaN). Pre-Stage 23 bug: pandas
+    suffixed the colliding columns to `asset_x`/`asset_y`, dropping the
+    plain `asset` column; the downstream groupby then read `asset = NaN`,
+    which made `gold_quality_statistics_report.statistics_ready=False` even
+    with all checks passing. Fix: `df.merge(..., suffixes=("", "_dim"))`
+    keeps the fact_oos side canonical.
+
+    This test FAILS if the `suffixes=("", "_dim")` argument is ever removed
+    from `_build_gold_oos_quality_report`.
+    """
+    fact = pd.DataFrame(
+        [
+            {
+                "run_id": "r_suffix",
+                "asset": "AAPL",
+                "feature_set_name": "BASELINE_TECHNICAL",
+                "config_signature": "cfg_x",
+                "parent_sweep_id": "sw_x",
+                "split": "test",
+                "horizon": 1,
+                "timestamp_utc": "2026-01-15T00:00:00Z",
+                "target_timestamp_utc": "2026-01-16T00:00:00Z",
+                "y_true": 0.001,
+                "y_pred": 0.002,
+                "quantile_p10": -0.01,
+                "quantile_p50": 0.0,
+                "quantile_p90": 0.01,
+            }
+        ]
+    )
+    # dim_run shares `asset`, `feature_set_name`, `config_signature`,
+    # `parent_sweep_id` with fact_oos -- this is the exact collision the
+    # pre-fix code couldn't handle.
+    dim_run = pd.DataFrame(
+        [
+            {
+                "run_id": "r_suffix",
+                "asset": "AAPL",
+                "feature_set_name": "BASELINE_TECHNICAL",
+                "config_signature": "cfg_x",
+                "parent_sweep_id": "sw_x",
+                "model_version": "tft_v1",
+                "trial_number": 1,
+                "status": "ok",
+            }
+        ]
+    )
+
+    report = RefreshAnalyticsStoreUseCase._build_gold_oos_quality_report(dim_run, fact)
+
+    run_rows = report[report["scope"] == "run_split_horizon"]
+    assert len(run_rows) == 1, "Expected exactly one run/split/horizon row."
+    row = run_rows.iloc[0]
+    # The substantive assertion: asset survived the merge.
+    assert row["asset"] == "AAPL", (
+        f"asset column lost after dim_run merge: got {row['asset']!r}. "
+        "Likely a regression of the Stage 23 suffixes=('','_dim') fix."
+    )
+    # Sibling columns from the collision set must also be canonical (fact_oos
+    # side), not NaN, not suffixed.
+    assert row["feature_set_name"] == "BASELINE_TECHNICAL"
+    assert row["config_signature"] == "cfg_x"
+    assert row["parent_sweep_id"] == "sw_x"
+    # And no `*_dim` leak appears in the report columns.
+    leaked = [c for c in report.columns if c.endswith("_dim")]
+    assert not leaked, f"_dim suffix leaked into the gold report columns: {leaked}"
+
+
 def _stage12_candidate_baseline_oos(*, parent_sweep_id: str = "sw_stage12") -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Stage 12 integration fixture: candidate TFT + baseline persisted on
     same parent_sweep_id, sharing target_timestamps so DM/MCS builders

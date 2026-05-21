@@ -15,6 +15,64 @@ Append-only. Mais recente no topo.
 
 ---
 
+## [2026-05-21 01:15 UTC] Stage R-E — completion (regression test do suffix fix)
+
+**Context:** Stage R-E do plano de remediacao. RED-6 da auditoria flagou que
+o suffix fix em `_build_gold_oos_quality_report` (commit `8d0d0fb` em
+PR #47) tinha escopo creep — Stage 23 era smoke + closure, nao fix de
+bug em arquivo que Stage 22 deveria refatorar. O fix em si foi avaliado
+como mecanicamente correto e ja esta em main; R-E pega apenas a parte
+faltante (regression test isolada).
+
+**Estado:** Branch nova `fix/refresh-asset-merge-collision-regression-test`
+sobre main. Apenas 1 modificacao em
+[`tests/unit/use_cases/test_refresh_analytics_store_use_case.py`](../../tests/unit/use_cases/test_refresh_analytics_store_use_case.py)
+(novo teste anexado no final).
+
+**Mudancas:**
+- NOVO `test_build_gold_oos_quality_report_preserves_asset_after_dim_run_merge`
+  em `tests/unit/use_cases/test_refresh_analytics_store_use_case.py`.
+  - Constroi `fact_oos_predictions` com `asset="AAPL"` + `dim_run` com
+    `asset="AAPL"` (colisao explicita nas colunas `asset`,
+    `feature_set_name`, `config_signature`, `parent_sweep_id`).
+  - Chama `_build_gold_oos_quality_report` e assertia
+    `row["asset"] == "AAPL"` + nenhuma coluna com sufixo `_dim` no output.
+  - Sem o fix `suffixes=("", "_dim")` em
+    `refresh_analytics_store_use_case.py:1490`, pandas geraria
+    `asset_x`/`asset_y` e o teste falharia.
+
+**Verificacao empirica da regressao:**
+- Demonstrado via REPL que `df.merge(..., how='left')` sem `suffixes=` em
+  duas dataframes com `asset` produz `asset_x, asset_y` (sem coluna
+  `asset` plain). Com `suffixes=("", "_dim")` produz `asset, asset_dim`
+  (fact_oos side canonical).
+
+**Validacao:**
+- `.venv/bin/pytest tests/ -q`: **560 passed** (era 559 em main; este
+  branch nao inclui R-20 changes).
+- `.venv/bin/ruff check src/ tests/`: clean.
+- `du -sh data/analytics_archive_pre_phase_b/`: **851M** intacto.
+
+**Principle aplicado:** §3.4 do plano de remediacao ("Match precedente do
+projeto") — teste segue o estilo das tests existentes em
+`test_refresh_analytics_store_use_case.py` (`pd.DataFrame` literal +
+static method direct call). §3.3 ("Mechanical > procedural") — teste e
+guard mecanico que falha imediatamente se alguem remover o argumento
+`suffixes`.
+
+**Outcome:** Commit pendente, PR contra main pendente. Pre-condicao para
+R-22 satisfeita (suffix fix coberto por regression test; modular gold
+builder em R-22 pode replicar o `suffixes=("", "_dim")` argumento com
+confianca).
+
+**Nota de adaptacao:** Estado real no inicio da sessao divergiu do prompt —
+as 4 PRs originais (#44, #45, #46, #47), Pre-Stage CI (#48) e docs PR
+(#49) ja estavam MERGED em main. Adaptacao: cada Stage de remediacao em
+branch nova off main (PR isolada). PR Stage R-20 ja aberta em #50; esta
+PR (R-E) e a segunda do ciclo de remediacao.
+
+---
+
 ## [2026-05-20 09:11 UTC] Stage 23 — completion (F.1 PASS pleno + Fase B prep)
 
 **Context:** Stage 23 — F.1 v3 PASS pleno + abrir Fase B.
