@@ -59,11 +59,15 @@ class PredictionRecord:
 class MultiHorizonPredictionPersister:
     """Canonical convention for fact_oos_predictions rows.
 
-    Per ADR-0003 (Opcao (a)):
+    Per ADR-0003 (Stage R-20, Opcao d revision):
       - timestamp_utc = decision_day = dataset_timestamps[decision_idx]
       - target_timestamp_utc = dataset_timestamps[decision_idx + h]
-      - y_true is supplied by callers indexing target_return[decision_idx + h - 1]
-        (callers know their own dataset shape; Persister only computes timestamps).
+      - y_true is supplied by callers indexing target_return[decision_idx + h].
+        target_return is now backward-indexed (target_return[t] =
+        log(close[t]/close[t-1])), so this position holds
+        log(close[decision_day + h] / close[decision_day + h - 1]) — the
+        h-period return ending at target_timestamp. For h=1 that yields
+        "next-day return after decision" (literature semantics preserved).
       - decision_idx is a column in fact_oos_predictions, materializing the
         invariant in the schema (not only in code).
 

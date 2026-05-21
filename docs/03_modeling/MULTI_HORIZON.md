@@ -35,7 +35,7 @@ avaliados separadamente. Nao cobre as metricas em si (ver
 ## Convencao canonica de target_timestamp e y_true
 
 Fixada em [ADR-0003](../01_architecture/decisions/ADR-0003-multi-horizon-prediction-persister.md)
-Opcao (a) e materializada em
+(amendada em Stage R-20 / Opcao d) e materializada em
 [`src/domain/services/multi_horizon_prediction_persister.py`](../../src/domain/services/multi_horizon_prediction_persister.py):
 
 - **Anchor:** `timestamp_utc = decision_day = dataset_timestamps[decision_idx]`.
@@ -43,10 +43,14 @@ Opcao (a) e materializada em
 - **target_timestamp:** `target_timestamp_utc = dataset_timestamps[decision_idx + h]`,
   indexado em **trading days** (consulta no dataset). Pula weekends/holidays
   naturalmente porque o dataset ja e trading-day indexed.
-- **y_true:** `dataset.target_return[decision_idx + h - 1]`. Convencao
+- **y_true:** `dataset.target_return[decision_idx + h]`. Convencao
   financeira: `h=1` significa "return realizado no dia seguinte a decisao",
-  consistente com literatura. `target_return[t] = log(close[t+1]/close[t])`
-  por `src/use_cases/build_tft_dataset_use_case.py:563`.
+  consistente com literatura. `target_return[t] = log(close[t]/close[t-1])`
+  (backward shift) por
+  [`src/use_cases/build_tft_dataset_use_case.py:563`](../../src/use_cases/build_tft_dataset_use_case.py#L563).
+  A indexacao backward foi escolhida (Stage R-20 / Opcao d) para casar com
+  o decoder do `pytorch_forecasting` (`y[0][i, h-1]` fetcha
+  `target_return[D+h]`), fechando o off-by-one cross-pipeline (Gap 6).
 - **decision_idx:** coluna `int64` em `fact_oos_predictions` que mapeia
   diretamente para `time_idx` do dataset. Materializa o invariante no schema
   (nao apenas no codigo). Required em
@@ -62,7 +66,9 @@ Convencao deixa de ser implicita e distribuida; vira objeto explicito
 do dominio com testes proprios em
 [`tests/unit/domain/services/test_multi_horizon_prediction_persister.py`](../../tests/unit/domain/services/test_multi_horizon_prediction_persister.py)
 e guard cross-pipeline em
-[`tests/integration/test_tft_baselines_y_true_alignment.py`](../../tests/integration/test_tft_baselines_y_true_alignment.py).
+[`tests/integration/test_tft_baselines_y_true_alignment.py`](../../tests/integration/test_tft_baselines_y_true_alignment.py)
++ adapter integration test em
+[`tests/integration/test_tft_decoder_target_indexing.py`](../../tests/integration/test_tft_decoder_target_indexing.py).
 
 ## Decisoes e escolhas
 - **Horizontes principais: h+1, h+7, h+30.** *Why:* cobrem curto, medio e
@@ -87,7 +93,7 @@ e guard cross-pipeline em
 | Coluna | Tipo | Descricao |
 |---|---|---|
 | `horizon` | `int64` | numero de passos a frente (1, 7, 30) |
-| `decision_idx` | `int64` | indice no dataset original (time_idx) do dia de decisao. Materializa Opcao (a) (ADR-0003). |
+| `decision_idx` | `int64` | indice no dataset original (time_idx) do dia de decisao. Materializa a convencao canonica (ADR-0003). |
 | `timestamp_utc` | `timestamp[utc]` | decision_day = `dataset_timestamps[decision_idx]` |
 | `target_timestamp_utc` | `timestamp[utc]` | `dataset_timestamps[decision_idx + h]` (trading-day indexed) |
 | `y_true`, `y_pred` | `float64` | valor real e previsao pontual no horizonte |
@@ -105,9 +111,10 @@ Grao logico de `fact_oos_predictions`:
 
 ## Fonte da verdade (codigo)
 - `src/domain/services/multi_horizon_prediction_persister.py` — domain
-  service unico que materializa a convencao canonica (Opcao (a) ADR-0003)
-  para `fact_oos_predictions`. Ambos pipelines (TFT + baselines) emitem
-  rows via `MultiHorizonPredictionPersister.build_record(...)`.
+  service unico que materializa a convencao canonica (ADR-0003 amendado em
+  Stage R-20 / Opcao d) para `fact_oos_predictions`. Ambos pipelines
+  (TFT + baselines) emitem rows via
+  `MultiHorizonPredictionPersister.build_record(...)`.
 - `src/use_cases/train_tft_model_use_case.py` — define
   `evaluation_horizons` e propaga para o trainer
 - `src/use_cases/run_baselines_use_case.py` — runner statistical baselines

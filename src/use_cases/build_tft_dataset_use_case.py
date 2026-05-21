@@ -553,14 +553,20 @@ class BuildTFTDatasetUseCase:
         df["day_of_week"] = df["timestamp"].dt.dayofweek.astype("int64")
         df["month"] = df["timestamp"].dt.month.astype("int64")
 
-        # Target: next-day log-return
+        # Target: 1-step log-return indexed BACKWARD (Opcao d per Stage R-20).
+        # target_return[t] = log(close[t] / close[t-1]). With this convention the
+        # pytorch_forecasting decoder cell at position D+h naturally yields
+        # log(close[D+h] / close[D+h-1]); for h=1 that is the "next-day return
+        # after decision" semantics required by ADR-0003 (see also
+        # docs/03_modeling/MULTI_HORIZON.md). First row is dropped because
+        # log(close[0] / close[-1]) is undefined.
         df = df.sort_values("timestamp").reset_index(drop=True)
         if df["timestamp"].duplicated().any():
             raise ValueError("Duplicate timestamps found while building TFT dataset")
         if not df["timestamp"].is_monotonic_increasing:
             raise ValueError("Timestamps are not monotonic in TFT dataset")
 
-        df["target_return"] = np.log(df["close"].shift(-1) / df["close"])
+        df["target_return"] = np.log(df["close"] / df["close"].shift(1))
         df = df.dropna(subset=["target_return"]).reset_index(drop=True)
         if df.empty:
             raise ValueError("Not enough rows to compute target_return")

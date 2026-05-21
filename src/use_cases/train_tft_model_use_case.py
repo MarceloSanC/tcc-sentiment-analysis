@@ -762,9 +762,10 @@ class TrainTFTModelUseCase:
         if not split_predictions:
             return
 
-        # Per ADR-0003 Opcao (a): sample i (from pytorch_forecasting dataloader)
-        # has its encoder_end at split_df row (max_encoder_length - 1) + i,
-        # which is the canonical decision_day for that sample.
+        # Per ADR-0003 anchor convention: sample i (from pytorch_forecasting
+        # dataloader) has its encoder_end at split_df row
+        # (max_encoder_length - 1) + i, which is the canonical decision_day
+        # for that sample.
         decision_start_offset = max(int(max_encoder_length) - 1, 0)
 
         rows: list[dict[str, object]] = []

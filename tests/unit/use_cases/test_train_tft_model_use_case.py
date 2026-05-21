@@ -1193,3 +1193,59 @@ def test_persist_fact_oos_predictions_applies_quantile_guardrail_columns() -> No
     assert row["quantile_p90_post_guardrail"] == 1.3
     assert row["quantile_guardrail_applied"] == 1
     assert int(row["decision_idx"]) == 0
+
+
+def test_persist_uses_decision_start_offset_equals_max_encoder_minus_one() -> None:
+    """Per ADR-0003 anchor: TFT sample i maps to decision_idx =
+    max_encoder_length - 1 + i. Test with max_encoder_length=5 to lock down
+    the formula (most other tests use max_encoder_length=1, which makes the
+    -1 invisible).
+    """
+    analytics = FakeAnalyticsRunRepo()
+    use_case = TrainTFTModelUseCase(
+        dataset_repository=FakeDatasetRepository(_df()),
+        model_trainer=FakeTrainer(),
+        model_repository=FakeModelRepo(),
+        analytics_run_repository=analytics,
+    )
+
+    test_ts = pd.date_range("2025-02-10", periods=20, freq="D", tz="UTC")
+    split_frames = {"test": pd.DataFrame({"timestamp": test_ts})}
+    # 3 samples x 1 horizon
+    split_predictions = {
+        "test": {
+            "horizons": [1],
+            "y_true_matrix": [[10.0], [20.0], [30.0]],
+            "y_pred_matrix": [[11.0], [21.0], [31.0]],
+            "quantile_p10_matrix": [[9.0], [19.0], [29.0]],
+            "quantile_p50_matrix": [[10.5], [20.5], [30.5]],
+            "quantile_p90_matrix": [[12.0], [22.0], [32.0]],
+        }
+    }
+    max_encoder_length = 5
+
+    use_case._persist_fact_oos_predictions(
+        run_id="run_offset",
+        asset_id="AAPL",
+        feature_set_name="B",
+        model_version="20260420_010101_B",
+        config_signature="sig_offset",
+        fold_name="wf_1",
+        seed=7,
+        max_encoder_length=max_encoder_length,
+        split_frames=split_frames,
+        split_predictions=split_predictions,
+    )
+
+    assert analytics.oos_rows is not None
+    rows = sorted(
+        (r for r in analytics.oos_rows if int(r["horizon"]) == 1),
+        key=lambda r: int(r["decision_idx"]),
+    )
+    assert len(rows) == 3
+    # Sample 0 → decision_idx = 4; sample 1 → 5; sample 2 → 6.
+    assert [int(r["decision_idx"]) for r in rows] == [4, 5, 6]
+    # timestamp_utc of sample 0 → test_ts[4] = 2025-02-14.
+    assert rows[0]["timestamp_utc"].startswith("2025-02-14")
+    # target_timestamp_utc of sample 0 (h=1) → test_ts[5] = 2025-02-15.
+    assert rows[0]["target_timestamp_utc"].startswith("2025-02-15")

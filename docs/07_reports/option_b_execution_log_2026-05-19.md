@@ -73,6 +73,138 @@ PR (R-E) e a segunda do ciclo de remediacao.
 
 ---
 
+## [2026-05-21 00:55 UTC] Stage R-20 — completion (Opcao d aplicada; Gap 6 fechado em substancia)
+
+**Context:** Stage R-20 do plano de remediacao (`docs/ai/STAGE_20_23_REMEDIATION_PLAN.md`).
+Auditoria 2026-05-20 levantou RED-1 (Gap 6: off-by-one TFT vs baseline em
+y_true para mesmo target_timestamp_utc, 663/685 linhas test/h=1) e RED-2
+(`test_tft_baselines_y_true_alignment.py` era hollow — passava o mesmo
+input pelo Persister duas vezes).
+
+**Estado real no inicio da sessao:** divergiu do prompt da sessao —
+todas as 4 PRs originais (#44, #45, #46, #47), o Pre-Stage CI (#48) e
+a doc PR (#49) ja estavam MERGED em main. Pre-Stage CI + Pre-Stage CI.bis
+do plano de remediacao foram NO-OP. Adaptacao: criar branches novas
+sobre main, uma por Stage de remediacao (R-20, R-E, R-21, R-22, R-23),
+em vez de adicionar commits as branches stacked (que nao existem mais).
+Branch desta sessao: `fix/stage-r-20-gap-6-target-shift`.
+
+**Decisao R-20.0 (Marcelo, anterior a sessao):** Opcao (d) — shift formula
+de `target_return` para `log(close[t]/close[t-1])` (backward) + ajustar
+`run_baselines_use_case.py:259` `y_true_idx = i + h_int` (era `+ h_int - 1`).
+Justificativa: e a unica opcao que preserva a semantica financeira
+"h=1 = next-day return after decision" (vs Opcao a que muda semantica,
+Opcao b que desalinha training-loss/metrica, Opcao c que deixa Gap 6 em
+aberto).
+
+**Mudancas R-20.1 (codigo):**
+- [`src/use_cases/build_tft_dataset_use_case.py:563`](../../src/use_cases/build_tft_dataset_use_case.py#L563):
+  formula `log(close.shift(-1) / close)` (forward) → `log(close / close.shift(1))`
+  (backward). Primeira row dropada (em vez da ultima).
+- [`src/use_cases/run_baselines_use_case.py:259`](../../src/use_cases/run_baselines_use_case.py#L259):
+  `y_true_idx = i + h_int` (era `i + h_int - 1`).
+- [`src/domain/services/multi_horizon_prediction_persister.py:60-76`](../../src/domain/services/multi_horizon_prediction_persister.py#L60-L76):
+  docstring atualizado para refletir nova indexacao.
+- Dataset rebuilt via `.venv/bin/python -m src.main_dataset_tft --asset AAPL --overwrite`:
+  4023 rows mantidas (4024 - 1 primeira row dropada vs 4024 - 1 ultima
+  row dropada antes). Primeira ts: `2010-01-05` (era `2010-01-04`).
+  Formula verificada: `target_return[t] == log(close[t]/close[t-1])`
+  bit-byte interno; valor da primeira row (`0.0017274378...`) coincide
+  com `log(candle.close[1]/candle.close[0])`.
+
+**Docs atualizados R-20.1:**
+- [`docs/01_architecture/decisions/ADR-0003-multi-horizon-prediction-persister.md`](../01_architecture/decisions/ADR-0003-multi-horizon-prediction-persister.md):
+  status amendado em 2026-05-20 (Opcao d). §Decision item 3 reescrito;
+  novo subsection "Historico do item 3 (Opcao a → Opcao d)".
+  §Consequences acrescenta nota sobre rebuild do dataset.
+- [`docs/03_modeling/MULTI_HORIZON.md`](../03_modeling/MULTI_HORIZON.md):
+  §"Convencao canonica" reescrita para nova formula + nova indexacao.
+- [`docs/02_data/DATA_PIPELINE_WALKTHROUGH.md`](../02_data/DATA_PIPELINE_WALKTHROUGH.md):
+  §3.5 target_return row (linha 585), §5.4 anchor convention (linha 1142),
+  §A.58 (linha 1731) reescritos. Sem `[i+h-1]` literal restante.
+- Comentarios `Opcao (a)` literais em `train_tft_model_use_case.py:765`,
+  `run_baselines_test_pipeline_use_case.py:201` e
+  `analytics_store_schema.py:382,546` generalizados para "ADR-0003 anchor
+  convention" (anchor preservado em todas as opcoes; literal era ambiguo).
+
+**Tests atualizados R-20.1:**
+- [`tests/unit/use_cases/test_run_baselines_use_case.py::test_baseline_y_true_aligns_with_tft_multi_horizon_convention`](../../tests/unit/use_cases/test_run_baselines_use_case.py):
+  expected values recalculados (decision_idx=30, h=1 → y_true=32.0 em vez
+  de 31.0; h=2 → 33.0 em vez de 32.0).
+- [`tests/unit/infrastructure/schemas/test_analytics_store_schema.py:224`](../../tests/unit/infrastructure/schemas/test_analytics_store_schema.py#L224):
+  docstring generalizado.
+- Demais testes (`test_persist_fact_oos_predictions_keeps_horizon_index_alignment_per_split`,
+  `test_baseline_y_true_skips_rows_beyond_horizon_at_end_of_dataset`,
+  `test_historical_mean_skips_rows_without_warmup_window`) PASSARAM sem
+  mudancas — y_true values eram hand-coded ou contagens nao dependiam
+  de off-by-one.
+
+**R-20.2 — testes substantivos (substituem o hollow test):**
+- NOVO [`tests/integration/test_tft_decoder_target_indexing.py`](../../tests/integration/test_tft_decoder_target_indexing.py):
+  4 tests, ~6s no CI, sem treino de modelo. Constroi `TimeSeriesDataSet`
+  direto, le `y[0]` do dataloader, verifica que
+  `actuals[i, h-1] == target_returns[decision_idx + h]` para varias
+  combinacoes de `max_encoder_length` x `max_prediction_length`. Tambem
+  guard explicito de off-by-one (decoder_h1 != target_return[decision_idx]).
+- REESCRITO [`tests/integration/test_tft_baselines_y_true_alignment.py`](../../tests/integration/test_tft_baselines_y_true_alignment.py):
+  era hollow (passava mesmo input pelo Persister 2x). Agora exercita
+  AMBOS os caminhos: `_tft_records()` itera TimeSeriesDataSet dataloader
+  (sem treino), `_baseline_zero_return_records()` espelha
+  `run_baselines_use_case._emit_oos_rows` com nova indexacao.
+  Join por `(target_timestamp_utc, horizon)`, assert
+  `abs(y_true_tft - y_true_base) < 1e-9`. Falharia sob codigo pre-fix
+  com diff != 0 em todas as linhas joined. 4 tests, ~7s.
+
+**R-20.2.bis — tests faltantes (coverage gaps confirmados pela auditoria):**
+- `test_year_partition_uses_decision_day_year_across_boundary` — Dec 29 +
+  h=5 → target Jan 3, asserta `year == 2023` apesar de target.year=2024.
+- `test_year_partition_at_quarter_boundary` — Mar/Apr boundary; assegura
+  invariante (year == decision_day.year) fora do caso Dec/Jan especifico.
+- `test_decision_idx_zero_at_first_valid_sample` — sanity guard para
+  decision_idx convention com `max_encoder_length=1`.
+- `test_persist_uses_decision_start_offset_equals_max_encoder_minus_one`
+  (em `test_train_tft_model_use_case.py`) — 3 samples x max_encoder=5,
+  asserta `decision_idx` ∈ {4, 5, 6}; lock down da formula que so era
+  testada implicitamente com `max_encoder=1`.
+
+**R-20.3 — smoke deferido para R-23:**
+**Question/Issue:** O plano §R-20.3 prescreve smoke completo
+(`main_train_tft` + `main_baselines_test_pipeline` + `main_refresh_analytics_store`)
+para reproduzir empiricamente o off-by-one que a auditoria detectou em
+parquets de smoke. Custo: ~30-60min CPU.
+**Options:**
+  (a) Rodar smoke agora apenas para R-20.3 (descartar artefatos).
+  (b) Deferir smoke para R-23 (que ja prescreve smoke completo com
+      `max_epochs=5` para validar F.1 6/6 PASS); aceitar adapter +
+      cross-pipeline tests como prova suficiente da correcao agora.
+**Choice:** (b) deferir.
+**Principle:** §3.5 do plano original ("Mechanical > procedural" — adapter
+integration test detecta o bug com seg de CI; smoke duplicaria evidencia
+a custo de tempo de execucao). §3.1 do plano de remediacao tambem
+explicitamente lista "adapter integration test SEM treino do modelo" como
+substituto valido para o smoke pesado.
+**Risk mitigation:** R-23.1 obrigatoriamente roda smoke com `max_epochs=5`;
+qualquer regressao silenciosa seria capturada la. O adapter test e
+deterministico — falha imediatamente se o decoder fetcha indice diferente.
+
+**Validacao final R-20.4:**
+- `.venv/bin/pytest tests/ -q`: **564 passed** (era 559 em main; 5 tests
+  novos: 3 boundary/decision tests + 1 decoder + 1 decision_start_offset;
+  net +5 considerando hollow test reescrito mas mesmo count).
+- `.venv/bin/ruff check src/ tests/`: **All checks passed!**
+- `du -sh data/analytics_archive_pre_phase_b/`: **851M** intacto.
+
+**Principle aplicado:** §3.1-3.5 do plano de remediacao — bit-identical
+NAO se aplica (R-20 muda formula intencionalmente); "Match precedente do
+projeto" (DI ja com QuantileGuardrailService style); "Cross-link, nao
+duplicacao" (ADR canonico atualizado; MULTI_HORIZON e walkthrough
+seguem ADR).
+
+**Outcome:** Commit pendente, PR contra main pendente. Apos merge, R-E
+(regression test do suffix fix; fix em si ja em main) e proxima.
+
+---
+
 ## [2026-05-20 09:11 UTC] Stage 23 — completion (F.1 PASS pleno + Fase B prep)
 
 **Context:** Stage 23 — F.1 v3 PASS pleno + abrir Fase B.

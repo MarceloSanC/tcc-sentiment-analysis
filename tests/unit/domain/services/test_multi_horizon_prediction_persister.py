@@ -297,3 +297,70 @@ def test_keyword_only_signature() -> None:
         MultiHorizonPredictionPersister.build_record(  # type: ignore[misc]
             1, 1, 0.0, 0.0, None, None, None, None, None, None, False, ts, rc,
         )
+
+
+def test_year_partition_uses_decision_day_year_across_boundary() -> None:
+    """Coverage gap noted in Stage R-20.2.bis audit: previous tests only
+    exercised one Dec/Jan boundary. The `year` column must always reflect
+    decision_day.year (because partitioning is by decision_day, not target),
+    even when h pushes target into the next year.
+    """
+    ts = [
+        pd.Timestamp(t, tz="UTC")
+        for t in pd.date_range("2023-12-26", periods=15, freq="D")
+    ]
+    record = MultiHorizonPredictionPersister.build_record(
+        decision_idx=3, h=5,  # decision_day=2023-12-29, target_day=2024-01-03
+        y_true=0.0, y_pred=0.0,
+        q10=None, q50=None, q90=None,
+        q10_post=None, q50_post=None, q90_post=None,
+        guardrail_applied=False,
+        dataset_timestamps=ts,
+        run_context=_make_run_context(),
+    )
+    assert record.year == 2023
+    assert pd.Timestamp(record.target_timestamp_utc).year == 2024
+
+
+def test_year_partition_at_quarter_boundary() -> None:
+    """Same invariant but at a non-Dec/Jan year boundary (here Mar/Apr).
+    The year value follows decision_day calendar year, not target year nor
+    quarter. Guards against accidental coupling between `year` and
+    `target_timestamp` in any future refactor.
+    """
+    ts = [
+        pd.Timestamp(t, tz="UTC")
+        for t in pd.date_range("2024-03-28", periods=10, freq="D")
+    ]
+    record = MultiHorizonPredictionPersister.build_record(
+        decision_idx=2, h=3,
+        y_true=0.0, y_pred=0.0,
+        q10=None, q50=None, q90=None,
+        q10_post=None, q50_post=None, q90_post=None,
+        guardrail_applied=False,
+        dataset_timestamps=ts,
+        run_context=_make_run_context(),
+    )
+    assert record.year == 2024
+    assert pd.Timestamp(record.timestamp_utc).month == 3
+    assert pd.Timestamp(record.target_timestamp_utc).month == 4
+
+
+def test_decision_idx_zero_at_first_valid_sample() -> None:
+    """Sanity guard for the decision_idx convention used by the TFT call
+    site (sample i → decision_idx = max_encoder_length - 1 + i). With
+    max_encoder_length = 1, sample 0 has decision_idx = 0.
+    """
+    ts = _make_daily_timestamps(10)
+    record = MultiHorizonPredictionPersister.build_record(
+        decision_idx=0, h=1,
+        y_true=0.0, y_pred=0.0,
+        q10=None, q50=None, q90=None,
+        q10_post=None, q50_post=None, q90_post=None,
+        guardrail_applied=False,
+        dataset_timestamps=ts,
+        run_context=_make_run_context(),
+    )
+    assert record.decision_idx == 0
+    assert record.timestamp_utc == ts[0].isoformat()
+    assert record.target_timestamp_utc == ts[1].isoformat()

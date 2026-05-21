@@ -1,15 +1,29 @@
-"""Regression guard: TFT trainer and baseline runner produce same
-`y_true`, `timestamp_utc`, and `target_timestamp_utc` for the same
-`(decision_idx, h)` pair. Closes Gap 6 mechanically.
+"""Cross-pipeline guard for Gap 6: at the same `target_timestamp_utc`, the
+TFT pipeline (decoder cell) and the baseline pipeline (Persister-emitted
+record) must produce the SAME `y_true`. The 2026-05-20 audit found 663/685
+test/h=1 rows where TFT.y_true == baseline.y_true_at_target_ts_plus_one
+instead of equality at the same target_ts — i.e., off-by-one.
 
-The guarantee comes from both writers going through
-`MultiHorizonPredictionPersister.build_record(...)` per ADR-0003 Opcao (a).
+Stage R-20 (Opcao d) closes this by:
+- shifting `target_return` to `log(close[t]/close[t-1])` (backward) in
+  `build_tft_dataset_use_case.py`
+- moving the baseline `y_true_idx` from `i + h - 1` to `i + h` in
+  `run_baselines_use_case.py:259`
+
+This test exercises BOTH sides end-to-end on a synthetic dataset and
+asserts equality on the join key `(target_timestamp_utc, horizon)`. No
+model training; the decoder iterates raw dataloader output, the baseline
+path goes through `MultiHorizonPredictionPersister.build_record` exactly
+as the production use case does.
 """
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
 import pytest
+import torch
+
+from pytorch_forecasting import TimeSeriesDataSet
 
 from src.domain.services.multi_horizon_prediction_persister import (
     IncompletePredictionWindowError,
@@ -18,10 +32,10 @@ from src.domain.services.multi_horizon_prediction_persister import (
 )
 
 
-def _make_run_context(model_version: str = "m1") -> RunContext:
+def _make_run_context(model_version: str) -> RunContext:
     return RunContext(
         schema_version=2,
-        run_id="run-test",
+        run_id=f"run-{model_version}",
         model_version=model_version,
         asset="AAPL",
         feature_set_name="BASELINE_FEATURES",
@@ -32,97 +46,181 @@ def _make_run_context(model_version: str = "m1") -> RunContext:
     )
 
 
-def _daily_timestamps(n: int) -> list[pd.Timestamp]:
-    return [pd.Timestamp(t, tz="UTC") for t in pd.date_range("2024-01-01", periods=n, freq="D")]
-
-
-@pytest.mark.parametrize("decision_idx,h", [(0, 1), (5, 1), (10, 7), (20, 30), (40, 7)])
-def test_tft_and_baseline_emit_aligned_records_for_same_decision_idx(
-    decision_idx: int, h: int
-) -> None:
-    """For the same (decision_idx, h), both pipelines' records reference
-    the exact same timestamp_utc, target_timestamp_utc, and y_true.
+def _synthetic_split_df(n_rows: int = 40, *, seed: int = 7) -> pd.DataFrame:
+    """Same construction as production: backward-shift target_return, drop
+    the first row (where t-1 is undefined).
     """
-    n = 60
-    timestamps = _daily_timestamps(n)
-    # In real datasets target_return[t] = log(close[t+1] / close[t]); both
-    # writers reference target_returns[decision_idx + h - 1]. Here we just
-    # use a deterministic array.
-    target_returns = np.linspace(-0.01, 0.05, n)
-
-    expected_y_true = float(target_returns[decision_idx + h - 1])
-
-    tft_record = MultiHorizonPredictionPersister.build_record(
-        decision_idx=decision_idx,
-        h=h,
-        y_true=expected_y_true,
-        y_pred=0.001,
-        q10=None, q50=None, q90=None,
-        q10_post=None, q50_post=None, q90_post=None,
-        guardrail_applied=False,
-        dataset_timestamps=timestamps,
-        run_context=_make_run_context(model_version="tft"),
+    rng = np.random.default_rng(seed)
+    raw_ts = pd.date_range("2024-03-01", periods=n_rows + 1, freq="D", tz="UTC")
+    close = 100.0 * np.exp(np.cumsum(rng.normal(0.0, 0.01, size=n_rows + 1)))
+    target_return = np.log(close[1:] / close[:-1])
+    return pd.DataFrame(
+        {
+            "timestamp": raw_ts[1:],
+            "asset_id": ["AAPL"] * n_rows,
+            "time_idx": np.arange(n_rows, dtype="int64"),
+            "close": close[1:],
+            "target_return": target_return.astype("float64"),
+            "day_of_week": raw_ts[1:].dayofweek.astype("int64"),
+            "month": raw_ts[1:].month.astype("int64"),
+            "feature_a": rng.normal(size=n_rows).astype("float64"),
+        }
     )
 
-    baseline_record = MultiHorizonPredictionPersister.build_record(
-        decision_idx=decision_idx,
-        h=h,
-        y_true=expected_y_true,
-        y_pred=0.0,
-        q10=None, q50=None, q90=None,
-        q10_post=None, q50_post=None, q90_post=None,
-        guardrail_applied=False,
-        dataset_timestamps=timestamps,
-        run_context=_make_run_context(model_version="baseline_zero_return"),
-    )
 
-    assert tft_record.timestamp_utc == baseline_record.timestamp_utc
-    assert tft_record.target_timestamp_utc == baseline_record.target_timestamp_utc
-    assert tft_record.y_true == baseline_record.y_true == pytest.approx(expected_y_true)
-    assert tft_record.decision_idx == baseline_record.decision_idx == decision_idx
-    assert tft_record.horizon == baseline_record.horizon == h
-
-
-def test_target_timestamp_is_h_trading_days_after_decision_for_consecutive_dates() -> None:
-    """In a contiguous daily dataset, target_timestamp_utc shifts exactly h
-    rows from decision day (i.e., calendar days equals h for daily series).
+def _tft_records(
+    split_df: pd.DataFrame, *, max_encoder_length: int, max_prediction_length: int
+) -> list[dict]:
+    """Walk the TimeSeriesDataSet exactly like the TFT trainer does, but
+    skip model training. Builds Persister records straight from the
+    decoder targets.
     """
-    ts = _daily_timestamps(40)
-    for decision_idx in (0, 5, 30):
-        for h in (1, 7, 30 - decision_idx if decision_idx <= 10 else 1):
-            if decision_idx + h >= len(ts):
+    ds = TimeSeriesDataSet(
+        split_df,
+        time_idx="time_idx",
+        target="target_return",
+        group_ids=["asset_id"],
+        max_encoder_length=max_encoder_length,
+        max_prediction_length=max_prediction_length,
+        time_varying_unknown_reals=["feature_a"],
+    )
+    dataloader = ds.to_dataloader(train=False, batch_size=128, num_workers=0)
+    actuals = torch.cat([y[0] for _, y in iter(dataloader)], dim=0).cpu().numpy()
+
+    timestamps = pd.to_datetime(split_df["timestamp"], utc=True).tolist()
+    rc = _make_run_context("tft-fake")
+    records: list[dict] = []
+    n_samples = actuals.shape[0]
+    for i in range(n_samples):
+        decision_idx = (max_encoder_length - 1) + i
+        for h in range(1, max_prediction_length + 1):
+            y_true = float(actuals[i, h - 1])
+            try:
+                record = MultiHorizonPredictionPersister.build_record(
+                    decision_idx=decision_idx,
+                    h=h,
+                    y_true=y_true,
+                    y_pred=0.0,
+                    q10=None, q50=None, q90=None,
+                    q10_post=None, q50_post=None, q90_post=None,
+                    guardrail_applied=False,
+                    dataset_timestamps=timestamps,
+                    run_context=rc,
+                )
+            except IncompletePredictionWindowError:
                 continue
-            record = MultiHorizonPredictionPersister.build_record(
-                decision_idx=decision_idx,
-                h=h,
-                y_true=0.0, y_pred=0.0,
-                q10=None, q50=None, q90=None,
-                q10_post=None, q50_post=None, q90_post=None,
-                guardrail_applied=False,
-                dataset_timestamps=ts,
-                run_context=_make_run_context(),
-            )
-            decision = pd.Timestamp(record.timestamp_utc)
-            target = pd.Timestamp(record.target_timestamp_utc)
-            assert (target - decision).days == h
+            records.append(record.to_dict())
+    return records
 
 
-def test_skip_at_boundary_is_symmetric_across_pipelines() -> None:
-    """Both pipelines raise IncompletePredictionWindowError at the same boundary.
-    Ensures no silent y_true=NaN.
+def _baseline_zero_return_records(
+    split_df: pd.DataFrame, *, max_encoder_length: int, max_prediction_length: int
+) -> list[dict]:
+    """Mirror `run_baselines_use_case._emit_oos_rows` for zero_return on the
+    same split. Critical: uses the post-Stage R-20 index
+    `y_true_idx = i + h_int` (not i + h - 1).
     """
-    ts = _daily_timestamps(10)
-    rc = _make_run_context()
-    for h in (1, 3, 7):
-        target_pos = 9 + h
-        assert target_pos >= len(ts)
-        with pytest.raises(IncompletePredictionWindowError):
-            MultiHorizonPredictionPersister.build_record(
-                decision_idx=9, h=h,
-                y_true=0.0, y_pred=0.0,
-                q10=None, q50=None, q90=None,
-                q10_post=None, q50_post=None, q90_post=None,
-                guardrail_applied=False,
-                dataset_timestamps=ts,
-                run_context=rc,
-            )
+    timestamps = pd.to_datetime(split_df["timestamp"], utc=True).tolist()
+    target_returns = split_df["target_return"].to_numpy()
+    rc = _make_run_context("baseline_zero_return")
+    # Same offsets as run_baselines_test_pipeline_use_case: start aligns
+    # with the TFT first valid sample; end trims trailing rows lacking the
+    # full decoder window.
+    n = len(split_df)
+    offset_start = max(max_encoder_length - 1, 0)
+    offset_end = max(max_prediction_length, 0)
+    candidate_idxs = np.arange(n, dtype="int64")
+    if offset_start:
+        candidate_idxs = candidate_idxs[offset_start:]
+    if offset_end:
+        candidate_idxs = candidate_idxs[: max(0, len(candidate_idxs) - offset_end)]
+
+    records: list[dict] = []
+    for i in candidate_idxs:
+        for h in range(1, max_prediction_length + 1):
+            y_true_idx = int(i) + h
+            if y_true_idx >= len(target_returns):
+                continue
+            y_true_value = target_returns[y_true_idx]
+            if not np.isfinite(y_true_value):
+                continue
+            try:
+                record = MultiHorizonPredictionPersister.build_record(
+                    decision_idx=int(i),
+                    h=h,
+                    y_true=float(y_true_value),
+                    y_pred=0.0,
+                    q10=0.0, q50=0.0, q90=0.0,
+                    q10_post=0.0, q50_post=0.0, q90_post=0.0,
+                    guardrail_applied=False,
+                    dataset_timestamps=timestamps,
+                    run_context=rc,
+                )
+            except IncompletePredictionWindowError:
+                continue
+            records.append(record.to_dict())
+    return records
+
+
+@pytest.mark.parametrize(
+    "max_encoder_length,max_prediction_length",
+    [(10, 7), (5, 3), (3, 2)],
+)
+def test_tft_and_baseline_emit_equal_y_true_for_same_target_ts(
+    max_encoder_length: int, max_prediction_length: int,
+) -> None:
+    """The substantive Gap 6 closure: y_true matches at every joined
+    `(target_timestamp_utc, horizon)`. If a future change diverges either
+    the TFT decoder fetch index or the baseline `y_true_idx`, this test
+    fails with non-zero rows in `diff`.
+    """
+    split_df = _synthetic_split_df(n_rows=30)
+
+    tft_rows = pd.DataFrame(
+        _tft_records(
+            split_df,
+            max_encoder_length=max_encoder_length,
+            max_prediction_length=max_prediction_length,
+        )
+    )
+    base_rows = pd.DataFrame(
+        _baseline_zero_return_records(
+            split_df,
+            max_encoder_length=max_encoder_length,
+            max_prediction_length=max_prediction_length,
+        )
+    )
+
+    assert not tft_rows.empty, "TFT path emitted no rows; check synthetic split sizing."
+    assert not base_rows.empty, "Baseline path emitted no rows; check offsets."
+
+    join = tft_rows[["target_timestamp_utc", "horizon", "y_true"]].merge(
+        base_rows[["target_timestamp_utc", "horizon", "y_true"]],
+        on=["target_timestamp_utc", "horizon"],
+        suffixes=("_tft", "_base"),
+        how="inner",
+    )
+    assert len(join) > 0, "TFT and baseline emitted no overlapping target_ts; offsets misaligned."
+
+    diff = (join["y_true_tft"] - join["y_true_base"]).abs()
+    assert (diff < 1e-9).all(), (
+        f"Cross-pipeline y_true off-by-one regression: max diff={float(diff.max())}, "
+        f"n_diverging={int((diff >= 1e-9).sum())} of {len(join)}. "
+        "TFT decoder fetches target_return[decision_idx+h]; baseline must use "
+        "y_true_idx = i + h_int (Stage R-20 Opcao d)."
+    )
+
+
+def test_target_timestamp_alignment_between_pipelines() -> None:
+    """The set of (decision_idx, h) → target_timestamp must coincide
+    bit-byte between the two paths (both go through the same Persister).
+    """
+    split_df = _synthetic_split_df(n_rows=24)
+    tft_rows = pd.DataFrame(_tft_records(split_df, max_encoder_length=5, max_prediction_length=2))
+    base_rows = pd.DataFrame(_baseline_zero_return_records(split_df, max_encoder_length=5, max_prediction_length=2))
+
+    key = ["decision_idx", "horizon"]
+    tft_ts = tft_rows.set_index(key)[["target_timestamp_utc"]]
+    base_ts = base_rows.set_index(key)[["target_timestamp_utc"]]
+    join = tft_ts.join(base_ts, lsuffix="_tft", rsuffix="_base", how="inner")
+    assert (join["target_timestamp_utc_tft"] == join["target_timestamp_utc_base"]).all()
