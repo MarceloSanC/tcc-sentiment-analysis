@@ -379,9 +379,9 @@ FACT_OOS_PREDICTIONS_SCHEMA = AnalyticsTableSchema(
         "fold": "string",
         "seed": "int64",
         "horizon": "int64",
-        # decision_idx materializes the Opcao (a) anchor convention from
-        # ADR-0003: timestamp_utc = dataset_timestamps[decision_idx]. The
-        # column is the schema-level invariant (mechanical > procedural).
+        # decision_idx materializes the ADR-0003 anchor convention:
+        # timestamp_utc = dataset_timestamps[decision_idx]. The column is
+        # the schema-level invariant (mechanical > procedural).
         "decision_idx": "int64",
         "timestamp_utc": "string",
         "target_timestamp_utc": "string",
@@ -543,9 +543,9 @@ FACT_INFERENCE_PREDICTIONS_SCHEMA = AnalyticsTableSchema(
         "model_path": "string",
         "split": "string",
         "horizon": "int64",
-        # decision_idx materializes the Opcao (a) anchor (ADR-0003). Column
-        # mirrors fact_oos_predictions; not required here yet because the
-        # inference writer is migrated post-Stage 20 (see ADR-0003 §C1).
+        # decision_idx materializes the ADR-0003 anchor. Column mirrors
+        # fact_oos_predictions; not required here yet because the inference
+        # writer is migrated post-Stage 20 (see ADR-0003 §C1).
         "decision_idx": "int64",
         "timestamp_utc": "string",
         "target_timestamp_utc": "string",

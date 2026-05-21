@@ -198,7 +198,7 @@ class RunBaselinesTestPipelineUseCase:
         seeds = _extract_seeds(config)
         training = config.get("training_config") or {}
         max_pred = int(training.get("max_prediction_length") or 1)
-        # Per ADR-0003 Opcao (a) (Stage 20):
+        # Per ADR-0003 anchor convention (Stage 20):
         # - Start: TFT trainer's first valid sample has encoder_end at row
         #   (max_encoder_length - 1) of the split. Baselines align to that.
         # - End: TFT's pytorch_forecasting TimeSeriesDataSet only produces

@@ -582,7 +582,7 @@ Base columns enforced no write: `asset_id, timestamp, time_idx, day_of_week, mon
 | 32 | `net_income_yoy_growth` | `net_income` (daily as-of) | `net_income.pct_change(252, fill_method=None)` | `:284` |
 | 33 | `day_of_week` | `timestamp` | `timestamp.dt.dayofweek.astype(int64)` | `:553` |
 | 34 | `month` | `timestamp` | `timestamp.dt.month.astype(int64)` | `:554` |
-| 35 | **`target_return`** (TARGET) | `close` | `log(close.shift(-1) / close)` → log return do proximo dia; ultima row dropada via `dropna(subset=["target_return"])` | `:563-566` |
+| 35 | **`target_return`** (TARGET) | `close` | `log(close / close.shift(1))` (backward) → log return do periodo terminando em `t`; primeira row dropada via `dropna(subset=["target_return"])`. Indexacao escolhida em Stage R-20 / Opcao d para casar com o decoder do `pytorch_forecasting` (`y[0][i, h-1]` → `target_return[D+h]`), fechando o Gap 6 cross-pipeline. Ver [ADR-0003](../01_architecture/decisions/ADR-0003-multi-horizon-prediction-persister.md). | `:563-566` |
 | 36 | `time_idx` | (linha) | `range(len(df))` apos sort por `timestamp` e drop do target NaN | `:557,573` |
 
 Anti-leakage validators (mesmo run): `:287-416` — checa `candle_range=high-low`, `candle_body=|close-open|`, `has_news`, `volume_spike_flag`, volatilidades nao-negativas, valores discretos de regime, sentiment lags shift correto, sentiment_x_volume, ratios fundamentalistas, e fundamentals as-of (`fundamentals_effective_date <= date`).
@@ -1139,7 +1139,7 @@ Baselines sao modelos estatisticos/ingenuos cujas predicoes sao escritas em `fac
 - `_compute_prediction` per baseline (static): `:159-189`
 - `RunContext` per split (`fold="none"` hard-coded): `:230-240`
 - `MultiHorizonPredictionPersister.build_record` (mesmo do TFT): `:254-285`
-- Anchor convention (mesma do TFT): `decision_idx = i`, `y_true = target_return[decision_idx + h - 1]` (ADR-0003 Opcao (a)) — `:258-262`; `target_timestamp = dataset_timestamps[decision_idx + h]` — `multi_horizon_prediction_persister.py:96-107`
+- Anchor convention (mesma do TFT): `decision_idx = i`, `y_true = target_return[decision_idx + h]` (ADR-0003 amendado em Stage R-20 / Opcao d; `target_return[t] = log(close[t]/close[t-1])`) — `run_baselines_use_case.py:259-265`; `target_timestamp = dataset_timestamps[decision_idx + h]` — `multi_horizon_prediction_persister.py:96-107`
 - Quantile guardrail aplicado (defensivo): `QuantileGuardrailService.enforce_monotonic_triplet` — `:266`
 - Skip rules: `y_true` nao-finito (`:263-265`), `IncompletePredictionWindowError` (`:283-284`)
 
@@ -1729,7 +1729,7 @@ Schema `analytics_store_schema.py:546-551`; writer em `run_tft_inference_use_cas
 `main_rebuild_explicit_sweep_predictions.py:46-50` hard-asserta `test_type=="explicit_configs"` (TFT-only). Re-invocar `main_baselines_test_pipeline` ou `main_run_baselines` e o unico caminho.
 
 ### A.58 — Anchor ADR-0003 sem assert runtime nos baselines
-Comentario em `run_baselines_use_case.py:258` documenta `y_true = target_return[decision_idx + h - 1]`; persister usa `target_timestamp = dataset_timestamps[decision_idx + h]` (`multi_horizon_prediction_persister.py:96-107`). Sem assertion runtime amarrando os dois — guarda apenas no gate silver.
+Comentario em `run_baselines_use_case.py:259` documenta `y_true = target_return[decision_idx + h]` (ADR-0003 amendado em Stage R-20 / Opcao d); persister usa `target_timestamp = dataset_timestamps[decision_idx + h]` (`multi_horizon_prediction_persister.py:96-107`). Sem assertion runtime amarrando os dois — guarda apenas no gate silver + integration tests (`test_tft_decoder_target_indexing.py`, `test_tft_baselines_y_true_alignment.py`).
 
 ### A.59 — Zero `GOLD_*_SCHEMA` declarados
 `analytics_store_schema.py` registry `ANALYTICS_TABLE_SCHEMAS` (`:674-691`) lista apenas silver. Gold schemaless.

@@ -458,11 +458,14 @@ def test_historical_quantiles_rolling_uses_only_strictly_past_history(tmp_path: 
 
 
 def test_baseline_y_true_aligns_with_tft_multi_horizon_convention(tmp_path: Path) -> None:
-    # F1 (case b) explicit: target_returns = [1..100]; at decision_ts at index i=30,
-    # the baseline must emit:
-    #   y_true(h=1) == target_returns[30] == 31
-    #   y_true(h=2) == target_returns[31] == 32
-    # If we mis-emitted y_true=target_returns[i] for all h, h=2 would also be 31.
+    # ADR-0003 (Stage R-20 Opcao d): target_return is backward-indexed
+    # (target_return[t] = log(close[t]/close[t-1])), so y_true at decision_idx=i,
+    # horizon h is target_return[i + h]. target_returns = [1..100]; at decision_ts
+    # at index i=30, the baseline must emit:
+    #   y_true(h=1) == target_returns[31] == 32
+    #   y_true(h=2) == target_returns[32] == 33
+    # This matches what the pytorch_forecasting decoder cell at position i+h
+    # would produce, closing the cross-pipeline off-by-one (Gap 6).
     silver = tmp_path / "silver"
     ds = tmp_path / "ds.parquet"
     _write_deterministic_dataset(ds, n_days=100)
@@ -479,11 +482,11 @@ def test_baseline_y_true_aligns_with_tft_multi_horizon_convention(tmp_path: Path
         baselines=["zero_return"],
     )
     oos = _load_oos(silver)
-    decision_ts = "2024-01-31T00:00:00+00:00"  # index i=30 (target_return value at this row is 31.0)
+    decision_ts = "2024-01-31T00:00:00+00:00"  # index i=30 (target_return at i+1=31 is 32.0)
     row_h1 = oos[(oos["timestamp_utc"] == decision_ts) & (oos["horizon"] == 1)].iloc[0]
     row_h2 = oos[(oos["timestamp_utc"] == decision_ts) & (oos["horizon"] == 2)].iloc[0]
-    assert float(row_h1["y_true"]) == pytest.approx(31.0)
-    assert float(row_h2["y_true"]) == pytest.approx(32.0)
+    assert float(row_h1["y_true"]) == pytest.approx(32.0)
+    assert float(row_h2["y_true"]) == pytest.approx(33.0)
     # Target timestamps must differ between horizons (paired-by-target_ts contract).
     assert row_h1["target_timestamp_utc"] != row_h2["target_timestamp_utc"]
 

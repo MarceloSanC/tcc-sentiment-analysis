@@ -3,7 +3,9 @@ title: ADR-0003 MultiHorizonPredictionPersister como domain service compartilhad
 scope: Decisao arquitetural de extrair a logica de persistencia de fact_oos_predictions
   multi-horizonte (hoje duplicada e divergente em train_tft_model_use_case e
   run_baselines_use_case) para um domain service unico que materializa
-  explicitamente a convencao target_timestamp / y_true / h-ahead. Status Accepted.
+  explicitamente a convencao target_timestamp / y_true / h-ahead. Status Accepted,
+  com revisao de formula (Stage R-20 / Opcao d) que preserva semantica financeira
+  "next-day return after decision" mas indexa `target_return` backward.
 update_when:
   - decisao for revisada (status mudar de Accepted para Superseded)
   - novo ADR derivado tornar este obsoleto
@@ -14,7 +16,8 @@ canonical_for: [adr_0003, multi_horizon_prediction_persister, target_timestamp_c
 # ADR-0003: MultiHorizonPredictionPersister
 
 ## Status
-Accepted (2026-05-19)
+Accepted (2026-05-19); amendado em 2026-05-20 (Stage R-20, Opcao d) para fechar
+Gap 6 sem alterar a semantica de "h=1 = next-day return after decision".
 
 ## Context
 
@@ -66,18 +69,36 @@ Convencao canonica fixada (material e auditavel):
 2. **`target_timestamp_utc`**: `dataset_timestamps[decision_idx + h]`,
    indexado em **trading days** (consulta no dataset, nao
    `pd.Timedelta(days=h)`).
-3. **`y_true`**: `dataset.target_return[decision_idx + h - 1]` se h=1
-   significa "next-day return after decision" (literatura financeira,
-   Opcao (a) do investigation report). Se Marcelo decidir Opcao (b),
-   este ADR e atualizado para Superseded e ADR-0003bis explicita a
-   convencao alternativa.
-4. **Borda**: se `decision_idx + h > len(dataset_timestamps)`, levantar
+3. **`y_true`**: `dataset.target_return[decision_idx + h]`.
+   `target_return[t] = log(close[t]/close[t-1])` por
+   `src/use_cases/build_tft_dataset_use_case.py:563` (Stage R-20 Opcao d).
+   Para `h=1` isso fornece `log(close[D+1]/close[D])`, i.e. "next-day
+   return after decision" — semantica financeira preservada. A formula
+   indexa `target_return` BACKWARD (em vez do forward shift original)
+   justamente para que o decoder do `pytorch_forecasting`
+   (`y[0][i, h-1]`, que naturalmente fetcha `target_return[D+h]`)
+   coincida bit-a-bit com o que o baseline persiste, fechando Gap 6.
+4. **Borda**: se `decision_idx + h >= len(dataset_timestamps)`, levantar
    `IncompletePredictionWindowError` em vez de emitir registro com
    `y_true` invalido. AGENT_CORE: skip rows with missing supervision.
 
 Ambos os call-sites (TFT trainer e baseline runner) passam a chamar o
 mesmo `build_record`. Convencao deixa de ser implicita e distribuida
 e passa a viver em **um arquivo** com **testes proprios**.
+
+### Historico do item 3 (Opcao a → Opcao d, 2026-05-20)
+
+A versao original deste ADR (Opcao a) prescrevia
+`y_true = target_return[decision_idx + h - 1]` com `target_return[t] =
+log(close[t+1]/close[t])` (forward shift). Auditoria de 2026-05-20
+confirmou empiricamente que o decoder do `pytorch_forecasting` fetcha
+`target_return[decision_idx + h]` (uma posicao alem do que Opcao (a)
+prescrevia para o baseline), causando off-by-one cross-pipeline (Gap 6,
+663/685 linhas test/h=1 com TFT.y_true == baseline.y_true do dia
+seguinte). Opcao (d) corrige a formula em `target_return` e ajusta o
+indice em `run_baselines_use_case.py:259` (`y_true_idx = i + h_int`)
+para casar com o decoder. Semantica "next-day return after decision"
+e preservada porque a formula passa a indexar backward.
 
 ## Consequences
 
@@ -103,6 +124,12 @@ e passa a viver em **um arquivo** com **testes proprios**.
   (calendar → trading day arithmetic).
 - Adiciona um novo conceito ao dominio (`RunContext`, `PredictionRecord`)
   que precisa estar documentado em `MULTI_HORIZON.md`.
+- Stage R-20 (Opcao d) muda a formula de `target_return` no dataset
+  (backward em vez de forward). Dataset_tft precisa ser reconstruido;
+  `data/analytics_archive_pre_phase_b/` mantem semantica antiga como
+  registro historico documentado, nao debito ativo (Phase B ainda nao
+  rodou; F.2 pre-registro nem foi feito; modelos antigos sao throwaway
+  de smoke max_epochs=1, hidden_size=16).
 
 ## Cross-link
 

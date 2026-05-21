@@ -255,8 +255,12 @@ class RunBaselinesUseCase:
                     h_int = int(h)
                     if h_int < 1:
                         continue
-                    # ADR-0003 Opcao (a): y_true = target_return[decision_idx + h - 1].
-                    y_true_idx = i + h_int - 1
+                    # ADR-0003 (Stage R-20 Opcao d): target_return is now BACKWARD
+                    # indexed (target_return[t] = log(close[t]/close[t-1])), so
+                    # y_true at horizon h is target_return[decision_idx + h]. This
+                    # mirrors the pytorch_forecasting decoder cell at the same
+                    # position and keeps "next-day return after decision" semantics.
+                    y_true_idx = i + h_int
                     if y_true_idx >= len(target_returns):
                         continue
                     y_true_value = target_returns[y_true_idx]
