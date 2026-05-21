@@ -1192,10 +1192,24 @@ Baselines sao modelos estatisticos/ingenuos cujas predicoes sao escritas em `fac
 ## 6. Stage: gold (analytics)
 
 **Entrypoint**: [`src/main_refresh_analytics_store.py`](../../src/main_refresh_analytics_store.py)
-**Use case**: [`src/use_cases/refresh_analytics_store_use_case.py`](../../src/use_cases/refresh_analytics_store_use_case.py)
-**Writer**: `_safe_write` em `refresh_analytics_store_use_case.py:190-193`
+**Use case**: [`src/use_cases/refresh_analytics_store_use_case.py`](../../src/use_cases/refresh_analytics_store_use_case.py) (300 LOC pos-R-22; era 2.579 LOC god-object pre-R-22)
+**Builders**: [`src/domain/services/gold_builders/`](../../src/domain/services/gold_builders/) — 25 builders em 5 clusters (ranking/descriptive/quantile/pairwise/confidence), `GoldBuildersRegistry`, `build_default_registry()` factory (ADR-0005)
+**Writer**: `_safe_write` em `refresh_analytics_store_use_case.py` (orchestrator)
 **Schemas**: **NENHUM declarado** (ver §A.59)
 **Scope domain**: [`src/domain/services/scope_spec.py`](../../src/domain/services/scope_spec.py)
+
+**Stage R-22 (2026-05-21)**: os 25 builders pre-R-22 inline como
+`@staticmethod _build_gold_X(...)` foram extraidos para
+`src/domain/services/gold_builders/{cluster}.py`. Cada builder vira
+uma `GoldBuilder` subclass com `output_table`, `requires` (silver/dim),
+`requires_gold` (Tier 2/3), e `build(snapshot, ctx) -> pd.DataFrame`.
+O orchestrator (use case) carrega snapshot, instancia `BuildContext`,
+itera registry, enforca `requires/requires_gold` via
+`GoldBuilderRequirementError`, persiste cada parquet, e acumula
+`ctx.gold_outputs` para Tier 2/3 a jusante. Ver
+[`docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md` §"Gold builder
+extension point"](../01_architecture/ANALYTICS_STORE_ARCHITECTURE.md#gold-builder-extension-point-adr-0005)
+e ADR-0005 para o contrato.
 
 ### 6.0 Achados arquiteturais (LER ANTES das tabelas)
 
@@ -1215,37 +1229,43 @@ def _safe_write(df, path):
 
 ### 6.1 Inventario de tabelas gold emitidas
 
-Listagem ordenada por linha em `refresh_analytics_store_use_case.py` (`execute` ~lines 2416-2563):
+Listagem ordenada por `build_default_registry()` em
+[`src/domain/services/gold_builders/__init__.py`](../../src/domain/services/gold_builders/__init__.py)
+(mesma ordem do emit do orchestrator pre-R-22; locked pelo sentinel
+test `tests/integration/test_gold_builders_byte_identical_archive.py`):
 
-| # | Tabela | Builder | Emit |
-|---|---|---|---|
-| 1 | `gold_runs_long` | `_build_gold_runs_long` (`:267-294`) | `:2416-2419` |
-| 2 | `gold_ranking_by_config` | `_build_gold_ranking_by_config` (`:296`) | `:2420-2423` |
-| 3 | `gold_consistency_topk` | `_build_gold_consistency_topk` (`:339`) | `:2424-2427` |
-| 4 | `gold_ic95_by_config_metric` | `_build_gold_ic95` (`:392`) | `:2428-2431` |
-| 5 | `gold_feature_set_impact` | `_build_gold_feature_set_impact` (`:429`) | `:2432-2435` |
-| 6 | `gold_oos_consolidated` | `_build_gold_oos_consolidated` (`:1305`) | `:2436-2440` |
-| 7 | `gold_prediction_metrics_by_run_split_horizon` | `_build_gold_prediction_metrics_by_run_split_horizon` (`:655`) | `:2442-2453` |
-| 8 | `gold_quantile_guardrail_audit` | `_build_gold_quantile_guardrail_audit` (`:769`) | `:2455-2457` |
-| 9 | `gold_quantile_degeneracy_report` | `_build_gold_quantile_degeneracy_report` (`:880`) | `:2459-2466` |
-| 10 | `gold_prediction_metrics_by_config` | `_build_gold_prediction_metrics_by_config` (`:933`) | `:2467-2470` |
-| 11 | `gold_prediction_metrics_by_horizon` | `_build_gold_prediction_metrics_by_horizon` (`:965`) | `:2471-2474` |
-| 12 | `gold_prediction_calibration` | `_build_gold_prediction_calibration` (`:997`) | `:2475-2478` |
-| 13 | `gold_prediction_risk` | `_build_gold_prediction_risk` (`:1226`) | `:2479-2482` |
-| 14 | `gold_prediction_generalization_gap` | `_build_gold_prediction_generalization_gap` (`:1025`) | `:2483-2486` |
-| 15 | `gold_prediction_robustness_by_horizon` | `_build_gold_prediction_robustness_by_horizon` (`:1063`) | `:2487-2490` |
-| 16 | `gold_feature_impact_by_horizon` | `_build_gold_feature_impact_by_horizon` (`:1113`) | `:2491-2497` |
-| 17 | `gold_feature_contrib_local_summary` | `_build_gold_feature_contrib_local_summary` (`:2262`) | `:2498-2501` |
-| 18 | `gold_oos_quality_report` | `_build_gold_oos_quality_report` (`:1463`) | `:2502-2506` |
-| 19 | `gold_dm_pairwise_results` | `_build_gold_dm_pairwise_results` (`:1568`) + `_apply_holm_adjustment_for_dm` (`:2228`) | `:2507-2513` |
-| 20 | `gold_mcs_results` | `_build_gold_mcs_results` (`:1642`) + `_compute_mcs_from_loss_matrix` (`:1387`) | `:2514-2518` |
-| 21 | `gold_win_rate_pairwise_results` | `_build_gold_win_rate_pairwise_results` (`:2048`) | `:2519-2523` |
-| 22 | `gold_paired_oos_intersection_by_horizon` | `_build_gold_paired_oos_intersection_by_horizon` (`:1718`) | `:2524-2532` |
-| 23 | `gold_model_decision_final` | `_build_gold_model_decision_final` (`:1811`) | `:2533-2545` |
-| 24 | `gold_quality_statistics_report` | `_build_gold_quality_statistics_report` (`:2141`) | `:2546-2555` |
-| 25 | `gold_quality_run_sweep_summary` | `_build_gold_quality_run_sweep_summary` (`:1190`) | `:2556-2563` |
+| # | Tabela | Builder (`GoldBuilder` subclass) | Cluster (arquivo) | Tier |
+|---|---|---|---|---|
+| 1 | `gold_runs_long` | `RunsLongGoldBuilder` | ranking | 1 |
+| 2 | `gold_ranking_by_config` | `RankingByConfigGoldBuilder` | ranking | 1 |
+| 3 | `gold_consistency_topk` | `ConsistencyTopkGoldBuilder` | ranking | 1 |
+| 4 | `gold_ic95_by_config_metric` | `Ic95GoldBuilder` | descriptive | 1 |
+| 5 | `gold_feature_set_impact` | `FeatureSetImpactGoldBuilder` | descriptive | 1 |
+| 6 | `gold_oos_consolidated` | `OosConsolidatedGoldBuilder` | descriptive | 1 |
+| 7 | `gold_prediction_metrics_by_run_split_horizon` | `PredictionMetricsByRunSplitHorizonGoldBuilder` (composes raw+post via `_build_metrics_single_contract`) | quantile | 1 |
+| 8 | `gold_quantile_guardrail_audit` | `QuantileGuardrailAuditGoldBuilder` | quantile | 1 |
+| 9 | `gold_quantile_degeneracy_report` | `QuantileDegeneracyReportGoldBuilder` | quantile | 1 |
+| 10 | `gold_prediction_metrics_by_config` | `PredictionMetricsByConfigGoldBuilder` | quantile | 2 |
+| 11 | `gold_prediction_metrics_by_horizon` | `PredictionMetricsByHorizonGoldBuilder` | descriptive | 2 |
+| 12 | `gold_prediction_calibration` | `PredictionCalibrationGoldBuilder` | descriptive | 2 |
+| 13 | `gold_prediction_risk` | `PredictionRiskGoldBuilder` | confidence | 1 |
+| 14 | `gold_prediction_generalization_gap` | `PredictionGeneralizationGapGoldBuilder` | confidence | 2 |
+| 15 | `gold_prediction_robustness_by_horizon` | `PredictionRobustnessByHorizonGoldBuilder` | confidence | 2 |
+| 16 | `gold_feature_impact_by_horizon` | `FeatureImpactByHorizonGoldBuilder` | confidence | 2 |
+| 17 | `gold_feature_contrib_local_summary` | `FeatureContribLocalSummaryGoldBuilder` | confidence | 1 |
+| 18 | `gold_oos_quality_report` | `OosQualityReportGoldBuilder` (preserves R-E suffix fix) | descriptive | 1 |
+| 19 | `gold_dm_pairwise_results` | `DmPairwiseResultsGoldBuilder` (Holm-adjusted inside `build()`) | pairwise | 1 |
+| 20 | `gold_mcs_results` | `McsResultsGoldBuilder` | pairwise | 1 |
+| 21 | `gold_win_rate_pairwise_results` | `WinRatePairwiseResultsGoldBuilder` | pairwise | 1 |
+| 22 | `gold_paired_oos_intersection_by_horizon` | `PairedOosIntersectionByHorizonGoldBuilder` | pairwise | 1 |
+| 23 | `gold_model_decision_final` | `ModelDecisionFinalGoldBuilder` (7 upstream gold + `ctx.primary_quantile_contract`) | confidence | 3 |
+| 24 | `gold_quality_statistics_report` | `QualityStatisticsReportGoldBuilder` | confidence | 3 |
+| 25 | `gold_quality_run_sweep_summary` | `QualityRunSweepSummaryGoldBuilder` | confidence | 3 |
 
-(Total: 25 tabelas — preview do agente dizia 24, a contagem real e 25.)
+Tiers (R-22.2.bis):
+- **Tier 1**: consome apenas silver/dim via `snapshot` (`requires_gold = ()`).
+- **Tier 2**: consome `gold_prediction_metrics_by_run_split_horizon` via `ctx.gold_outputs`.
+- **Tier 3**: consome multiplas tabelas Tier 1/2 via `ctx.gold_outputs`.
 
 ### 6.2 Formulas canonicas (statistical core)
 

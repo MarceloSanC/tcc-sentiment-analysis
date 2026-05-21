@@ -132,10 +132,67 @@ contra `data/analytics_archive_pre_phase_b/silver` no estado pre-mudanca.
 DI: o use case aceita `registry=` no construtor para testes. Default e
 o `build_default_registry()` com os 27 checks canonicos.
 
+## Gold builder extension point (ADR-0005)
+
+`RefreshAnalyticsStoreUseCase` segue o mesmo padrao do validate: e um
+orchestrator fino (300 LOC pos-R-22, vs 2.579 LOC pre-R-22) que carrega
+silver/dim + escopo, monta um `GoldBuilderSnapshot`, instancia
+`BuildContext` (com `primary_quantile_contract` + `gold_outputs` dict),
+e itera um `GoldBuildersRegistry` (`src/domain/services/gold_builders/`).
+Cada builder vive como uma `GoldBuilder` subclass com `output_table`,
+`requires` (silver/dim consumidas), `requires_gold` (gold tables
+upstream — Tier 2/3), e `build(snapshot, ctx) -> pd.DataFrame`.
+
+Para **adicionar um novo builder**:
+
+```python
+# src/domain/services/gold_builders/<cluster>.py
+from src.domain.services.gold_builders.base import (
+    BuildContext,
+    GoldBuilder,
+    GoldBuilderSnapshot,
+)
+
+
+class MyNewGoldBuilder(GoldBuilder):
+    output_table = "gold_my_new_metric"
+    requires = ("dim_run", "fact_oos_predictions")  # silver/dim
+    requires_gold = ()  # Tier 1; for Tier 2 set to upstream gold tables
+
+    def build(self, snapshot: GoldBuilderSnapshot, ctx: BuildContext) -> pd.DataFrame:
+        dim_run = snapshot.get("dim_run")
+        # Tier 2/3 read upstream gold from ctx.gold_outputs[...]
+        # ctx.primary_quantile_contract is available for raw vs post-guardrail
+        return df  # the orchestrator persists to gold/<output_table>.parquet
+```
+
+E **registrar na ordem topologica** no factory `build_default_registry()`
+em [`src/domain/services/gold_builders/__init__.py`](../../src/domain/services/gold_builders/__init__.py).
+A ordem de registro e simultaneamente: (a) o contrato bit-identical do
+ADR-0005 §Consequences (sentinel test em
+`tests/integration/test_gold_builders_byte_identical_archive.py`); (b) a
+ordem topologica honrando `requires_gold` — Tier 2/3 builders precisam
+aparecer estritamente depois de seus upstreams.
+
+Topology test em
+[`tests/unit/domain/services/gold_builders/test_topology.py`](../../tests/unit/domain/services/gold_builders/test_topology.py)
+falha rapido se a ordem for violada; orchestrator tambem enforca em
+runtime via `GoldBuilderRequirementError` antes de chamar `build()`.
+
+Reordenar a registry requer:
+1. Atualizar `test_topology.py::test_registry_output_tables_match_monolith_emit_sequence`
+2. Regenerar fixtures em `tests/integration/fixtures/gold_builders/byte_identical_archive/*.json`
+   rodando `RefreshAnalyticsStoreUseCase` contra
+   `data/analytics_archive_pre_phase_b/silver/` no estado pre-mudanca
+
+DI: o use case aceita `registry=` no construtor para testes. Default e
+o `build_default_registry()` com os 25 builders canonicos.
+
 ## Fonte da verdade (codigo)
 - `src/infrastructure/schemas/analytics_store_schema.py` — definicao de schemas
-- `src/use_cases/refresh_analytics_store_use_case.py` — materializacao gold
+- `src/use_cases/refresh_analytics_store_use_case.py` — orchestrator fino sobre gold_builders (ADR-0005)
 - `src/use_cases/validate_analytics_quality_use_case.py` — orchestrator fino sobre quality_checks
+- `src/domain/services/gold_builders/` — 25 builders em 5 clusters (ranking/descriptive/quantile/pairwise/confidence), `GoldBuildersRegistry`, `GoldBuilderSnapshot`, `BuildContext`, `build_default_registry()` factory (ADR-0005)
 - `src/domain/services/quality_checks/` — 27 checks em 4 clusters (cardinality/alignment/calibration/contracts), `QualityCheckRegistry`, `AnalyticsSnapshot`, `build_default_registry()` factory (ADR-0004)
 - `src/adapters/parquet_analytics_run_repository.py` — leitura/escrita silver
 - `src/domain/services/scope_spec.py` — governanca de escopo
