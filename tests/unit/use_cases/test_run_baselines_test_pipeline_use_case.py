@@ -216,8 +216,7 @@ def test_window_override_per_baseline(tmp_path: Path) -> None:
         "replica_seeds": [42],
     }
     pipeline.execute(asset="AAPL", config=config, dataset_path=ds)
-    config_silver = _load_dim(silver)
-    # No config emitted? fact_config_silver = ParquetAnalyticsRunRepository writes
+    # fact_config_silver = ParquetAnalyticsRunRepository writes
     # to fact_config table. We can read it via load:
     config_files = sorted((silver / "fact_config").rglob("*.parquet"))
     cfg = pd.concat(
