@@ -84,10 +84,59 @@ nao recomputar nem editar manualmente o snapshot arquivado.
 | `gold_prediction_metrics_by_config` | 1 linha por (`config_signature`, `split`, `horizon`) | + agregados (mean/std/iqr) por metrica |
 | `gold_dm_pairwise_results` | 1 linha por par de candidatos | `parent_sweep_id`, `aligned_timestamps`, `dm_stat`, `pvalue_adj_holm` |
 
+## Quality check extension point (ADR-0004)
+
+`ValidateAnalyticsQualityUseCase` e um orchestrator fino: carrega
+silver/gold + escopo, monta um `AnalyticsSnapshot`, e itera um
+`QualityCheckRegistry` (`src/domain/services/quality_checks/`). Cada
+check vive como uma `QualityCheck` subclass com `name`, `applies_when`
+e `run(snapshot)`.
+
+Para **adicionar um novo check**:
+
+```python
+# src/domain/services/quality_checks/<cluster>.py
+from src.domain.services.quality_checks.base import (
+    AnalyticsSnapshot,
+    CheckResult,
+    QualityCheck,
+)
+
+
+class MyNewCheck(QualityCheck):
+    name = "my_new_check"
+
+    def applies_when(self, scope):
+        # Default herda True; override para scope-specific gating, e.g.:
+        # return scope is not None and scope.scope_mode == "cohort_decision"
+        return True
+
+    def run(self, snapshot: AnalyticsSnapshot) -> CheckResult:
+        df = snapshot.get("fact_oos_predictions")
+        if df.empty:
+            return CheckResult(self.name, True, "ok")
+        # ... compute issues
+        return CheckResult(self.name, passed=..., detail=...)
+```
+
+E **registrar na ordem topologica** no factory
+`build_default_registry()` em
+[`src/domain/services/quality_checks/__init__.py`](../../src/domain/services/quality_checks/__init__.py).
+A ordem de registro e o contrato bit-identical do ADR-0004 §Consequences;
+reordenar requer atualizar tambem o teste
+`tests/unit/domain/services/quality_checks/test_registry_order.py` +
+regenerar as fixtures em
+`tests/integration/fixtures/quality_checks/archive_silver_*.json` rodando
+contra `data/analytics_archive_pre_phase_b/silver` no estado pre-mudanca.
+
+DI: o use case aceita `registry=` no construtor para testes. Default e
+o `build_default_registry()` com os 27 checks canonicos.
+
 ## Fonte da verdade (codigo)
 - `src/infrastructure/schemas/analytics_store_schema.py` — definicao de schemas
 - `src/use_cases/refresh_analytics_store_use_case.py` — materializacao gold
-- `src/use_cases/validate_analytics_quality_use_case.py` — quality gates
+- `src/use_cases/validate_analytics_quality_use_case.py` — orchestrator fino sobre quality_checks
+- `src/domain/services/quality_checks/` — 27 checks em 4 clusters (cardinality/alignment/calibration/contracts), `QualityCheckRegistry`, `AnalyticsSnapshot`, `build_default_registry()` factory (ADR-0004)
 - `src/adapters/parquet_analytics_run_repository.py` — leitura/escrita silver
 - `src/domain/services/scope_spec.py` — governanca de escopo
 
