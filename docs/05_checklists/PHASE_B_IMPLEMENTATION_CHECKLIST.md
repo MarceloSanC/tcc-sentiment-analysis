@@ -1749,15 +1749,17 @@ git via branch `feat/stage-f0-pre-smoke-fixes`.
 
 ### Tasks
 
-- [ ] **F.1** Smoke confirmatorio com `max_epochs >= 5`, `n_rows >= 1000`.
-      **Aceite:**
-      - `% p10==p90 < 5%` (gate do Stage 11);
-      - zero violacoes probabilisticas;
-      - gold cohort-aware gerado corretamente;
-      - **suite completa de testes do projeto passa** (`pytest tests/`);
-      - **CI verde** em todos os PRs dos Stages anteriores ja mergeados;
-      - refresh + quality gate executados sem erro no smoke (output do
-        `main_refresh_analytics_store` sob scope da coorte do smoke).
+- [x] **F.1** Smoke confirmatorio com `max_epochs >= 5`, `n_rows >= 1000`.
+      **Aceite (satisfeito 2026-05-20 via Stage 23 smoke v3):**
+      - `% p10==p90 < 5%` (gate do Stage 11) — PASS via `block_quantile_degeneracy_gate`;
+      - zero violacoes probabilisticas — MPIW post_guardrail >= 0; crossing rate raw OK;
+      - gold cohort-aware gerado corretamente — todas as ~25 tabelas com `parent_sweep_id`;
+      - **suite completa de testes do projeto passa** (`pytest tests/` → 559 passed);
+      - **CI verde** em todos os PRs dos Stages anteriores ja mergeados — pendente
+        merge de Stages 20-23 (PRs #44-#47) por Marcelo;
+      - refresh + quality gate executados sem erro no smoke — **27/27 PASS**, zero
+        FAIL. Reporte: `docs/07_reports/smoke_confirmatory_2026-05-18.md` §"F.1 v3
+        PASS pleno (post-Stage 22, 2026-05-20)".
 
 - [ ] **F.2** Pre-registro com contrato quantilico primario fundamentado
       (raw vs post-guardrail) e politica de baselines (mesmo

@@ -438,3 +438,19 @@ Evidencia completa do smoke em
 [`docs/07_reports/smoke_confirmatory_2026-05-18.md`](../smoke_confirmatory_2026-05-18.md).
 Re-rodada do smoke pos-Stage F.0 (data: 2026-05-18 re-run) anexa
 secao final nesse mesmo relatorio.
+
+## Status final (2026-05-20)
+
+Stage F.0 mergeado (PR #40). Stage F.A registro mergeado (PRs #41-#43).
+PHASE_B §Stages 20-23 abertos em revisao (PRs #44-#47):
+- Stage 20 (#44): `MultiHorizonPredictionPersister`, Gap 6 fechado mecanicamente.
+- Stage 21 (#45): `QualityCheckRegistry` skeleton.
+- Stage 22 (#46): `GoldBuilders` skeleton.
+- Stage 23 (#47): F.1 v3 smoke executado com **27/27 quality checks PASS**.
+  Reporte: [`smoke_confirmatory_2026-05-18.md`](../smoke_confirmatory_2026-05-18.md)
+  §"F.1 v3 PASS pleno".
+
+**F.2 pre-registro:** ainda pendente; documento separado em
+`docs/06_pre_registration/`. **F.3 Gate de saida Fase A:** awaiting F.2.
+Fase B tecnicamente pronta para abrir formalmente apos merge dos PRs #44-#47
++ conclusao F.2.

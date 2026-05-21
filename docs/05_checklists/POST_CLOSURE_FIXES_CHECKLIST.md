@@ -11,7 +11,10 @@ canonical_for: [post_closure_fixes, smoke_iteration_findings, phase_b_blockers]
 
 # Post-Closure Fixes — Checklist
 
-**Status:** Stage F.0 em revisao.
+**Status:** Stage F.0 mergeado (PR #40, 2026-05-19). Stage F.A registro mergeado
+(PRs #41-#43, 2026-05-20). Gap 6 fechado mecanicamente via PHASE_B §Stage 20
+(PR #44, ADR-0003 Opcao (a) materializada em
+`MultiHorizonPredictionPersister`). Stage 23 (F.1 v3 PASS pleno) em revisao.
 **Criado:** 2026-05-19 (apos separacao de [`PHASE_B_IMPLEMENTATION_CHECKLIST.md`](PHASE_B_IMPLEMENTATION_CHECKLIST.md)).
 **Pre-requisito:** [`A_audit_closure_2026-05-17.md`](../07_reports/phase-gates/A_audit_closure_2026-05-17.md) com amendment "Findings post-closure".
 **Bloqueante para:** F.1 smoke PASS pleno → abertura da Fase B (ver `Stage final` em PHASE_B).
@@ -92,20 +95,20 @@ compartilhada, nao por acoplamento de processo. Sibling architecture:
 
 ### Tasks
 
-- [~] **F.0.0** Schema da secao `baselines` em sweep JSON config.
+- [x] **F.0.0** Schema da secao `baselines` em sweep JSON config.
       **Aceite:** schema documentado em
       [`SWEEPS_AND_SELECTION.md`](../03_modeling/SWEEPS_AND_SELECTION.md)
       §"Schema da secao baselines"; ao menos 1 config real em
       `config/sweeps/explicit/*.json` com seção `baselines` como exemplo;
       novo config `phase_a_smoke_20260518_v2.json` para re-rodada do smoke.
 
-- [~] **F.0.1** Standalone CLI `src/main_run_baselines.py` (debug).
+- [x] **F.0.1** Standalone CLI `src/main_run_baselines.py` (debug).
       **Aceite:** `python -m src.main_run_baselines --help` retorna exit 0;
       `RunBaselinesUseCase` reinvocavel sem JSON; runbook em
       [`RUN_BASELINES.md`](../06_runbooks/RUN_BASELINES.md). NAO substitui
       caminho canonico (F.0.2).
 
-- [~] **F.0.2** Sibling test pipeline canonico.
+- [x] **F.0.2** Sibling test pipeline canonico.
       **Aceite:** `src/use_cases/run_baselines_test_pipeline_use_case.py`
       + `src/main_baselines_test_pipeline.py`; mesmo JSON do
       `main_tft_test_pipeline` alimenta ambos; `parent_sweep_id` derivado
@@ -115,41 +118,41 @@ compartilhada, nao por acoplamento de processo. Sibling architecture:
       `evaluation_end_offset_days = 0`. Aceita parametros aditivos em
       `RunBaselinesUseCase.execute()` sem quebrar Stage 12.
 
-- [~] **F.0.3** Defense-in-depth gate em quality validator.
+- [x] **F.0.3** Defense-in-depth gate em quality validator.
       **Aceite:** check `tft_baselines_timestamp_subset_alignment` em
       `validate_analytics_quality_use_case.py`; ativo em
       `scope_mode=cohort_decision`; falha se
       `set(target_timestamp_utc | TFT) != set(target_timestamp_utc | baselines)`.
       Regression guard para Cenario Falha D do F.1.
 
-- [~] **F.0.4** Fix `--help` em `main_refresh_analytics_store`.
+- [x] **F.0.4** Fix `--help` em `main_refresh_analytics_store`.
       **Aceite:** `python -m src.main_refresh_analytics_store --help`
       retorna exit 0 (escape `%%` em help strings).
 
-- [~] **F.0.5** Re-rodar F.1 smoke com fixes F.0.0-F.0.4 + F.0.6-F.0.7.
+- [x] **F.0.5** Re-rodar F.1 smoke com fixes F.0.0-F.0.4 + F.0.6-F.0.7.
       **Aceite:** todos 6 criterios PASS conforme aceite literal de
       [F.1](PHASE_B_IMPLEMENTATION_CHECKLIST.md#stage-final--smoke-confirmatorio--pre-registro-bc);
       relatorio atualizado em `docs/07_reports/smoke_confirmatory_2026-05-18.md`
       secao "Re-run pos-Stage F.0".
 
-- [~] **F.0.6** Quality check `gold_confidence_calibrated_by_horizon`:
+- [x] **F.0.6** Quality check `gold_confidence_calibrated_by_horizon`:
       filtrar `is_quantile_genuine=False`.
       **Aceite:** point baselines (NaN confidence por design) nao mais
       contadas como `bad_confidence`. Regression guard via teste: NaN em
       quantile-genuine ainda falha (defeito real preservado).
 
-- [~] **F.0.7** Quality check `official_contract_quantile_attention`:
+- [x] **F.0.7** Quality check `official_contract_quantile_attention`:
       filtrar baselines do artifact check.
       **Aceite:** runs com `feature_set_name='baseline'` OR `model_version`
       startswith `'baseline_'` excluidos do `fact_model_artifacts` check.
       Quantile contract continua aplicando a TODOS os runs.
 
-- [~] **F.0.8** Amendment ao closure doc.
+- [x] **F.0.8** Amendment ao closure doc.
       **Aceite:** seção "Findings post-closure" em
       [`A_audit_closure_2026-05-17.md`](../07_reports/phase-gates/A_audit_closure_2026-05-17.md)
       lista os 5 gaps; cross-link bidirecional com Stage F.0.
 
-- [~] **F.0.9** Adicionar Stage F.0 ao checklist post-closure.
+- [x] **F.0.9** Adicionar Stage F.0 ao checklist post-closure.
       **Aceite:** este Stage existe em
       [`POST_CLOSURE_FIXES_CHECKLIST.md`](POST_CLOSURE_FIXES_CHECKLIST.md)
       com Objetivo, Notas, Cross-link e Tasks. Tasks `[~]` durante
@@ -200,14 +203,15 @@ Quando uma re-rodada subsequente do smoke F.1 descobrir novo gap,
 abrir um Stage novo aqui (nao espremer mais sub-IDs em F.0.X).
 Candidato corrente:
 
-- **Gap 6 — TFT y_true convention bug.** Descoberto durante re-run
-  F.0.5. Investigacao em [`tft_y_true_investigation_2026-05-18.md`](../07_reports/tft_y_true_investigation_2026-05-18.md).
-  **Decisao tomada (2026-05-19):** promovido para Stage de codigo em
-  PHASE_B, mas **depende de PHASE_B §Stage 20** (extracao do
-  `MultiHorizonPredictionPersister`) — o fix vira mudanca de
-  implementacao no persister, em 1 arquivo, em vez de blast-radius em
-  5. O Stage do fix em si sera numerado como Stage 23 (ou Stage 20.5)
-  quando aberto, apos Stage 20 mergeado e ADR-0003 fechado com
-  Opcao (a) ou (b) decidida. Sub-ID provisorio `F.0.10` em
-  `tft_y_true_investigation_2026-05-18.md` §"Stage F.0.10 (proposed)"
-  fica obsoleto — referenciar Stage 23 (TBD) em vez disso.
+- **Gap 6 — TFT y_true convention bug.** **RESOLVIDO** via PHASE_B §Stage 20
+  (PR #44, 2026-05-20). `MultiHorizonPredictionPersister` materializa a
+  convencao Opcao (a) do ADR-0003: `timestamp_utc = dataset_timestamps[decision_idx]`,
+  `target_timestamp_utc = dataset_timestamps[decision_idx + h]`, `y_true`
+  passado pelo caller indexando `target_return[decision_idx + h - 1]`.
+  Ambos TFT trainer e baseline runner usam o mesmo Persister. Schema
+  `fact_oos_predictions.decision_idx` materializa o invariante.
+  Validacao: Stage 23 smoke 2026-05-20 → `oos_pairwise_target_alignment` PASS
+  + `tft_baselines_timestamp_subset_alignment` PASS (ambos eram FAIL pre-Stage 20).
+  Cross-link: [`tft_y_true_investigation_2026-05-18.md`](../07_reports/tft_y_true_investigation_2026-05-18.md);
+  [ADR-0003](../01_architecture/decisions/ADR-0003-multi-horizon-prediction-persister.md);
+  [`smoke_confirmatory_2026-05-18.md`](../07_reports/smoke_confirmatory_2026-05-18.md) §"Post-Stage 20".
