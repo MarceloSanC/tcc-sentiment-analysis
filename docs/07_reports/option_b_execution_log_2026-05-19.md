@@ -15,6 +15,36 @@ Append-only. Mais recente no topo.
 
 ---
 
+## [2026-05-20 08:57 UTC] Stage 21.1 — completion (skeleton + decision)
+
+**Context:** Stage 21 — QualityCheckRegistry extraction. ADR-0004 verified.
+**Decision (scope adjustment):** Stage 21 PR initial scope = SKELETON only.
+**Question/Issue:** Stage 21 plan calls for migrating ~30 quality checks
+  from validate_analytics_quality_use_case (1152 LOC) to per-category
+  class files, preserving bit-for-bit output. Full migration estimated
+  8-14h. Combined with Stage 22 (gold builders, 2568 LOC, 12-20h) and
+  Stage 23 closure, total active work exceeds reasonable single-session
+  context budget. Bit-identical preservation has non-trivial risk per
+  migration.
+**Options:**
+  (a) Do full Stage 21 in this session — risk context exhaustion mid-Stage 22
+  (b) Skeleton only Stage 21 + Stage 22; full Stage 23 closure attempt
+  (c) Defer Stage 21 + 22 entirely; jump to Stage 23
+**Choice:** (b) — produce skeleton (base classes + registry + tests)
+  in Stage 21 + Stage 22 PRs as architectural foundation. Subsequent
+  sessions migrate concrete checks/builders per ADR-0004/0005 patterns.
+**Principle:** §4.4 (Em duvida, opcao conservadora: menos extracao,
+  mais reutilizacao). End-state architecture preserved; full migration
+  becomes mechanical follow-up.
+**Outcome:**
+  - src/domain/services/quality_checks/ (base.py + __init__.py)
+    com QualityCheck (ABC), CheckResult, QualityCheckRegistry,
+    AnalyticsSnapshot
+  - tests/unit/domain/services/quality_checks/test_base.py (4 tests)
+**Next:** Stage 21 PR (skeleton). Then Stage 22 (skeleton). Then Stage 23 (closure focus).
+
+---
+
 ## [2026-05-20 08:54 UTC] Stage 20.7 + decision (stacking) — completion
 
 **Context:** Stage 20 PR aberta (#44). Plan §"PR pattern" diz "aguardar merge
