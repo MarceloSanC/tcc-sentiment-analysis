@@ -14,8 +14,10 @@ from src.adapters.parquet_analytics_run_repository import ParquetAnalyticsRunRep
 from src.entities.tft_inference_record import TFTInferenceRecord
 from src.infrastructure.schemas.analytics_store_schema import ANALYTICS_SCHEMA_VERSION
 from src.interfaces.tft_inference_model_loader import LoadedTFTInferenceModel
-from src.use_cases.refresh_analytics_store_use_case import RefreshAnalyticsStoreUseCase
 from src.use_cases.run_tft_inference_use_case import RunTFTInferenceUseCase
+from tests._helpers.gold_builder_adapters import (
+    build_gold_feature_contrib_local_summary,
+)
 
 
 class _DatasetRepo:
@@ -234,7 +236,7 @@ def test_inference_training_run_id_feeds_gold_parent_sweep_id(tmp_path: Path) ->
     assert fact_feature_contrib_local["run_id"].eq("R1").all()
     assert fact_feature_contrib_local["training_run_id"].eq("R1").all()
 
-    gold = RefreshAnalyticsStoreUseCase._build_gold_feature_contrib_local_summary(
+    gold = build_gold_feature_contrib_local_summary(
         fact_feature_contrib_local,
         dim_run,
     )
@@ -336,7 +338,7 @@ def test_legacy_metadata_without_training_run_id_results_in_null_parent_sweep_id
     assert fact_feature_contrib_local["run_id"].isna().all()
     assert fact_feature_contrib_local["training_run_id"].isna().all()
 
-    gold = RefreshAnalyticsStoreUseCase._build_gold_feature_contrib_local_summary(
+    gold = build_gold_feature_contrib_local_summary(
         fact_feature_contrib_local,
         dim_run,
     )
