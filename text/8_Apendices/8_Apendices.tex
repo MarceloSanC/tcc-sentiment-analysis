@@ -27,7 +27,7 @@ A variante primária para as hipóteses H1, H2a e H2b é \texttt{post\_guardrail
 
 \section*{A.4 \textit{Gates} quantitativos de qualidade}
 
-A versão expandida dos \textit{gates} A, B, C e D está descrita no Capítulo 4. Para conveniência de auditoria, os limiares operacionais consolidados são:
+A versão expandida dos \textit{gates} A, B, C e D está descrita no Capítulo 4, juntamente com a classificação dos limiares em três categorias metodológicas: (i) convenções estatísticas consagradas (\(p < 0{,}05\) do Gate D), (ii) limiares operacionais provisionais calibrados em rodada exploratória e (iii) contratos de governança fixados \textit{ex ante} no pré-registro, justificados pelo compromisso antecipado e auditável \cite{PINEAU2021REPRODUCIBILITY}. Para conveniência de auditoria, os limiares operacionais consolidados são:
 
 \begin{itemize}
     \item \textbf{Gate A — Contrato quantilico}: \texttt{crossing\_bruto\_rate} \(\leq 0{,}10\%\); \texttt{crossing\_pos\_guardrail\_rate} \(= 0\); \texttt{negative\_interval\_width\_count} \(= 0\).
@@ -55,49 +55,49 @@ Este apêndice reúne, em formato sintético, os termos técnicos recorrentes ao
 
 \section*{B.1 Termos de calibração e contrato probabilístico}
 
-\textbf{Calibração probabilística}: correspondência entre a probabilidade nominal declarada pelo modelo e a frequência empírica observada nas previsões. Um modelo bem calibrado em \(p90\) deve ter \(y_{\textit{true}}\) abaixo do quantil previsto em aproximadamente \(90\%\) dos casos.
+\phantomsection\label{gl:calibracao}\textbf{Calibração probabilística}: correspondência entre a probabilidade nominal declarada pelo modelo e a frequência empírica observada nas previsões. Um modelo bem calibrado em \(p90\) deve ter \(y_{\textit{true}}\) abaixo do quantil previsto em aproximadamente \(90\%\) dos casos.
 
-\textbf{PICP (\textit{Prediction Interval Coverage Probability})}: \(\text{mean}(p10 \leq y_{\textit{true}} \leq p90)\). Para o intervalo \([p10, p90]\), a cobertura nominal é \(0{,}80\).
+\phantomsection\label{gl:picp}\textbf{PICP (\textit{Prediction Interval Coverage Probability})}: probabilidade empírica de cobertura do intervalo de predição, definida na Equação~\ref{eq:picp} (Capítulo 3). Para o intervalo \([p10, p90]\), a cobertura nominal é \(0{,}80\).
 
-\textbf{MPIW (\textit{Mean Prediction Interval Width})}: \(\text{mean}(p90 - p10)\). Largura média do intervalo de predição. Analisada conjuntamente com PICP, dado que intervalo estreito com PICP baixo indica modelo sistematicamente errado, e não modelo preciso.
+\phantomsection\label{gl:mpiw}\textbf{MPIW (\textit{Mean Prediction Interval Width})}: largura média do intervalo de predição, definida na Equação~\ref{eq:mpiw} (Capítulo 3). Analisada conjuntamente com PICP, dado que intervalo estreito com PICP baixo indica modelo sistematicamente errado, e não modelo preciso.
 
-\textbf{\textit{Pinball loss}}: \(L_q(y, \hat{q}) = \max(q (y - \hat{q}), (q - 1)(y - \hat{q}))\). Função de perda para regressão quantilica; métrica primária deste trabalho para avaliação probabilística, por ser regra de pontuação estritamente própria.
+\phantomsection\label{gl:pinball}\textbf{\textit{Pinball loss}}: função de perda para regressão quantilica, definida na Equação~\ref{eq:pinball} (Capítulo 3); métrica primária deste trabalho para avaliação probabilística, por ser regra de pontuação estritamente própria.
 
-\textbf{Variante quantilica (\textit{raw} e \textit{post-guardrail})}: duas representações paralelas dos quantis previstos, conforme apêndice A.3.
+\phantomsection\label{gl:variante-quantilica}\textbf{Variante quantilica (\textit{raw} e \textit{post-guardrail})}: duas representações paralelas dos quantis previstos, conforme apêndice A.3.
 
-\textbf{\textit{Crossing}}: violação da ordenação dos quantis (\(p10 > p50\) ou \(p50 > p90\)) na saída \textit{raw} do modelo, mitigado por rearranjo monotônico no pós-processamento.
+\phantomsection\label{gl:crossing}\textbf{\textit{Crossing}}: violação da ordenação dos quantis (\(p10 > p50\) ou \(p50 > p90\)) na saída \textit{raw} do modelo, mitigado por rearranjo monotônico no pós-processamento.
 
 \section*{B.2 Termos de governança e escopo}
 
-\textbf{Coorte}: conjunto de \textit{runs} de um mesmo \textit{sweep} (mesmo \texttt{parent\_sweep\_id}) que compartilham protocolo homogêneo de treino, validação e teste. Comparações estatísticas válidas ocorrem apenas dentro de coortes comparáveis.
+\phantomsection\label{gl:coorte}\textbf{Coorte}: conjunto de \textit{runs} de um mesmo \textit{sweep} (mesmo \texttt{parent\_sweep\_id}) que compartilham protocolo homogêneo de treino, validação e teste. Comparações estatísticas válidas ocorrem apenas dentro de coortes comparáveis.
 
-\textbf{\texttt{cohort\_decision} e \texttt{global\_health}}: dois modos de escopo. O primeiro restringe validações e comparações à coorte oficial declarada e é bloqueante para decisões finais. O segundo verifica saúde de plataforma sem restrição de coorte e não substitui validação \textit{scoped} para decisão de vencedor.
+\phantomsection\label{gl:scope-modes}\textbf{\texttt{cohort\_decision} e \texttt{global\_health}}: dois modos de escopo. O primeiro restringe validações e comparações à coorte oficial declarada e é bloqueante para decisões finais. O segundo verifica saúde de plataforma sem restrição de coorte e não substitui validação \textit{scoped} para decisão de vencedor.
 
-\textbf{Pré-registro}: documento versionado, comitado antes da rodada confirmatória, que declara o candidato, os baselines, a métrica primária, as bandas de calibração, a regra de desempate e o contrato de variante quantilica. Sua função é eliminar graus de liberdade que induzem \textit{p-hacking} e seleção adversa de baselines.
+\phantomsection\label{gl:preregistro}\textbf{Pré-registro}: documento versionado, comitado antes da rodada confirmatória, que declara o candidato, os baselines, a métrica primária, as bandas de calibração, a regra de desempate e o contrato de variante quantilica. Sua função é eliminar graus de liberdade que induzem \textit{p-hacking} e seleção adversa de baselines.
 
-\textbf{\textit{Leakage} temporal}: uso de informação futura no cálculo de \textit{features}, no ajuste de \textit{scalers} ou na seleção de modelo por meio do conjunto de teste. Invalida conclusões OOS quando presente.
+\phantomsection\label{gl:leakage}\textbf{\textit{Leakage} temporal}: uso de informação futura no cálculo de \textit{features}, no ajuste de \textit{scalers} ou na seleção de modelo por meio do conjunto de teste. Invalida conclusões OOS quando presente.
 
 \section*{B.3 Termos do modelo e da pipeline}
 
-\textbf{TFT (\textit{Temporal Fusion Transformer})}: modelo de previsão multi-horizonte que combina mecanismos de seleção de variáveis, camadas recorrentes, atenção \textit{multi-head} e cabeça \textit{multi-quantile}, conforme Lim et al. (2021).
+\phantomsection\label{gl:tft}\textbf{TFT (\textit{Temporal Fusion Transformer})}: modelo de previsão multi-horizonte que combina mecanismos de seleção de variáveis, camadas recorrentes, atenção \textit{multi-head} e cabeça \textit{multi-quantile}, conforme Lim et al. (2021).
 
-\textbf{VSN (\textit{Variable Selection Network})}: subcomponente do TFT que atribui pesos dinâmicos por \textit{timestep} e por família de \textit{feature}, separando entradas estáticas, conhecidas no futuro e desconhecidas no futuro.
+\phantomsection\label{gl:vsn}\textbf{VSN (\textit{Variable Selection Network})}: subcomponente do TFT que atribui pesos dinâmicos por \textit{timestep} e por família de \textit{feature}, separando entradas estáticas, conhecidas no futuro e desconhecidas no futuro.
 
-\textbf{Famílias de \textit{features}}: agrupamento semântico de variáveis de entrada por origem; o trabalho utiliza PRICE (preço, volume, retorno log), TECHNICAL (indicadores técnicos sobre OHLCV), SENTIMENT (sentimento agregado de notícias por sessão) e FUNDAMENTAL (indicadores fundamentalistas).
+\phantomsection\label{gl:feature-families}\textbf{Famílias de \textit{features}}: agrupamento semântico de variáveis de entrada por origem; o trabalho utiliza PRICE (preço, volume, retorno log), TECHNICAL (indicadores técnicos sobre OHLCV), SENTIMENT (sentimento agregado de notícias por sessão) e FUNDAMENTAL (indicadores fundamentalistas).
 
-\textbf{\texttt{run\_id}}: identidade lógica determinística de uma execução, conforme apêndice A.1.
+\phantomsection\label{gl:run-id}\textbf{\texttt{run\_id}}: identidade lógica determinística de uma execução, conforme apêndice A.1.
 
-\textbf{\textit{Split} temporal}: divisão cronológica do dataset em \textit{train} (ajuste), \textit{val} (parada antecipada e otimização de hiperparâmetros) e \textit{test} (avaliação OOS final), sem sobreposição.
+\phantomsection\label{gl:split}\textbf{\textit{Split} temporal}: divisão cronológica do dataset em \textit{train} (ajuste), \textit{val} (parada antecipada e otimização de hiperparâmetros) e \textit{test} (avaliação OOS final), sem sobreposição.
 
 \section*{B.4 Termos de teste estatístico}
 
-\textbf{DM (\textit{Diebold-Mariano})}: teste para igualdade de acurácia preditiva esperada entre dois modelos, sobre série de perdas pareadas por \texttt{target\_timestamp}.
+\phantomsection\label{gl:dm}\textbf{DM (\textit{Diebold-Mariano})}: teste para igualdade de acurácia preditiva esperada entre dois modelos, sobre série de perdas pareadas por \texttt{target\_timestamp}.
 
-\textbf{HLN (\textit{Harvey-Leybourne-Newbold})}: correção do DM para amostras pequenas, baseada em ajuste HAC de variância e distribuição \(t\) com graus de liberdade adaptados.
+\phantomsection\label{gl:hln}\textbf{HLN (\textit{Harvey-Leybourne-Newbold})}: correção do DM para amostras pequenas, baseada em ajuste HAC de variância e distribuição \(t\) com graus de liberdade adaptados.
 
-\textbf{MCS (\textit{Model Confidence Set})}: procedimento de Hansen, Lunde e Nason (2011) que identifica o conjunto de modelos não rejeitáveis como melhores ao nível \(\alpha\), controlando FWER por construção.
+\phantomsection\label{gl:mcs}\textbf{MCS (\textit{Model Confidence Set})}: procedimento de Hansen, Lunde e Nason (2011) que identifica o conjunto de modelos não rejeitáveis como melhores ao nível \(\alpha\), controlando FWER por construção.
 
-\textbf{Holm-Bonferroni}: ajuste de múltiplas comparações por passos descendentes que controla \textit{Family-Wise Error Rate}; resultado significativo exige \texttt{pvalue\_adj\_holm} \(< 0{,}05\).
+\phantomsection\label{gl:holm}\textbf{Holm-Bonferroni}: ajuste de múltiplas comparações por passos descendentes que controla \textit{Family-Wise Error Rate}; resultado significativo exige \texttt{pvalue\_adj\_holm} \(< 0{,}05\).
 
 \chapter*{APÊNDICE C - Comandos de reprodução}
 \addcontentsline{toc}{chapter}{APÊNDICE C - Comandos de reprodução}
