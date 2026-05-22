@@ -15,6 +15,66 @@ Append-only. Mais recente no topo.
 
 ---
 
+## [2026-05-22 00:07 UTC] Stage R-22.fix — completion (audit follow-ups)
+
+**Context:** Auditoria 2026-05-21 22:30 UTC sobre PR #53 confirmou
+substancia R-22 correta (RED-5 fechado, 25 builders migrados, refresh
+2.579 → 300 LOC, sentinel byte-identical PASS) mas identificou 1 RED
+de CI + 2 YELLOWs. Branch `feat/stage-r-22-gold-builders-modular` ainda
+aberta; PR #53 com lint-type-unit FAIL na pipeline. Fixes aplicados
+nos 3 commits abaixo, mesma branch, sem rebase/amend nem alteracao
+de substancia.
+
+**Fix #1 (commit `ae2ae97`)** — bloqueador CI pandas 3.0 vs 2.3.
+Arquivo: `tests/unit/domain/services/gold_builders/test_base.py`.
+Dois testes (`test_normalize_parent_sweep_id_strips_trailing_dot_zero`
+e `test_normalize_parent_sweep_id_drops_sentinel_strings`) comparavam
+`Series.tolist()` contra literal `[..., None, ...]`. pandas 2.3 (local)
+preserva `None`; pandas 3.0.3 (CI) coerce para `nan` — divergencia
+quebra a assertion. Substituido por assertion elemento-a-elemento com
+`pd.isna()`. Local: 12/12 passed.
+
+**Fix #2 (commit `d31ed2a`)** — `tests/_helpers/gold_builder_adapters.py`
+YELLOW. **Opcao escolhida: B (manter helper, documentar como bridge
+transitoria).** Justificativa: grep mostrou >30 call-sites em 2575 LOC
+de `test_refresh_analytics_store_use_case.py` + 2 em
+`test_inference_to_gold_parent_sweep_id.py`. Criterio do prompt era
+"<10 call-sites → Opcao A; senao → Opcao B". Refactor amplo
+(Opcao A) exigiria construir GoldBuilderSnapshot + BuildContext em
+cada call-site, expondo logica de fixtures interna em ~50+ pontos —
+fora do scope R-22.fix. Adicionado docstring explicito declarando o
+helper como ponte transitoria, slated for removal numa sessao de
+cleanup pos-R-23.
+
+**Fix #3 (commit `c1ac4e4`)** — FutureWarning pandas 2.3 em
+`src/domain/services/gold_builders/confidence.py:807-809`. **Desvio do
+prompt mecanico, com motivo registrado:** o prompt prescreveu
+`.fillna(False).infer_objects(copy=False).astype(bool)`. Teste
+empirico com `warnings.simplefilter('error', FutureWarning)` provou
+que o warning persiste — emitido pelo proprio `fillna()` (downcast
+implicito interno) antes do `infer_objects` ser chamado. Solucao
+adotada: `.where(s.notna(), False).astype(bool)` evita o caminho de
+downcast do fillna inteiramente. Resultado validado sob
+`-W error::FutureWarning:src.domain.services.gold_builders.confidence`:
+45/45 tests pass, 0 FutureWarning na linha. Demais sites do mesmo
+padrao em `quality_checks/` e lambdas em `confidence.py:987-1034`
+ficam como follow-up fora do scope R-22.fix.
+
+**Validation:**
+- `pytest tests/ -q --ignore=...byte_identical...` → **605 passed,
+  9 warnings** (vs 45 warnings antes — 3 FutureWarnings eliminados).
+- `ruff check src/ tests/` → **All checks passed**.
+- `du -sh data/analytics_archive_pre_phase_b/` → **851M** (intact).
+- `pytest tests/integration/test_gold_builders_byte_identical_archive.py`
+  → **1 passed in 429.95s** (substancia R-22 preservada — fingerprints
+  byte-identical contra archive).
+
+**Outcome:** 3 commits empilhados em `feat/stage-r-22-gold-builders-modular`
+(`ae2ae97`, `d31ed2a`, `c1ac4e4`). Push e watch de CI a seguir. **Sem
+merge** — Marcelo merge manualmente apos confirmar verde.
+
+---
+
 ## [2026-05-22 02:30 UTC] Stage R-22 — completion (gold builders modularization; byte-identical sentinel)
 
 **Context:** Stage R-22 do plano de remediacao. RED-5 da auditoria
