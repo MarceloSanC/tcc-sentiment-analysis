@@ -41,12 +41,12 @@ A perda média de \textit{pinball} entre quantis é a métrica primária deste t
 
 A justificativa para tratar \textit{pinball} como métrica primária, e não apenas intervalos como PICP (ver \nameref{gl:picp}), vem do trabalho seminal de \cite{GNEITING2007} sobre \textit{scoring rules}. Os autores estabelecem o conceito de regra estritamente própria, isto é, uma função de avaliação cuja minimização em esperança ocorre se e somente se a previsão reportada coincide com a distribuição verdadeira do alvo. \textit{Pinball loss} é estritamente própria para o quantil correspondente, o que significa que reportar quantis honestos é estratégia dominante para o \textit{predictor}; em contraste, métricas de cobertura agregada como PICP podem ser otimizadas com estratégias degeneradas (intervalos artificialmente largos) e portanto não são adequadas como função objetivo primária, ainda que sejam complementos necessários para diagnóstico de calibração.
 
-A avaliação probabilística neste trabalho distingue formalmente duas formas de calibração. A primeira é a \textbf{calibração intervalar}, medida pelo PICP (\textit{Prediction Interval Coverage Probability}) do par $(p10, p90)$ contra a cobertura nominal de $0{,}80$, conforme a Equação~\ref{eq:picp}:
+A avaliação probabilística neste trabalho distingue formalmente duas formas de calibração. A primeira é a calibração intervalar, medida pelo PICP (\textit{Prediction Interval Coverage Probability}) do par $(p10, p90)$ contra a cobertura nominal de $0{,}80$, conforme a Equação~\ref{eq:picp}:
 \begin{equation}
     \mathrm{PICP} = \frac{1}{N}\sum_{i=1}^{N} \mathbb{1}\!\left[\,p10_i \leq y_{\text{true},i} \leq p90_i\,\right],
     \label{eq:picp}
 \end{equation}
-em que $\mathbb{1}[\cdot]$ é a função indicadora e $N$ é o tamanho da amostra fora da amostra. A segunda é a \textbf{calibração marginal por quantil}, medida pela taxa empírica de cobertura por nível $\tau$, conforme a Equação~\ref{eq:coverage}:
+em que $\mathbb{1}[\cdot]$ é a função indicadora e $N$ é o tamanho da amostra fora da amostra. A segunda é a calibração marginal por quantil, medida pela taxa empírica de cobertura por nível $\tau$, conforme a Equação~\ref{eq:coverage}:
 \begin{equation}
     \mathrm{coverage}_{q_\tau} = \frac{1}{N}\sum_{i=1}^{N} \mathbb{1}\!\left[\,y_{\text{true},i} \leq \hat{q}_{\tau,i}\,\right],
     \label{eq:coverage}

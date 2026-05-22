@@ -137,7 +137,11 @@
 \ExecuteMetaData[settings.tex]{listOfFiguresTag}
 \ExecuteMetaData[settings.tex]{quadroTag}
 \ExecuteMetaData[settings.tex]{listOfTablesTag}
-\ExecuteMetaData[settings.tex]{nomenclatureTag} %makeindex ARQUIVO_PRINCIPAL.nlo -s nomencl.ist -o ARQUIVO_PRINCIPAL.nls
+% nomenclatureTag desativado: o pacote `nomencl` (\printnomenclature) gerava
+% uma página vazia com título "Lista de Abreviaturas e Siglas" duplicando a
+% lista nativa do abntex2 abaixo. Como não usamos \nomenclature{} no texto,
+% mantemos apenas o ambiente `siglas` do abntex2 (ABNT-conforme NBR 14724).
+% \ExecuteMetaData[settings.tex]{nomenclatureTag}
 \input{1_Resumo/lista-siglas.tex}
 \input{1_Resumo/lista-simbolos.tex}
 \ExecuteMetaData[settings.tex]{tableOfContentsTag}
