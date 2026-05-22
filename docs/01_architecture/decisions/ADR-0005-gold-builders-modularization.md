@@ -201,14 +201,16 @@ from 2.579 LOC to 300 LOC (88% reduction). Builder cluster files total
 monolith had ~2.6k LOC of inline `_build_gold_*` methods plus
 orchestration glue.
 
-**Test ergonomics:** existing fine-grained unit tests at
-`tests/unit/use_cases/test_refresh_analytics_store_use_case.py` (40+
-direct-DataFrame call sites) keep their legacy ergonomics via thin
-adapters at `tests/_helpers/gold_builder_adapters.py`. Ranking + the
-two pre-joined descriptive builders (Ic95, FeatureSetImpact) expose
-`_build_*_from_base(base)` module-level helpers so adapters can avoid
-re-running `_base_join_runs_split_metrics` on an already-joined
-`base`.
+**Test ergonomics:** R-22 initially shipped with a thin test bridge
+mapping legacy direct-args signatures to the new
+`GoldBuilder.build(snapshot, ctx)` API; this bridge was eliminated
+2026-05-22 (PR #56) by refactoring the 30 call-sites in
+`tests/unit/use_cases/test_refresh_analytics_store_use_case.py` and
+`tests/integration/test_inference_to_gold_parent_sweep_id.py` to
+construct `GoldBuilderSnapshot` + `BuildContext` inline. Ranking + the
+two pre-joined descriptive builders (Ic95, FeatureSetImpact) still
+expose `_build_*_from_base(base)` module-level helpers, now used
+internally by the `GoldBuilder` subclasses only.
 
 ## Cross-link
 

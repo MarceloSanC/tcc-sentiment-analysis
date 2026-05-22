@@ -7,10 +7,12 @@ preserving byte-identical column ordering, aggregation semantics, and
 sort keys per ADR-0005.
 
 The transformation per builder lives in a module-level helper
-(`_build_<name>_from_base(base)`); the `GoldBuilder` subclasses just
-materialize `base` from the snapshot and delegate. Tests in
-`tests/_helpers/gold_builder_adapters.py` call these helpers directly
-so they keep the legacy direct-DataFrame ergonomics.
+(`_build_<name>_from_base(base)`); the `GoldBuilder` subclasses
+materialize `base` from the snapshot and delegate. The helpers are
+internal to this module — they previously enabled a test-only bridge
+eliminated 2026-05-22 in PR #56 but are kept module-level for
+readability of the join+aggregate pattern shared across the 3 ranking
+builders.
 """
 from __future__ import annotations
 

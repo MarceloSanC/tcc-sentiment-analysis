@@ -15,6 +15,60 @@ Append-only. Mais recente no topo.
 
 ---
 
+## [2026-05-22 21:34 UTC] chore — completion (remove gold_builder_adapters transitional bridge)
+
+**Context:** Follow-up declarado no log R-22 fix-up (`9fc4adf`) e no docstring
+do proprio helper. R-22 modularizou os 25 gold builders mas dois arquivos de
+teste antigos continuaram usando assinaturas direct-args via wrappers em
+`tests/_helpers/gold_builder_adapters.py` (322 LOC). Esta sessao refatorou os
+39 call-sites para a API direta `GoldBuilder.build(snapshot, ctx)` e deletou a
+ponte.
+
+**Pre-conditions verificadas:**
+- R-22 PR #53 → MERGED (2026-05-22 18:55 UTC).
+- R-23 PR #54 → MERGED (2026-05-22 20:57 UTC).
+- Baseline `pytest tests/ -q --ignore=*archive*` → `609 passed`.
+- `du -sh data/analytics_archive_pre_phase_b/` → `851M` (intacto).
+
+**Refator aplicado:**
+- `tests/unit/use_cases/test_refresh_analytics_store_use_case.py` — 37
+  call-sites migrados. Tier 1 (snapshot-only): `OosQualityReportGoldBuilder`,
+  `PredictionMetricsByRunSplitHorizonGoldBuilder`, `PredictionRiskGoldBuilder`,
+  `DmPairwiseResultsGoldBuilder`, `McsResultsGoldBuilder`,
+  `WinRatePairwiseResultsGoldBuilder`, `FeatureContribLocalSummaryGoldBuilder`,
+  `QuantileDegeneracyReportGoldBuilder(thresholds=...)`. Tier 2/3 (precisam de
+  `ctx.gold_outputs`): `PredictionMetricsByConfigGoldBuilder`,
+  `PredictionMetricsByHorizonGoldBuilder`, `FeatureImpactByHorizonGoldBuilder`
+  → invocados com `BuildContext(gold_outputs={"gold_prediction_metrics_by_run_split_horizon": metrics})`.
+  Base-keyed (consistency/ranking/feature_set_impact) usam os helpers
+  module-level `_build_*_from_base(base)`; `model_decision_final` usa
+  `_build_model_decision_final(...)` direto (mesmo padrao do helper anterior).
+- `tests/integration/test_inference_to_gold_parent_sweep_id.py` — 2
+  call-sites migrados para `FeatureContribLocalSummaryGoldBuilder().build(...)`.
+- Helper removido: `rm tests/_helpers/gold_builder_adapters.py` + diretorio
+  `tests/_helpers/` (incluindo `__init__.py` vazio).
+
+**Validation:**
+- `.venv/bin/pytest tests/ -q --ignore=tests/integration/test_quality_registry_bit_identical_archive.py --ignore=tests/integration/test_gold_builders_byte_identical_archive.py`
+  → `609 passed, 9 warnings` (identico ao baseline).
+- `.venv/bin/ruff check src/ tests/` → `All checks passed!`.
+- `git diff --stat` → `+282 / -442` (net **−160 LOC**); 4 arquivos.
+
+**Stale references intencionalmente preservadas (escopo test-only):**
+A regra de execucao desta sessao proibe tocar arquivos em `src/`, ADR canonico
+ou entradas anteriores deste log. Restam 4 mencoes a `gold_builder_adapters`
+em comentarios/docstrings historicos: `src/domain/services/gold_builders/ranking.py:12`,
+`docs/01_architecture/decisions/ADR-0005-gold-builders-modularization.md:207`,
+e duas entradas anteriores neste log (linhas 138 e 262). Sao referencias
+documentais ao bridge deletado; nao afetam comportamento. Limpeza opcional
+em proximo refresh de docs.
+
+**Outcome:** Bridge transitoria eliminada. API direta `GoldBuilder.build(...)`
+usada de ponta a ponta nos testes. PR `chore/remove-gold-builder-adapters-bridge`
+pronta para merge.
+
+---
+
 ## [2026-05-22 20:01 UTC] Stage R-23.5 — completion (F.1 PASS pleno post-remediation)
 
 **Context:** Fechamento documental do ultimo stage do ciclo de remediacao.
