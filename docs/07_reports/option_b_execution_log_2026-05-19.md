@@ -15,6 +15,32 @@ Append-only. Mais recente no topo.
 
 ---
 
+## [2026-05-22 19:54 UTC] Stage R-23.2 — completion (6/6 criterios F.1 PASS)
+
+**Context:** Validacao dos 6 criterios de aceite literal de F.1 apos o
+re-smoke R-23.1. A primeira validacao detectou que o JSON padrao de baselines
+derivava `parent_sweep_id=phase_a_smoke_20260518_v2`, deixando o cohort
+`phase_a_smoke_20260522_r23` sem baselines e com `statistics_ready=False`.
+Sem tocar codigo de producao nem arquivo versionado de config, a segunda
+tentativa usou copia temporaria em `/tmp/phase_a_smoke_20260522_r23.json`
+com apenas `output_subdir` alinhado ao sweep R-23. Output final do refresh:
+`/tmp/r23_smoke_output.txt`; output da tentativa inicial preservado em
+`/tmp/r23_smoke_output_attempt1.txt`.
+
+| # | Criterio | Evidencia R-23.2 | Status |
+|---|---|---|---|
+| 1 | `% p10==p90 < 5%` | `gold_quantile_degeneracy_report`: max `p10_eq_p90_rate=0.0` em 6 linhas quantile; `gate_passed=True`; `failed_checks=[]` | PASS |
+| 2 | Zero violacoes probabilisticas | `gold_prediction_metrics_by_run_split_horizon`: min `mpiw_post_guardrail=0.031959862662777956`; raw crossing `0/24008 = 0.0` | PASS |
+| 3 | Gold cohort-aware | `gold_quality_statistics_report`: `parent_sweep_id=phase_a_smoke_20260522_r23`, test h=1/h=7 com `statistics_ready=True`, `dm_pairs=3`, `mcs_models=3`, `win_rate_pairs=3`, aligned timestamps `686` | PASS |
+| 4 | `pytest tests/` PASS | `.venv/bin/pytest tests/ -q --ignore=tests/integration/test_quality_registry_bit_identical_archive.py --ignore=tests/integration/test_gold_builders_byte_identical_archive.py` → `605 passed, 9 warnings` | PASS |
+| 5 | CI verde em PRs anteriores | `gh pr view #50/#51/#52/#53 --json statusCheckRollup`: `lint-type-unit=SUCCESS` e `analytics-contract-and-quality=SUCCESS` em todos; PRs MERGED | PASS |
+| 6 | Refresh + quality 0 FAIL | `main_refresh_analytics_store` exit 0; `passed=True`; `failed_checks=[]`; `total_checks=27`; 25 gold tables geradas | PASS |
+
+**Outcome:** 6/6 criterios PASS. R-23.3 autorizado: atualizar somente a nota
+textual anexada ao F.1, preservando o checkbox `[x]`.
+
+---
+
 ## [2026-05-22 19:48 UTC] Stage R-23.1 — completion (F.1 re-smoke v4 max_epochs=5)
 
 **Context:** Re-smoke F.1 v4 executado com aceite literal
