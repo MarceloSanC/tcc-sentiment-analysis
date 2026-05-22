@@ -1,10 +1,22 @@
-% LISTA DE SÍMBOLOS------------------------------------------------------------
+% LISTA DE SÍMBOLOS ------------------------------------------------------------
+% Conforme NBR 14724. Símbolos matemáticos recorrentes ao longo do trabalho,
+% com significado canônico. Variáveis declarativas operacionais (p10, p50, p90)
+% são tratadas como símbolos quantis e não como identificadores de coluna.
 
 \begin{simbolos}
-    \item[$ \Gamma $] Letra grega Gama
-    \item[$ \lambda $] Comprimento de onda
-    \item[$ \in $] Pertence
+    \item[$y_{\text{true}}$] Valor observado (retorno realizado) do alvo
+    \item[$\hat{q}_\tau$] Quantil condicional estimado pelo modelo no nível $\tau$
+    \item[$p10$] Quantil condicional estimado no nível 0{,}10 (limite inferior do intervalo de predição)
+    \item[$p50$] Mediana condicional estimada (quantil no nível 0{,}50)
+    \item[$p90$] Quantil condicional estimado no nível 0{,}90 (limite superior do intervalo de predição)
+    \item[$\tau$] Nível de quantil (\textit{quantile level}), $\tau \in (0,1)$
+    \item[$\alpha$] Nível de significância estatística
+    \item[$R^2$] Coeficiente de determinação fora da amostra (\textit{out-of-sample})
+    \item[$L_q(y, \hat{q})$] \textit{Pinball loss} do quantil $q$ avaliada no par $(y, \hat{q})$
+    \item[$h$] Horizonte de previsão (em passos discretos)
+    \item[$h+1$] Horizonte de previsão de um passo à frente
+    \item[$h+7$] Horizonte de previsão de sete passos à frente
+    \item[$h+30$] Horizonte de previsão de trinta passos à frente (suplementar)
+    \item[$\Delta$] Operador de diferença entre variantes ou execuções
+    \item[$H_0$] Hipótese nula em teste estatístico
 \end{simbolos}
-
-% OBSERVAÇÕES-------------------------------------------------------------------
-% Altere a lista acima para definir os símbolos utilizados no trabalho
