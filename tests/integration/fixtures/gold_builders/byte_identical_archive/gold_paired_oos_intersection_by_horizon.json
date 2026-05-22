@@ -1,0 +1,160 @@
+{
+  "column_stats": {
+    "aligned_exact": {
+      "max": 1.0,
+      "mean": 0.4375,
+      "min": 0.0,
+      "n_null": 0,
+      "sum": 21.0
+    },
+    "asset": {
+      "n_null": 0,
+      "nunique": 1
+    },
+    "coverage_ratio": {
+      "max": 1.0,
+      "mean": 0.9899016165779746,
+      "min": 0.964,
+      "n_null": 0,
+      "sum": 47.51527759574278
+    },
+    "horizon": {
+      "max": 7.0,
+      "mean": 1.125,
+      "min": 1.0,
+      "n_null": 0,
+      "sum": 54.0
+    },
+    "n_common": {
+      "max": 691.0,
+      "mean": 483.2083333333333,
+      "min": 102.0,
+      "n_null": 0,
+      "sum": 23194.0
+    },
+    "n_configs": {
+      "max": 1341.0,
+      "mean": 143.79166666666666,
+      "min": 1.0,
+      "n_null": 0,
+      "sum": 6902.0
+    },
+    "n_union": {
+      "max": 691.0,
+      "mean": 488.2708333333333,
+      "min": 102.0,
+      "n_null": 0,
+      "sum": 23437.0
+    },
+    "pairwise_ready_dm": {
+      "max": 1.0,
+      "mean": 0.9583333333333334,
+      "min": 0.0,
+      "n_null": 0,
+      "sum": 46.0
+    },
+    "pairwise_ready_mcs": {
+      "max": 1.0,
+      "mean": 0.9583333333333334,
+      "min": 0.0,
+      "n_null": 0,
+      "sum": 46.0
+    },
+    "parent_sweep_id": {
+      "n_null": 10,
+      "nunique": 13
+    },
+    "split": {
+      "n_null": 0,
+      "nunique": 1
+    },
+    "split_signature": {
+      "n_null": 0,
+      "nunique": 11
+    },
+    "target_exact_alignment": {
+      "max": 1.0,
+      "mean": 0.4375,
+      "min": 0.0,
+      "n_null": 0,
+      "sum": 21.0
+    },
+    "target_intersection_count": {
+      "max": 691.0,
+      "mean": 483.2083333333333,
+      "min": 102.0,
+      "n_null": 0,
+      "sum": 23194.0
+    },
+    "target_jaccard_alignment": {
+      "max": 1.0,
+      "mean": 0.9899016165779746,
+      "min": 0.964,
+      "n_null": 0,
+      "sum": 47.51527759574278
+    },
+    "target_max_count_per_config": {
+      "max": 691.0,
+      "mean": 488.2708333333333,
+      "min": 102.0,
+      "n_null": 0,
+      "sum": 23437.0
+    },
+    "target_min_count_per_config": {
+      "max": 691.0,
+      "mean": 483.2083333333333,
+      "min": 102.0,
+      "n_null": 0,
+      "sum": 23194.0
+    },
+    "target_union_count": {
+      "max": 691.0,
+      "mean": 488.2708333333333,
+      "min": 102.0,
+      "n_null": 0,
+      "sum": 23437.0
+    }
+  },
+  "columns": [
+    "asset",
+    "parent_sweep_id",
+    "split_signature",
+    "split",
+    "horizon",
+    "n_configs",
+    "n_union",
+    "n_common",
+    "coverage_ratio",
+    "aligned_exact",
+    "target_union_count",
+    "target_intersection_count",
+    "target_min_count_per_config",
+    "target_max_count_per_config",
+    "target_exact_alignment",
+    "target_jaccard_alignment",
+    "pairwise_ready_dm",
+    "pairwise_ready_mcs"
+  ],
+  "dtypes": {
+    "aligned_exact": "bool",
+    "asset": "object",
+    "coverage_ratio": "float64",
+    "horizon": "int64",
+    "n_common": "int64",
+    "n_configs": "int64",
+    "n_union": "int64",
+    "pairwise_ready_dm": "bool",
+    "pairwise_ready_mcs": "bool",
+    "parent_sweep_id": "object",
+    "split": "object",
+    "split_signature": "object",
+    "target_exact_alignment": "bool",
+    "target_intersection_count": "int64",
+    "target_jaccard_alignment": "float64",
+    "target_max_count_per_config": "int64",
+    "target_min_count_per_config": "int64",
+    "target_union_count": "int64"
+  },
+  "n_cols": 18,
+  "n_rows": 48
+}

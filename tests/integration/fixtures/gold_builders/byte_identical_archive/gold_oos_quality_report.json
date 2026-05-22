@@ -1,0 +1,195 @@
+{
+  "column_stats": {
+    "asset": {
+      "n_null": 0,
+      "nunique": 1
+    },
+    "config_signature": {
+      "n_null": 27,
+      "nunique": 6902
+    },
+    "feature_set_name": {
+      "n_null": 27,
+      "nunique": 13
+    },
+    "horizon": {
+      "max": 7.0,
+      "mean": 1.0008441193021946,
+      "min": 1.0,
+      "n_null": 0,
+      "sum": 14228.0
+    },
+    "n_configs": {
+      "max": 6225.0,
+      "mean": 525.3703703703703,
+      "min": 15.0,
+      "n_null": 14189,
+      "sum": 14185.0
+    },
+    "n_duplicate_key_rows": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 27,
+      "sum": 0.0
+    },
+    "n_negative_interval_width": {
+      "max": 102.0,
+      "mean": 0.0246669955599408,
+      "min": 0.0,
+      "n_null": 27,
+      "sum": 350.0
+    },
+    "n_rows": {
+      "max": 2767.0,
+      "mean": 543.3419550355909,
+      "min": 99.0,
+      "n_null": 27,
+      "sum": 7709479.0
+    },
+    "n_target_before_timestamp": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 27,
+      "sum": 0.0
+    },
+    "n_y_pred_null": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 27,
+      "sum": 0.0
+    },
+    "n_y_true_null": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 27,
+      "sum": 0.0
+    },
+    "parent_sweep_id": {
+      "n_null": 12838,
+      "nunique": 13
+    },
+    "passed": {
+      "max": 1.0,
+      "mean": 0.9972566122678672,
+      "min": 0.0,
+      "n_null": 0,
+      "sum": 14177.0
+    },
+    "run_id": {
+      "n_null": 27,
+      "nunique": 6902
+    },
+    "scope": {
+      "n_null": 0,
+      "nunique": 2
+    },
+    "split": {
+      "n_null": 0,
+      "nunique": 3
+    },
+    "split_signature": {
+      "n_null": 14216
+    },
+    "target_exact_alignment": {
+      "n_null": 14189,
+      "nunique": 1
+    },
+    "target_intersection_count": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 14189,
+      "sum": 0.0
+    },
+    "target_jaccard_alignment": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 14189,
+      "sum": 0.0
+    },
+    "target_max_count_per_config": {
+      "max": 2767.0,
+      "mean": 593.3703703703703,
+      "min": 501.0,
+      "n_null": 14189,
+      "sum": 16021.0
+    },
+    "target_min_count_per_config": {
+      "max": 500.0,
+      "mean": 480.0740740740741,
+      "min": 103.0,
+      "n_null": 14189,
+      "sum": 12962.0
+    },
+    "target_timestamp_monotonic": {
+      "n_null": 27,
+      "nunique": 1
+    },
+    "target_union_count": {
+      "max": 2767.0,
+      "mean": 1558.6666666666667,
+      "min": 1498.0,
+      "n_null": 14189,
+      "sum": 42084.0
+    }
+  },
+  "columns": [
+    "scope",
+    "run_id",
+    "asset",
+    "feature_set_name",
+    "config_signature",
+    "parent_sweep_id",
+    "split",
+    "horizon",
+    "n_rows",
+    "n_duplicate_key_rows",
+    "n_target_before_timestamp",
+    "n_y_true_null",
+    "n_y_pred_null",
+    "n_negative_interval_width",
+    "target_timestamp_monotonic",
+    "passed",
+    "split_signature",
+    "n_configs",
+    "target_intersection_count",
+    "target_union_count",
+    "target_min_count_per_config",
+    "target_max_count_per_config",
+    "target_exact_alignment",
+    "target_jaccard_alignment"
+  ],
+  "dtypes": {
+    "asset": "object",
+    "config_signature": "object",
+    "feature_set_name": "object",
+    "horizon": "int64",
+    "n_configs": "float64",
+    "n_duplicate_key_rows": "float64",
+    "n_negative_interval_width": "float64",
+    "n_rows": "float64",
+    "n_target_before_timestamp": "float64",
+    "n_y_pred_null": "float64",
+    "n_y_true_null": "float64",
+    "parent_sweep_id": "object",
+    "passed": "bool",
+    "run_id": "object",
+    "scope": "object",
+    "split": "object",
+    "split_signature": "float64",
+    "target_exact_alignment": "object",
+    "target_intersection_count": "float64",
+    "target_jaccard_alignment": "float64",
+    "target_max_count_per_config": "float64",
+    "target_min_count_per_config": "float64",
+    "target_timestamp_monotonic": "object",
+    "target_union_count": "float64"
+  },
+  "n_cols": 24,
+  "n_rows": 14216
+}

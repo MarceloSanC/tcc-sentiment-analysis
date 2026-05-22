@@ -1,0 +1,67 @@
+{
+  "column_stats": {
+    "asset": {
+      "n_null": 0,
+      "nunique": 1
+    },
+    "feature_set_name": {
+      "n_null": 0,
+      "nunique": 13
+    },
+    "mean_value": {
+      "max": 0.5274523375979789,
+      "mean": 0.1823084627948706,
+      "min": 0.01193076202616794,
+      "n_null": 0,
+      "sum": 28.440120195999814
+    },
+    "metric": {
+      "n_null": 0,
+      "nunique": 3
+    },
+    "n_runs": {
+      "max": 902.0,
+      "mean": 272.86538461538464,
+      "min": 1.0,
+      "n_null": 0,
+      "sum": 42567.0
+    },
+    "parent_sweep_id": {
+      "n_null": 78,
+      "nunique": 13
+    },
+    "split": {
+      "n_null": 0,
+      "nunique": 3
+    },
+    "std_value": {
+      "max": 0.03248525880152326,
+      "mean": 0.010437729591838378,
+      "min": 0.0,
+      "n_null": 0,
+      "sum": 1.628285816326787
+    }
+  },
+  "columns": [
+    "asset",
+    "feature_set_name",
+    "parent_sweep_id",
+    "split",
+    "metric",
+    "n_runs",
+    "mean_value",
+    "std_value"
+  ],
+  "dtypes": {
+    "asset": "object",
+    "feature_set_name": "object",
+    "mean_value": "float64",
+    "metric": "object",
+    "n_runs": "int64",
+    "parent_sweep_id": "object",
+    "split": "object",
+    "std_value": "float64"
+  },
+  "n_cols": 8,
+  "n_rows": 156
+}

@@ -1,0 +1,154 @@
+{
+  "column_stats": {
+    "aligned_timestamps": {
+      "max": 691.0,
+      "mean": 490.3408064246277,
+      "min": 482.0,
+      "n_null": 0,
+      "sum": 8792301.0
+    },
+    "asset": {
+      "n_null": 0,
+      "nunique": 1
+    },
+    "horizon": {
+      "max": 1.0,
+      "mean": 1.0,
+      "min": 1.0,
+      "n_null": 0,
+      "sum": 17931.0
+    },
+    "left_config": {
+      "n_null": 0,
+      "nunique": 1083
+    },
+    "left_mean_loss": {
+      "max": 0.0006551643860058243,
+      "mean": 0.0003710460938163385,
+      "min": 0.0001779230614944387,
+      "n_null": 0,
+      "sum": 6.653227508220766
+    },
+    "left_minus_right_mean_loss": {
+      "max": 0.0001108082257688833,
+      "mean": 1.2391053970108125e-07,
+      "min": -0.00010010621804144458,
+      "n_null": 0,
+      "sum": 0.002221839887380088
+    },
+    "left_win_rate": {
+      "max": 0.6593625498007968,
+      "mean": 0.4945308258168987,
+      "min": 0.0,
+      "n_null": 0,
+      "sum": 8867.43223772281
+    },
+    "left_win_rate_ex_ties": {
+      "max": 0.6593625498007968,
+      "mean": 0.4945375146653427,
+      "min": 0.0,
+      "n_null": 0,
+      "sum": 8867.55217546426
+    },
+    "left_wins": {
+      "max": 354.0,
+      "mean": 242.49400479616307,
+      "min": 0.0,
+      "n_null": 0,
+      "sum": 4348160.0
+    },
+    "parent_sweep_id": {
+      "n_null": 11031,
+      "nunique": 12
+    },
+    "right_config": {
+      "n_null": 0,
+      "nunique": 1083
+    },
+    "right_mean_loss": {
+      "max": 0.0006551643860058243,
+      "mean": 0.00037092218327663745,
+      "min": 0.0001779230614944387,
+      "n_null": 0,
+      "sum": 6.6510056683333865
+    },
+    "right_win_rate": {
+      "max": 0.6852589641434262,
+      "mean": 0.4942460446597132,
+      "min": 0.0,
+      "n_null": 0,
+      "sum": 8862.325826793318
+    },
+    "right_win_rate_ex_ties": {
+      "max": 0.6852589641434262,
+      "mean": 0.49425284839304784,
+      "min": 0.0,
+      "n_null": 0,
+      "sum": 8862.44782453574
+    },
+    "right_wins": {
+      "max": 348.0,
+      "mean": 242.33428141207963,
+      "min": 0.0,
+      "n_null": 0,
+      "sum": 4345296.0
+    },
+    "split": {
+      "n_null": 0,
+      "nunique": 1
+    },
+    "split_signature": {
+      "n_null": 0,
+      "nunique": 10
+    },
+    "ties": {
+      "max": 691.0,
+      "mean": 5.512520216385031,
+      "min": 0.0,
+      "n_null": 0,
+      "sum": 98845.0
+    }
+  },
+  "columns": [
+    "asset",
+    "parent_sweep_id",
+    "split_signature",
+    "split",
+    "horizon",
+    "left_config",
+    "right_config",
+    "aligned_timestamps",
+    "left_wins",
+    "right_wins",
+    "ties",
+    "left_win_rate",
+    "right_win_rate",
+    "left_win_rate_ex_ties",
+    "right_win_rate_ex_ties",
+    "left_mean_loss",
+    "right_mean_loss",
+    "left_minus_right_mean_loss"
+  ],
+  "dtypes": {
+    "aligned_timestamps": "int64",
+    "asset": "object",
+    "horizon": "int64",
+    "left_config": "object",
+    "left_mean_loss": "float64",
+    "left_minus_right_mean_loss": "float64",
+    "left_win_rate": "float64",
+    "left_win_rate_ex_ties": "float64",
+    "left_wins": "int64",
+    "parent_sweep_id": "object",
+    "right_config": "object",
+    "right_mean_loss": "float64",
+    "right_win_rate": "float64",
+    "right_win_rate_ex_ties": "float64",
+    "right_wins": "int64",
+    "split": "object",
+    "split_signature": "object",
+    "ties": "int64"
+  },
+  "n_cols": 18,
+  "n_rows": 17931
+}

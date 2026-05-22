@@ -15,6 +15,165 @@ Append-only. Mais recente no topo.
 
 ---
 
+## [2026-05-22 00:07 UTC] Stage R-22.fix — completion (audit follow-ups)
+
+**Context:** Auditoria 2026-05-21 22:30 UTC sobre PR #53 confirmou
+substancia R-22 correta (RED-5 fechado, 25 builders migrados, refresh
+2.579 → 300 LOC, sentinel byte-identical PASS) mas identificou 1 RED
+de CI + 2 YELLOWs. Branch `feat/stage-r-22-gold-builders-modular` ainda
+aberta; PR #53 com lint-type-unit FAIL na pipeline. Fixes aplicados
+nos 3 commits abaixo, mesma branch, sem rebase/amend nem alteracao
+de substancia.
+
+**Fix #1 (commit `ae2ae97`)** — bloqueador CI pandas 3.0 vs 2.3.
+Arquivo: `tests/unit/domain/services/gold_builders/test_base.py`.
+Dois testes (`test_normalize_parent_sweep_id_strips_trailing_dot_zero`
+e `test_normalize_parent_sweep_id_drops_sentinel_strings`) comparavam
+`Series.tolist()` contra literal `[..., None, ...]`. pandas 2.3 (local)
+preserva `None`; pandas 3.0.3 (CI) coerce para `nan` — divergencia
+quebra a assertion. Substituido por assertion elemento-a-elemento com
+`pd.isna()`. Local: 12/12 passed.
+
+**Fix #2 (commit `d31ed2a`)** — `tests/_helpers/gold_builder_adapters.py`
+YELLOW. **Opcao escolhida: B (manter helper, documentar como bridge
+transitoria).** Justificativa: grep mostrou >30 call-sites em 2575 LOC
+de `test_refresh_analytics_store_use_case.py` + 2 em
+`test_inference_to_gold_parent_sweep_id.py`. Criterio do prompt era
+"<10 call-sites → Opcao A; senao → Opcao B". Refactor amplo
+(Opcao A) exigiria construir GoldBuilderSnapshot + BuildContext em
+cada call-site, expondo logica de fixtures interna em ~50+ pontos —
+fora do scope R-22.fix. Adicionado docstring explicito declarando o
+helper como ponte transitoria, slated for removal numa sessao de
+cleanup pos-R-23.
+
+**Fix #3 (commit `c1ac4e4`)** — FutureWarning pandas 2.3 em
+`src/domain/services/gold_builders/confidence.py:807-809`. **Desvio do
+prompt mecanico, com motivo registrado:** o prompt prescreveu
+`.fillna(False).infer_objects(copy=False).astype(bool)`. Teste
+empirico com `warnings.simplefilter('error', FutureWarning)` provou
+que o warning persiste — emitido pelo proprio `fillna()` (downcast
+implicito interno) antes do `infer_objects` ser chamado. Solucao
+adotada: `.where(s.notna(), False).astype(bool)` evita o caminho de
+downcast do fillna inteiramente. Resultado validado sob
+`-W error::FutureWarning:src.domain.services.gold_builders.confidence`:
+45/45 tests pass, 0 FutureWarning na linha. Demais sites do mesmo
+padrao em `quality_checks/` e lambdas em `confidence.py:987-1034`
+ficam como follow-up fora do scope R-22.fix.
+
+**Validation:**
+- `pytest tests/ -q --ignore=...byte_identical...` → **605 passed,
+  9 warnings** (vs 45 warnings antes — 3 FutureWarnings eliminados).
+- `ruff check src/ tests/` → **All checks passed**.
+- `du -sh data/analytics_archive_pre_phase_b/` → **851M** (intact).
+- `pytest tests/integration/test_gold_builders_byte_identical_archive.py`
+  → **1 passed in 429.95s** (substancia R-22 preservada — fingerprints
+  byte-identical contra archive).
+
+**Outcome:** 3 commits empilhados em `feat/stage-r-22-gold-builders-modular`
+(`ae2ae97`, `d31ed2a`, `c1ac4e4`). Push e watch de CI a seguir. **Sem
+merge** — Marcelo merge manualmente apos confirmar verde.
+
+---
+
+## [2026-05-22 02:30 UTC] Stage R-22 — completion (gold builders modularization; byte-identical sentinel)
+
+**Context:** Stage R-22 do plano de remediacao. RED-5 da auditoria
+(Stage 22 mergeado em main como skeleton-only — `gold_builders/`
+existia com `base.py` 91 LOC + `__init__.py` vazio; zero imports em
+producao; god-object `refresh_analytics_store_use_case.py` 2.579 LOC
+intacto com 25 builders inline `_build_gold_*` como `@staticmethod`).
+Marcelo decisao: **Opcao (1)** migracao COMPLETA + Opcao A+B hibrida
+para dependency ordering.
+
+**Mapeamento real:** monolito tinha **25 builders** (plano §0 estimou
+26; contagem precisa via grep — o 26o era o helper
+`_build_gold_prediction_metrics_by_run_split_horizon_single_contract`,
+nao um builder). Distribuicao por cluster:
+
+- **ranking** (3 Tier 1): `RunsLong`, `RankingByConfig`, `ConsistencyTopk`
+- **descriptive** (6, mix Tier 1+2): `Ic95`, `FeatureSetImpact`,
+  `OosConsolidated`, `OosQualityReport` (R-E suffix fix preservado),
+  `PredictionMetricsByHorizon` (T2), `PredictionCalibration` (T2)
+- **quantile** (4, mix): `PredictionMetricsByRunSplitHorizon` (T1,
+  composes raw+post via `_build_metrics_single_contract`),
+  `QuantileGuardrailAudit`, `QuantileDegeneracyReport`,
+  `PredictionMetricsByConfig` (T2)
+- **pairwise** (4 Tier 1): `DmPairwiseResults` (Holm inside `build()`),
+  `McsResults`, `WinRatePairwiseResults`,
+  `PairedOosIntersectionByHorizon`
+- **confidence** (8, mix Tier 1+2+3): `PredictionRisk`,
+  `PredictionGeneralizationGap` (T2), `PredictionRobustnessByHorizon`
+  (T2), `FeatureImpactByHorizon` (T2), `FeatureContribLocalSummary`,
+  `ModelDecisionFinal` (T3), `QualityStatisticsReport` (T3),
+  `QualityRunSweepSummary` (T3)
+
+**Decisao R-22.0.bis: rename `AnalyticsSnapshot` -> `GoldBuilderSnapshot`
+no gold_builders/base.py, alias preservado.**
+- **Question/Issue:** colisao com `AnalyticsSnapshot` em
+  `quality_checks/base.py` (shapes diferentes, mesmo nome -> confusao).
+- **Choice:** rename so do lado gold; manter alias
+  `AnalyticsSnapshot = GoldBuilderSnapshot` para back-compat do
+  `test_base.py` existente.
+- **Principle:** "imutabilidade de checklists" + R-21 ja mergeado nao
+  pode ser tocado; rename unilateral so no lado gold.
+- **Outcome:** commit ef5a946; base.py 159 LOC.
+
+**Decisao R-22.2.bis: dependency ordering via Opcao A+B hibrida.**
+- **Question/Issue:** 14 builders Tier 1, 7 Tier 2 (consumindo
+  `gold_prediction_metrics_by_run_split_horizon`), 3 Tier 3 (multiplas).
+  Plano original §22.7 nao especificou COMO Tier 2/3 acessam Tier 1
+  outputs.
+- **Options:** (A) `ctx.gold_outputs` dict acumula em ordem manual de
+  registro; (B) `requires_gold` + topo-sort programatico em runtime;
+  (C) re-ler parquets do disco.
+- **Choice:** (A)+(B) hibrida — `BuildContext.gold_outputs` acumula
+  + `requires_gold: tuple[str, ...]` declarado em cada builder +
+  `GoldBuilderRequirementError` raised no orchestrator quando
+  ausentes + topology test estatico em
+  `tests/unit/domain/services/gold_builders/test_topology.py`.
+- **Principle:** "mechanical > procedural" + "fail-fast em ordem de
+  registro errada vs silenciosamente-empty Tier 2/3 outputs".
+- **Outcome:** commit ef5a946; topology test verifica todas 25 dependencias.
+
+**Decisao R-22.3 (sentinel byte-identical): fingerprint fixtures vs
+full parquets.**
+- **Question/Issue:** O baseline `data/analytics_archive_pre_phase_b/gold/`
+  e PRE-R-E + PRE-R-20 (capturado em audit 2026-05-20) — too old.
+  Para byte-identical preciso rodar main HEAD (post-R-21) contra
+  archive silver, depois rodar R-22 contra mesmo silver, diffar.
+- **Procedure executada:** (1) git stash R-22 + git checkout main +
+  rodei refresh contra archive silver -> /tmp/gold_main_baseline (~7min
+  por causa do MCS bootstrap). (2) git checkout R-22 + git stash pop +
+  rodei refresh contra mesmo silver -> /tmp/gold_r22_modular. (3) Diff
+  byte-byte: **25/25 tabelas OK** sob `pd.testing.assert_frame_equal`
+  com rtol=1e-9.
+- **Sentinel fixture choice:** 351M de full parquets nao da pra comitar.
+  Optei por fingerprint JSON (n_rows + columns + dtypes + per-column
+  sum/mean/min/max/nunique) — 188K total, sensivel a qualquer
+  sign-flip individual.
+- **Principle:** "byte-identical empirico mandatorio" + pragmatismo
+  sobre tamanho de fixture (188K << 351M, mesmo poder discriminatorio
+  para regressoes futuras).
+- **Outcome:** commit 52c8ad8; sentinel passa em 441s.
+
+**Test ergonomics:** existing 40+ direct-arg calls em
+`tests/unit/use_cases/test_refresh_analytics_store_use_case.py` adapted
+via thin module `tests/_helpers/gold_builder_adapters.py`.
+Ranking/descriptive Tier 1 builders ganharam helpers
+`_build_*_from_base(base)` module-level para os adapters nao
+re-rodarem `_base_join_runs_split_metrics` em ja-joined base.
+
+**LOC reduction:** `refresh_analytics_store_use_case.py` 2.579 -> 300
+(-88%). Cluster files totalizam ~3.0k LOC (5 arquivos). Org files
+muito mais navegaveis.
+
+**Outcome:** commits ef5a946 + 52c8ad8 + R-22.4 docs (proximo); 605
+testes passam (+25 vs main 580); archive intacto 851M; sentinel byte-
+identical contra main HEAD baseline 25/25 OK; ADR-0005 status ->
+Implemented.
+
+---
+
 ## [2026-05-21 08:50 UTC] Stage R-21 — completion (registry migration; bit-identical empirico)
 
 **Context:** Stage R-21 do plano de remediacao. RED-3 + RED-4 da

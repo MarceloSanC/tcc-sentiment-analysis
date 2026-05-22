@@ -1,0 +1,711 @@
+{
+  "column_stats": {
+    "asset": {
+      "n_null": 0,
+      "nunique": 1
+    },
+    "config_signature": {
+      "n_null": 0,
+      "nunique": 6902
+    },
+    "feature_set_name": {
+      "n_null": 0,
+      "nunique": 13
+    },
+    "horizon": {
+      "max": 7.0,
+      "mean": 1.000845725562055,
+      "min": 1.0,
+      "n_null": 0,
+      "sum": 14201.0
+    },
+    "iqr_bias": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 0,
+      "sum": 0.0
+    },
+    "iqr_confidence_calibrated_post_guardrail": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 14185,
+      "sum": 0.0
+    },
+    "iqr_confidence_calibrated_raw": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 12835,
+      "sum": 0.0
+    },
+    "iqr_coverage_error_post_guardrail": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 14185,
+      "sum": 0.0
+    },
+    "iqr_coverage_error_raw": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 12835,
+      "sum": 0.0
+    },
+    "iqr_directional_accuracy": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 0,
+      "sum": 0.0
+    },
+    "iqr_mae": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 0,
+      "sum": 0.0
+    },
+    "iqr_mape": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 0,
+      "sum": 0.0
+    },
+    "iqr_mean_pinball_post_guardrail": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 14185,
+      "sum": 0.0
+    },
+    "iqr_mean_pinball_raw": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 12835,
+      "sum": 0.0
+    },
+    "iqr_mpiw_post_guardrail": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 14185,
+      "sum": 0.0
+    },
+    "iqr_mpiw_raw": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 12835,
+      "sum": 0.0
+    },
+    "iqr_picp_post_guardrail": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 14185,
+      "sum": 0.0
+    },
+    "iqr_picp_raw": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 12835,
+      "sum": 0.0
+    },
+    "iqr_pinball_q10_post_guardrail": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 14185,
+      "sum": 0.0
+    },
+    "iqr_pinball_q10_raw": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 12835,
+      "sum": 0.0
+    },
+    "iqr_pinball_q50_post_guardrail": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 14185,
+      "sum": 0.0
+    },
+    "iqr_pinball_q50_raw": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 12835,
+      "sum": 0.0
+    },
+    "iqr_pinball_q90_post_guardrail": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 14185,
+      "sum": 0.0
+    },
+    "iqr_pinball_q90_raw": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 12835,
+      "sum": 0.0
+    },
+    "iqr_pred_interval_width_post_guardrail": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 14185,
+      "sum": 0.0
+    },
+    "iqr_pred_interval_width_raw": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 12835,
+      "sum": 0.0
+    },
+    "iqr_prob_down_post_guardrail": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 14185,
+      "sum": 0.0
+    },
+    "iqr_prob_down_raw": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 12835,
+      "sum": 0.0
+    },
+    "iqr_prob_up_post_guardrail": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 14185,
+      "sum": 0.0
+    },
+    "iqr_prob_up_raw": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 12835,
+      "sum": 0.0
+    },
+    "iqr_rmse": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 0,
+      "sum": 0.0
+    },
+    "iqr_smape": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 0,
+      "sum": 0.0
+    },
+    "mean_bias": {
+      "max": 0.008963692252953348,
+      "mean": -0.00015859394566450778,
+      "min": -0.010335762187695587,
+      "n_null": 0,
+      "sum": -2.2502894950337007
+    },
+    "mean_confidence_calibrated_post_guardrail": {
+      "max": 0.2786241413194653,
+      "mean": 0.2114293975581379,
+      "min": 0.12525254630202973,
+      "n_null": 14185,
+      "sum": 0.8457175902325516
+    },
+    "mean_confidence_calibrated_raw": {
+      "max": 0.9686964005890242,
+      "mean": 0.8534870679892037,
+      "min": 0.0,
+      "n_null": 12835,
+      "sum": 1155.6214900573818
+    },
+    "mean_coverage_error_post_guardrail": {
+      "max": -0.5745098039215687,
+      "mean": -0.6290998217468806,
+      "min": -0.698989898989899,
+      "n_null": 14185,
+      "sum": -2.5163992869875225
+    },
+    "mean_coverage_error_raw": {
+      "max": 0.16392785571142277,
+      "mean": -0.04606800219496444,
+      "min": -0.8,
+      "n_null": 12835,
+      "sum": -62.37607497198184
+    },
+    "mean_directional_accuracy": {
+      "max": 0.6116504854368932,
+      "mean": 0.5157907821232899,
+      "min": 0.41649484536082476,
+      "n_null": 0,
+      "sum": 7318.55540754736
+    },
+    "mean_mae": {
+      "max": 0.02548936259317814,
+      "mean": 0.01365377115062775,
+      "min": 0.009880691625594334,
+      "n_null": 0,
+      "sum": 193.73335885625715
+    },
+    "mean_mape": {
+      "max": 4.086436036507933,
+      "mean": 1.3236938788525636,
+      "min": 0.9979880862741264,
+      "n_null": 0,
+      "sum": 18781.892447039027
+    },
+    "mean_mean_pinball_post_guardrail": {
+      "max": 0.011530236034567456,
+      "mean": 0.009899100852835692,
+      "min": 0.008066130954806664,
+      "n_null": 14185,
+      "sum": 0.03959640341134277
+    },
+    "mean_mean_pinball_raw": {
+      "max": 0.012753962083538973,
+      "mean": 0.004689946405094344,
+      "min": 0.0032864342812463634,
+      "n_null": 12835,
+      "sum": 6.350187432497742
+    },
+    "mean_mpiw_post_guardrail": {
+      "max": 0.01175932316839987,
+      "mean": 0.009859136937430504,
+      "min": 0.007989320180830404,
+      "n_null": 14185,
+      "sum": 0.039436547749722016
+    },
+    "mean_mpiw_raw": {
+      "max": 0.0669182503786014,
+      "mean": 0.03884708104939233,
+      "min": -0.00863307189908536,
+      "n_null": 12835,
+      "sum": 52.598947740877215
+    },
+    "mean_picp_post_guardrail": {
+      "max": 0.22549019607843138,
+      "mean": 0.17090017825311943,
+      "min": 0.10101010101010101,
+      "n_null": 14185,
+      "sum": 0.6836007130124777
+    },
+    "mean_picp_raw": {
+      "max": 0.9639278557114228,
+      "mean": 0.7539319978050356,
+      "min": 0.0,
+      "n_null": 12835,
+      "sum": 1020.8239250280182
+    },
+    "mean_pinball_q10_post_guardrail": {
+      "max": 0.010557009515057395,
+      "mean": 0.009260332501070959,
+      "min": 0.007989554233862176,
+      "n_null": 14185,
+      "sum": 0.037041330004283834
+    },
+    "mean_pinball_q10_raw": {
+      "max": 0.013612810617861196,
+      "mean": 0.003659287948048703,
+      "min": 0.002427745502868647,
+      "n_null": 12835,
+      "sum": 4.954675881657944
+    },
+    "mean_pinball_q50_post_guardrail": {
+      "max": 0.01256863334356699,
+      "mean": 0.011018692625869044,
+      "min": 0.009295906968641337,
+      "n_null": 14185,
+      "sum": 0.04407477050347618
+    },
+    "mean_pinball_q50_raw": {
+      "max": 0.012715049052282913,
+      "mean": 0.006870125215291108,
+      "min": 0.004949588532597035,
+      "n_null": 12835,
+      "sum": 9.30214954150416
+    },
+    "mean_pinball_q90_post_guardrail": {
+      "max": 0.011707263786052918,
+      "mean": 0.009418277431567078,
+      "min": 0.006780282192987357,
+      "n_null": 14185,
+      "sum": 0.03767310972626831
+    },
+    "mean_pinball_q90_raw": {
+      "max": 0.01238146773383675,
+      "mean": 0.003540426051943219,
+      "min": 0.00231644131611926,
+      "n_null": 12835,
+      "sum": 4.793736874331119
+    },
+    "mean_pred_interval_width_post_guardrail": {
+      "max": 0.01175932316839987,
+      "mean": 0.009859136937430504,
+      "min": 0.007989320180830404,
+      "n_null": 14185,
+      "sum": 0.039436547749722016
+    },
+    "mean_pred_interval_width_raw": {
+      "max": 0.0669182503786014,
+      "mean": 0.03884708104939233,
+      "min": -0.00863307189908536,
+      "n_null": 12835,
+      "sum": 52.598947740877215
+    },
+    "mean_prob_down_post_guardrail": {
+      "max": 0.5455332037505692,
+      "mean": 0.38726159867703347,
+      "min": 0.2301543806290386,
+      "n_null": 14185,
+      "sum": 1.5490463947081339
+    },
+    "mean_prob_down_raw": {
+      "max": 0.6558926457094163,
+      "mean": 0.4919624122104964,
+      "min": 0.0,
+      "n_null": 12835,
+      "sum": 666.1171061330122
+    },
+    "mean_prob_up_post_guardrail": {
+      "max": 0.7698456193709614,
+      "mean": 0.6127384013229665,
+      "min": 0.45446679624943076,
+      "n_null": 14185,
+      "sum": 2.450953605291866
+    },
+    "mean_prob_up_raw": {
+      "max": 1.0,
+      "mean": 0.5080375877895036,
+      "min": 0.3441073542905837,
+      "n_null": 12835,
+      "sum": 687.8828938669878
+    },
+    "mean_rmse": {
+      "max": 0.03674184302322905,
+      "mean": 0.019097510540265938,
+      "min": 0.013323970250596949,
+      "n_null": 0,
+      "sum": 270.9745770558334
+    },
+    "mean_smape": {
+      "max": 1.9611228434890755,
+      "mean": 1.6848989687822102,
+      "min": 1.2652545269431628,
+      "n_null": 0,
+      "sum": 23907.03146805078
+    },
+    "n_oos": {
+      "max": 2767.0,
+      "mean": 543.3419550355909,
+      "min": 99.0,
+      "n_null": 0,
+      "sum": 7709479.0
+    },
+    "n_runs": {
+      "max": 1.0,
+      "mean": 1.0,
+      "min": 1.0,
+      "n_null": 0,
+      "sum": 14189.0
+    },
+    "parent_sweep_id": {
+      "n_null": 12835,
+      "nunique": 13
+    },
+    "split": {
+      "n_null": 0,
+      "nunique": 3
+    },
+    "std_bias": {
+      "n_null": 14189
+    },
+    "std_confidence_calibrated_post_guardrail": {
+      "n_null": 14189
+    },
+    "std_confidence_calibrated_raw": {
+      "n_null": 14189
+    },
+    "std_coverage_error_post_guardrail": {
+      "n_null": 14189
+    },
+    "std_coverage_error_raw": {
+      "n_null": 14189
+    },
+    "std_directional_accuracy": {
+      "n_null": 14189
+    },
+    "std_mae": {
+      "n_null": 14189
+    },
+    "std_mape": {
+      "n_null": 14189
+    },
+    "std_mean_pinball_post_guardrail": {
+      "n_null": 14189
+    },
+    "std_mean_pinball_raw": {
+      "n_null": 14189
+    },
+    "std_mpiw_post_guardrail": {
+      "n_null": 14189
+    },
+    "std_mpiw_raw": {
+      "n_null": 14189
+    },
+    "std_picp_post_guardrail": {
+      "n_null": 14189
+    },
+    "std_picp_raw": {
+      "n_null": 14189
+    },
+    "std_pinball_q10_post_guardrail": {
+      "n_null": 14189
+    },
+    "std_pinball_q10_raw": {
+      "n_null": 14189
+    },
+    "std_pinball_q50_post_guardrail": {
+      "n_null": 14189
+    },
+    "std_pinball_q50_raw": {
+      "n_null": 14189
+    },
+    "std_pinball_q90_post_guardrail": {
+      "n_null": 14189
+    },
+    "std_pinball_q90_raw": {
+      "n_null": 14189
+    },
+    "std_pred_interval_width_post_guardrail": {
+      "n_null": 14189
+    },
+    "std_pred_interval_width_raw": {
+      "n_null": 14189
+    },
+    "std_prob_down_post_guardrail": {
+      "n_null": 14189
+    },
+    "std_prob_down_raw": {
+      "n_null": 14189
+    },
+    "std_prob_up_post_guardrail": {
+      "n_null": 14189
+    },
+    "std_prob_up_raw": {
+      "n_null": 14189
+    },
+    "std_rmse": {
+      "n_null": 14189
+    },
+    "std_smape": {
+      "n_null": 14189
+    }
+  },
+  "columns": [
+    "asset",
+    "feature_set_name",
+    "parent_sweep_id",
+    "config_signature",
+    "split",
+    "horizon",
+    "n_runs",
+    "n_oos",
+    "mean_rmse",
+    "std_rmse",
+    "iqr_rmse",
+    "mean_mae",
+    "std_mae",
+    "iqr_mae",
+    "mean_mape",
+    "std_mape",
+    "iqr_mape",
+    "mean_smape",
+    "std_smape",
+    "iqr_smape",
+    "mean_directional_accuracy",
+    "std_directional_accuracy",
+    "iqr_directional_accuracy",
+    "mean_bias",
+    "std_bias",
+    "iqr_bias",
+    "mean_pinball_q10_raw",
+    "std_pinball_q10_raw",
+    "iqr_pinball_q10_raw",
+    "mean_pinball_q50_raw",
+    "std_pinball_q50_raw",
+    "iqr_pinball_q50_raw",
+    "mean_pinball_q90_raw",
+    "std_pinball_q90_raw",
+    "iqr_pinball_q90_raw",
+    "mean_mean_pinball_raw",
+    "std_mean_pinball_raw",
+    "iqr_mean_pinball_raw",
+    "mean_picp_raw",
+    "std_picp_raw",
+    "iqr_picp_raw",
+    "mean_mpiw_raw",
+    "std_mpiw_raw",
+    "iqr_mpiw_raw",
+    "mean_pred_interval_width_raw",
+    "std_pred_interval_width_raw",
+    "iqr_pred_interval_width_raw",
+    "mean_coverage_error_raw",
+    "std_coverage_error_raw",
+    "iqr_coverage_error_raw",
+    "mean_confidence_calibrated_raw",
+    "std_confidence_calibrated_raw",
+    "iqr_confidence_calibrated_raw",
+    "mean_prob_up_raw",
+    "std_prob_up_raw",
+    "iqr_prob_up_raw",
+    "mean_prob_down_raw",
+    "std_prob_down_raw",
+    "iqr_prob_down_raw",
+    "mean_pinball_q10_post_guardrail",
+    "std_pinball_q10_post_guardrail",
+    "iqr_pinball_q10_post_guardrail",
+    "mean_pinball_q50_post_guardrail",
+    "std_pinball_q50_post_guardrail",
+    "iqr_pinball_q50_post_guardrail",
+    "mean_pinball_q90_post_guardrail",
+    "std_pinball_q90_post_guardrail",
+    "iqr_pinball_q90_post_guardrail",
+    "mean_mean_pinball_post_guardrail",
+    "std_mean_pinball_post_guardrail",
+    "iqr_mean_pinball_post_guardrail",
+    "mean_picp_post_guardrail",
+    "std_picp_post_guardrail",
+    "iqr_picp_post_guardrail",
+    "mean_mpiw_post_guardrail",
+    "std_mpiw_post_guardrail",
+    "iqr_mpiw_post_guardrail",
+    "mean_pred_interval_width_post_guardrail",
+    "std_pred_interval_width_post_guardrail",
+    "iqr_pred_interval_width_post_guardrail",
+    "mean_coverage_error_post_guardrail",
+    "std_coverage_error_post_guardrail",
+    "iqr_coverage_error_post_guardrail",
+    "mean_confidence_calibrated_post_guardrail",
+    "std_confidence_calibrated_post_guardrail",
+    "iqr_confidence_calibrated_post_guardrail",
+    "mean_prob_up_post_guardrail",
+    "std_prob_up_post_guardrail",
+    "iqr_prob_up_post_guardrail",
+    "mean_prob_down_post_guardrail",
+    "std_prob_down_post_guardrail",
+    "iqr_prob_down_post_guardrail"
+  ],
+  "dtypes": {
+    "asset": "object",
+    "config_signature": "object",
+    "feature_set_name": "object",
+    "horizon": "int64",
+    "iqr_bias": "float64",
+    "iqr_confidence_calibrated_post_guardrail": "float64",
+    "iqr_confidence_calibrated_raw": "float64",
+    "iqr_coverage_error_post_guardrail": "float64",
+    "iqr_coverage_error_raw": "float64",
+    "iqr_directional_accuracy": "float64",
+    "iqr_mae": "float64",
+    "iqr_mape": "float64",
+    "iqr_mean_pinball_post_guardrail": "float64",
+    "iqr_mean_pinball_raw": "float64",
+    "iqr_mpiw_post_guardrail": "float64",
+    "iqr_mpiw_raw": "float64",
+    "iqr_picp_post_guardrail": "float64",
+    "iqr_picp_raw": "float64",
+    "iqr_pinball_q10_post_guardrail": "float64",
+    "iqr_pinball_q10_raw": "float64",
+    "iqr_pinball_q50_post_guardrail": "float64",
+    "iqr_pinball_q50_raw": "float64",
+    "iqr_pinball_q90_post_guardrail": "float64",
+    "iqr_pinball_q90_raw": "float64",
+    "iqr_pred_interval_width_post_guardrail": "float64",
+    "iqr_pred_interval_width_raw": "float64",
+    "iqr_prob_down_post_guardrail": "float64",
+    "iqr_prob_down_raw": "float64",
+    "iqr_prob_up_post_guardrail": "float64",
+    "iqr_prob_up_raw": "float64",
+    "iqr_rmse": "float64",
+    "iqr_smape": "float64",
+    "mean_bias": "float64",
+    "mean_confidence_calibrated_post_guardrail": "float64",
+    "mean_confidence_calibrated_raw": "float64",
+    "mean_coverage_error_post_guardrail": "float64",
+    "mean_coverage_error_raw": "float64",
+    "mean_directional_accuracy": "float64",
+    "mean_mae": "float64",
+    "mean_mape": "float64",
+    "mean_mean_pinball_post_guardrail": "float64",
+    "mean_mean_pinball_raw": "float64",
+    "mean_mpiw_post_guardrail": "float64",
+    "mean_mpiw_raw": "float64",
+    "mean_picp_post_guardrail": "float64",
+    "mean_picp_raw": "float64",
+    "mean_pinball_q10_post_guardrail": "float64",
+    "mean_pinball_q10_raw": "float64",
+    "mean_pinball_q50_post_guardrail": "float64",
+    "mean_pinball_q50_raw": "float64",
+    "mean_pinball_q90_post_guardrail": "float64",
+    "mean_pinball_q90_raw": "float64",
+    "mean_pred_interval_width_post_guardrail": "float64",
+    "mean_pred_interval_width_raw": "float64",
+    "mean_prob_down_post_guardrail": "float64",
+    "mean_prob_down_raw": "float64",
+    "mean_prob_up_post_guardrail": "float64",
+    "mean_prob_up_raw": "float64",
+    "mean_rmse": "float64",
+    "mean_smape": "float64",
+    "n_oos": "int64",
+    "n_runs": "int64",
+    "parent_sweep_id": "object",
+    "split": "object",
+    "std_bias": "float64",
+    "std_confidence_calibrated_post_guardrail": "float64",
+    "std_confidence_calibrated_raw": "float64",
+    "std_coverage_error_post_guardrail": "float64",
+    "std_coverage_error_raw": "float64",
+    "std_directional_accuracy": "float64",
+    "std_mae": "float64",
+    "std_mape": "float64",
+    "std_mean_pinball_post_guardrail": "float64",
+    "std_mean_pinball_raw": "float64",
+    "std_mpiw_post_guardrail": "float64",
+    "std_mpiw_raw": "float64",
+    "std_picp_post_guardrail": "float64",
+    "std_picp_raw": "float64",
+    "std_pinball_q10_post_guardrail": "float64",
+    "std_pinball_q10_raw": "float64",
+    "std_pinball_q50_post_guardrail": "float64",
+    "std_pinball_q50_raw": "float64",
+    "std_pinball_q90_post_guardrail": "float64",
+    "std_pinball_q90_raw": "float64",
+    "std_pred_interval_width_post_guardrail": "float64",
+    "std_pred_interval_width_raw": "float64",
+    "std_prob_down_post_guardrail": "float64",
+    "std_prob_down_raw": "float64",
+    "std_prob_up_post_guardrail": "float64",
+    "std_prob_up_raw": "float64",
+    "std_rmse": "float64",
+    "std_smape": "float64"
+  },
+  "n_cols": 92,
+  "n_rows": 14189
+}

@@ -13,7 +13,9 @@ canonical_for: [adr_0005, gold_builders_modularization, refresh_analytics_store_
 # ADR-0005: GoldBuilders modulares por categoria
 
 ## Status
-Accepted (2026-05-19)
+Implemented (Stage R-22, 2026-05-21) — shipped via PR feat/stage-r-22-gold-builders-modular.
+
+Original status: Accepted (2026-05-19).
 
 ## Context
 
@@ -112,9 +114,106 @@ em `tests/unit/domain/services/gold_builders/test_<categoria>.py`.
 - Adiciona indireccao no grep: "onde esta DM?" precisa de indice
   exportado em `gold_builders/__init__.py`.
 
+## Implementation notes (Stage R-22, 2026-05-21)
+
+Final layout shipped:
+
+```
+src/domain/services/gold_builders/
+  base.py            — GoldBuilder ABC + GoldBuilderSnapshot + BuildContext
+                       + GoldBuildersRegistry + GoldBuilderRequirementError
+                       + normalize_parent_sweep_id_for_merge helper
+  ranking.py         — RunsLongGoldBuilder, RankingByConfigGoldBuilder,
+                       ConsistencyTopkGoldBuilder (3 Tier 1 builders sharing
+                       _base_join_runs_split_metrics)
+  descriptive.py     — Ic95GoldBuilder, FeatureSetImpactGoldBuilder,
+                       OosConsolidatedGoldBuilder, OosQualityReportGoldBuilder
+                       (preserves R-E suffix fix),
+                       PredictionMetricsByHorizonGoldBuilder (Tier 2),
+                       PredictionCalibrationGoldBuilder (Tier 2)
+  quantile.py        — PredictionMetricsByRunSplitHorizonGoldBuilder
+                       (Tier 1, composes raw + post_guardrail via the
+                       _build_metrics_single_contract module-level helper),
+                       QuantileGuardrailAuditGoldBuilder,
+                       QuantileDegeneracyReportGoldBuilder,
+                       PredictionMetricsByConfigGoldBuilder (Tier 2)
+  pairwise.py        — DmPairwiseResultsGoldBuilder (Holm-adjusted inside
+                       build()), McsResultsGoldBuilder,
+                       WinRatePairwiseResultsGoldBuilder,
+                       PairedOosIntersectionByHorizonGoldBuilder
+  confidence.py      — PredictionRiskGoldBuilder,
+                       PredictionGeneralizationGapGoldBuilder (Tier 2),
+                       PredictionRobustnessByHorizonGoldBuilder (Tier 2),
+                       FeatureImpactByHorizonGoldBuilder (Tier 2),
+                       FeatureContribLocalSummaryGoldBuilder,
+                       ModelDecisionFinalGoldBuilder (Tier 3, 7 upstream gold
+                       tables + ctx.primary_quantile_contract),
+                       QualityStatisticsReportGoldBuilder (Tier 3),
+                       QualityRunSweepSummaryGoldBuilder (Tier 3)
+  __init__.py        — build_default_registry() pinning the 25 builders in
+                       topological order = monolith emit sequence
+```
+
+**Total: 25 builders** (the initial Context line cited 26; verified by
+grep against the monolith pre-R-22 — the 26th was the
+`_build_gold_prediction_metrics_by_run_split_horizon_single_contract`
+helper, not a builder; it now lives as `_build_metrics_single_contract`
+in `quantile.py`).
+
+**Dependency ordering — R-22.2.bis (Opcao A+B hibrida adopted):**
+
+- `BuildContext.gold_outputs: dict[str, pd.DataFrame]` accumulates
+  outputs in registration order (Opcao A — no programmatic topo-sort).
+- Each builder declares `requires_gold: tuple[str, ...]` of upstream
+  gold tables consumed (Opcao B — explicit dependency contract).
+- Orchestrator enforces both `requires` (silver/dim) and
+  `requires_gold` at iteration time, raising
+  `GoldBuilderRequirementError` so missing dependencies surface
+  immediately rather than producing silently-empty Tier 2/3 outputs.
+- A topology test in
+  [`tests/unit/domain/services/gold_builders/test_topology.py`](../../../tests/unit/domain/services/gold_builders/test_topology.py)
+  asserts that for every builder B, all of `B.requires_gold` appear in
+  the registry strictly before B; this catches registration-order bugs
+  at unit-test time rather than during a smoke run.
+
+**Snapshot rename — R-22.0.bis:**
+
+`base.py::AnalyticsSnapshot` renamed to `GoldBuilderSnapshot` to
+disambiguate from `quality_checks/base.py::QualityCheckSnapshot`. The
+alias `AnalyticsSnapshot = GoldBuilderSnapshot` is preserved for
+backward compatibility with code still using the original name.
+
+**Byte-identical regression (R-22.3) — verified 2026-05-21:**
+
+The modular pipeline emitted byte-identical output to the pre-R-22
+monolith (commit d244a8d) when run against
+`data/analytics_archive_pre_phase_b/silver` (499M of real F.1 smoke
+data). All 25 gold parquets compared OK under per-column sum / mean /
+min / max / nunique fingerprints with 1e-9 relative tolerance.
+Sentinel test at
+[`tests/integration/test_gold_builders_byte_identical_archive.py`](../../../tests/integration/test_gold_builders_byte_identical_archive.py)
+guards against future regressions; skipped on contributor checkouts
+that lack the archive.
+
+**Orchestrator LOC:** `refresh_analytics_store_use_case.py` reduced
+from 2.579 LOC to 300 LOC (88% reduction). Builder cluster files total
+~3.0k LOC; aggregate src/ growth is modest because the previous
+monolith had ~2.6k LOC of inline `_build_gold_*` methods plus
+orchestration glue.
+
+**Test ergonomics:** existing fine-grained unit tests at
+`tests/unit/use_cases/test_refresh_analytics_store_use_case.py` (40+
+direct-DataFrame call sites) keep their legacy ergonomics via thin
+adapters at `tests/_helpers/gold_builder_adapters.py`. Ranking + the
+two pre-joined descriptive builders (Ic95, FeatureSetImpact) expose
+`_build_*_from_base(base)` module-level helpers so adapters can avoid
+re-running `_base_join_runs_split_metrics` on an already-joined
+`base`.
+
 ## Cross-link
 
 - Diagnostico: [`docs/07_reports/phase-gates/B_architectural_debt_2026-05-19.md`](../../07_reports/phase-gates/B_architectural_debt_2026-05-19.md) §"M5-refresh"
-- Implementacao: PHASE_B_IMPLEMENTATION_CHECKLIST.md §Stage 22
-- Relacionado: ADR-0001 (Analytics Store como source of truth — este ADR refina internals do builder side)
+- Implementacao log: [`docs/07_reports/option_b_execution_log_2026-05-19.md`](../../07_reports/option_b_execution_log_2026-05-19.md) §R-22
+- Plano de remediacao: [`docs/ai/STAGE_20_23_REMEDIATION_PLAN.md`](../../ai/STAGE_20_23_REMEDIATION_PLAN.md) §Stage R-22
+- Relacionado: ADR-0001 (Analytics Store como source of truth — este ADR refina internals do builder side); ADR-0004 (QualityCheckRegistry, mesmo padrao aplicado ao validate)
 - Habilita future: PHASE_B §Stages 15-18 (Caminho C write-time per-run) se forem ativados.

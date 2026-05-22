@@ -6,6 +6,23 @@ import pytest
 from src.domain.services.quantile_contract_analyzer import QuantileDegeneracyThresholds
 from src.domain.services.scope_spec import ScopeSpec
 from src.use_cases.refresh_analytics_store_use_case import RefreshAnalyticsStoreUseCase
+from tests._helpers.gold_builder_adapters import (
+    build_gold_consistency_topk,
+    build_gold_dm_pairwise_results,
+    build_gold_feature_contrib_local_summary,
+    build_gold_feature_impact_by_horizon,
+    build_gold_feature_set_impact,
+    build_gold_mcs_results,
+    build_gold_model_decision_final,
+    build_gold_oos_quality_report,
+    build_gold_prediction_metrics_by_config,
+    build_gold_prediction_metrics_by_horizon,
+    build_gold_prediction_metrics_by_run_split_horizon,
+    build_gold_prediction_risk,
+    build_gold_quantile_degeneracy_report,
+    build_gold_ranking_by_config,
+    build_gold_win_rate_pairwise_results,
+)
 
 
 def _write_table(base, table_name: str, rows: list[dict], parts: dict[str, str] | None = None) -> None:
@@ -66,7 +83,7 @@ def _quantile_contract_oos(*, include_post_guardrail: bool = True) -> pd.DataFra
 
 
 def test_metrics_by_run_split_horizon_emits_raw_and_post_guardrail_pairs() -> None:
-    out = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon(
+    out = build_gold_prediction_metrics_by_run_split_horizon(
         _quantile_contract_dim_run(),
         _quantile_contract_oos(),
         _quantile_contract_fact_config(),
@@ -100,7 +117,7 @@ def test_metrics_by_run_split_horizon_emits_raw_and_post_guardrail_pairs() -> No
 
 
 def test_metrics_emits_nan_post_guardrail_when_silver_missing_columns() -> None:
-    out = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon(
+    out = build_gold_prediction_metrics_by_run_split_horizon(
         _quantile_contract_dim_run(),
         _quantile_contract_oos(include_post_guardrail=False),
         _quantile_contract_fact_config(),
@@ -145,7 +162,7 @@ def test_pred_interval_negative_uses_raw_quantiles_not_post_guardrail() -> None:
         ]
     )
 
-    out = RefreshAnalyticsStoreUseCase._build_gold_oos_quality_report(
+    out = build_gold_oos_quality_report(
         _quantile_contract_dim_run(),
         fact,
     )
@@ -174,7 +191,7 @@ def test_quantile_degeneracy_report_materializes_group_metrics_and_gate_status()
         [{"run_id": "r1", "prediction_mode": "quantile", "parent_sweep_id": "sw1"}]
     )
 
-    out = RefreshAnalyticsStoreUseCase._build_gold_quantile_degeneracy_report(
+    out = build_gold_quantile_degeneracy_report(
         pd.DataFrame(rows),
         fact_config,
         thresholds=QuantileDegeneracyThresholds(),
@@ -221,7 +238,7 @@ def test_quantile_degeneracy_report_honors_custom_thresholds() -> None:
         [{"run_id": "r1", "prediction_mode": "quantile", "parent_sweep_id": "sw1"}]
     )
 
-    permissive = RefreshAnalyticsStoreUseCase._build_gold_quantile_degeneracy_report(
+    permissive = build_gold_quantile_degeneracy_report(
         pd.DataFrame(rows),
         fact_config,
         thresholds=QuantileDegeneracyThresholds(
@@ -229,7 +246,7 @@ def test_quantile_degeneracy_report_honors_custom_thresholds() -> None:
             max_p10_eq_p90_rate=0.50,
         ),
     )
-    strict = RefreshAnalyticsStoreUseCase._build_gold_quantile_degeneracy_report(
+    strict = build_gold_quantile_degeneracy_report(
         pd.DataFrame(rows),
         fact_config,
         thresholds=QuantileDegeneracyThresholds(
@@ -244,7 +261,7 @@ def test_quantile_degeneracy_report_honors_custom_thresholds() -> None:
 
 
 def test_prob_up_emits_dual_variants() -> None:
-    out = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon(
+    out = build_gold_prediction_metrics_by_run_split_horizon(
         _quantile_contract_dim_run(),
         _quantile_contract_oos(),
         _quantile_contract_fact_config(),
@@ -274,7 +291,7 @@ def test_prob_up_emits_dual_variants() -> None:
 
 
 def test_prob_up_alias_falls_back_to_raw_when_post_guardrail_missing() -> None:
-    out = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon(
+    out = build_gold_prediction_metrics_by_run_split_horizon(
         _quantile_contract_dim_run(),
         _quantile_contract_oos(include_post_guardrail=False),
         _quantile_contract_fact_config(),
@@ -288,7 +305,7 @@ def test_prob_up_alias_falls_back_to_raw_when_post_guardrail_missing() -> None:
 
 
 def test_delta_columns_equal_post_minus_raw_per_row() -> None:
-    out = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon(
+    out = build_gold_prediction_metrics_by_run_split_horizon(
         _quantile_contract_dim_run(),
         _quantile_contract_oos(),
         _quantile_contract_fact_config(),
@@ -326,7 +343,7 @@ def test_delta_columns_equal_post_minus_raw_per_row() -> None:
 
 
 def test_delta_columns_are_nan_when_silver_missing_post_guardrail() -> None:
-    out = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon(
+    out = build_gold_prediction_metrics_by_run_split_horizon(
         _quantile_contract_dim_run(),
         _quantile_contract_oos(include_post_guardrail=False),
         _quantile_contract_fact_config(),
@@ -371,7 +388,7 @@ def test_gold_prediction_risk_uses_post_guardrail_quantiles() -> None:
         ]
     )
 
-    out = RefreshAnalyticsStoreUseCase._build_gold_prediction_risk(
+    out = build_gold_prediction_risk(
         _quantile_contract_dim_run(),
         fact,
     )
@@ -404,7 +421,7 @@ def test_gold_prediction_risk_emits_nan_when_post_guardrail_missing() -> None:
         ]
     )
 
-    out = RefreshAnalyticsStoreUseCase._build_gold_prediction_risk(
+    out = build_gold_prediction_risk(
         _quantile_contract_dim_run(),
         fact,
     )
@@ -551,7 +568,7 @@ def test_model_decision_final_uses_primary_contract() -> None:
         ]
     )
 
-    raw = RefreshAnalyticsStoreUseCase._build_gold_model_decision_final(
+    raw = build_gold_model_decision_final(
         metrics_by_config=metrics_by_config,
         robustness_by_horizon=pd.DataFrame(),
         generalization_gap=pd.DataFrame(),
@@ -561,7 +578,7 @@ def test_model_decision_final_uses_primary_contract() -> None:
         paired_intersection=pd.DataFrame(),
         primary_quantile_contract="raw",
     )
-    post = RefreshAnalyticsStoreUseCase._build_gold_model_decision_final(
+    post = build_gold_model_decision_final(
         metrics_by_config=metrics_by_config,
         robustness_by_horizon=pd.DataFrame(),
         generalization_gap=pd.DataFrame(),
@@ -1533,8 +1550,8 @@ def test_build_gold_prediction_metrics_by_config_n_oos_is_idempotent_on_row_orde
     df = pd.DataFrame(rows)
     shuffled = df.sample(frac=1.0, random_state=42).reset_index(drop=True)
 
-    out_a = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_config(df)
-    out_b = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_config(shuffled)
+    out_a = build_gold_prediction_metrics_by_config(df)
+    out_b = build_gold_prediction_metrics_by_config(shuffled)
 
     assert "n_oos" in out_a.columns
     assert "parent_sweep_id" in out_a.columns
@@ -1579,7 +1596,7 @@ def test_gold_metrics_by_config_carries_parent_sweep_id() -> None:
         ]
     )
 
-    out = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_config(metrics)
+    out = build_gold_prediction_metrics_by_config(metrics)
     expected_by_config = metrics.groupby(["asset", "feature_set_name", "config_signature", "split", "horizon"], dropna=False).ngroups
 
     assert "parent_sweep_id" in out.columns
@@ -1636,7 +1653,7 @@ def test_gold_metrics_by_config_preserves_legacy_null_parent_sweep_id() -> None:
         ]
     )
 
-    out = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_config(metrics)
+    out = build_gold_prediction_metrics_by_config(metrics)
     cfg1 = out[out["config_signature"] == "cfg1"].reset_index(drop=True)
 
     assert len(cfg1) == 2
@@ -1690,7 +1707,7 @@ def test_gold_feature_set_impact_is_cohort_aware() -> None:
         ]
     )
 
-    out = RefreshAnalyticsStoreUseCase._build_gold_feature_set_impact(base)
+    out = build_gold_feature_set_impact(base)
     rmse = out[out["metric"] == "rmse"].sort_values("parent_sweep_id").reset_index(drop=True)
 
     assert "parent_sweep_id" in out.columns
@@ -1720,7 +1737,7 @@ def test_gold_prediction_metrics_by_horizon_is_cohort_aware() -> None:
         ]
     ]
 
-    out = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_horizon(pd.DataFrame(rows))
+    out = build_gold_prediction_metrics_by_horizon(pd.DataFrame(rows))
     out = out.sort_values("parent_sweep_id").reset_index(drop=True)
 
     assert "parent_sweep_id" in out.columns
@@ -1761,7 +1778,7 @@ def test_gold_feature_impact_by_horizon_is_cohort_aware() -> None:
         ]
     )
 
-    out = RefreshAnalyticsStoreUseCase._build_gold_feature_impact_by_horizon(fact_model_artifacts, metrics)
+    out = build_gold_feature_impact_by_horizon(fact_model_artifacts, metrics)
     out = out.sort_values("parent_sweep_id").reset_index(drop=True)
 
     assert "parent_sweep_id" in out.columns
@@ -1802,7 +1819,7 @@ def test_gold_feature_contrib_local_summary_is_cohort_aware_via_dim_run() -> Non
         ]
     )
 
-    out = RefreshAnalyticsStoreUseCase._build_gold_feature_contrib_local_summary(
+    out = build_gold_feature_contrib_local_summary(
         fact_feature_contrib_local,
         dim_run,
     )
@@ -1844,7 +1861,7 @@ def test_gold_feature_contrib_local_summary_keeps_legacy_rows_without_parent_swe
         ]
     )
 
-    out = RefreshAnalyticsStoreUseCase._build_gold_feature_contrib_local_summary(
+    out = build_gold_feature_contrib_local_summary(
         fact_feature_contrib_local,
         pd.DataFrame(),
     )
@@ -1908,7 +1925,7 @@ def test_gold_consistency_topk_ranks_within_parent_sweep() -> None:
         ]
     )
 
-    out = RefreshAnalyticsStoreUseCase._build_gold_consistency_topk(base)
+    out = build_gold_consistency_topk(base)
 
     assert "parent_sweep_id" in out.columns
     lookup = {
@@ -1971,7 +1988,7 @@ def test_gold_ranking_by_config_is_cohort_aware() -> None:
         ]
     )
 
-    out = RefreshAnalyticsStoreUseCase._build_gold_ranking_by_config(base)
+    out = build_gold_ranking_by_config(base)
 
     assert "parent_sweep_id" in out.columns
     assert len(out) == 4
@@ -2051,7 +2068,7 @@ def test_gold_model_decision_final_is_cohort_aware() -> None:
         ]
     )
 
-    out = RefreshAnalyticsStoreUseCase._build_gold_model_decision_final(
+    out = build_gold_model_decision_final(
         metrics_by_config=metrics_by_config,
         robustness_by_horizon=pd.DataFrame(),
         generalization_gap=pd.DataFrame(),
@@ -2172,7 +2189,7 @@ _STAGE9_PROBABILISTIC_BASES = (
 
 
 def test_genuine_quantile_run_contributes_to_picp() -> None:
-    out = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon(
+    out = build_gold_prediction_metrics_by_run_split_horizon(
         _stage9_dim_run(),
         _stage9_oos(),
         _stage9_fact_config(),
@@ -2189,7 +2206,7 @@ def test_genuine_quantile_run_contributes_to_picp() -> None:
 
 
 def test_point_run_excluded_from_probabilistic_metrics() -> None:
-    out = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon(
+    out = build_gold_prediction_metrics_by_run_split_horizon(
         _stage9_dim_run(),
         _stage9_oos(),
         _stage9_fact_config(),
@@ -2210,7 +2227,7 @@ def test_point_run_excluded_from_probabilistic_metrics() -> None:
 
 
 def test_degenerate_quantile_run_excluded_from_probabilistic_metrics() -> None:
-    out = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon(
+    out = build_gold_prediction_metrics_by_run_split_horizon(
         _stage9_dim_run(),
         _stage9_oos(),
         _stage9_fact_config(),
@@ -2248,7 +2265,7 @@ def test_n_probabilistic_samples_matches_eligible_rows() -> None:
     )
     fact_config = pd.DataFrame([{"run_id": "r_mixed", "prediction_mode": "quantile"}])
 
-    out = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon(
+    out = build_gold_prediction_metrics_by_run_split_horizon(
         dim_run, oos, fact_config
     )
     row = out.iloc[0]
@@ -2259,7 +2276,7 @@ def test_n_probabilistic_samples_matches_eligible_rows() -> None:
 
 
 def test_missing_fact_config_treats_as_non_quantile() -> None:
-    out = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon(
+    out = build_gold_prediction_metrics_by_run_split_horizon(
         _stage9_dim_run(),
         _stage9_oos(),
         pd.DataFrame(),  # fact_config vazio -> conservador: nenhum run elegivel.
@@ -2334,13 +2351,13 @@ def test_pred_interval_negative_unchanged_by_stage9_filter() -> None:
     )
 
     # Caminho 1: quality_report -- Cat C raw-only, conta crossing.
-    out_q = RefreshAnalyticsStoreUseCase._build_gold_oos_quality_report(dim_run, fact)
+    out_q = build_gold_oos_quality_report(dim_run, fact)
     run_row = out_q[out_q["scope"] == "run_split_horizon"].iloc[0]
     assert int(run_row["n_negative_interval_width"]) == 1
 
     # Caminho 2: metrics_by_run_split_horizon -- Stage 9 filter mantem
     # esse run (mode=quantile, p10 != p90) como elegivel.
-    out_m = RefreshAnalyticsStoreUseCase._build_gold_prediction_metrics_by_run_split_horizon(
+    out_m = build_gold_prediction_metrics_by_run_split_horizon(
         dim_run, fact, fact_config
     )
     metrics_row = out_m.iloc[0]
@@ -2405,7 +2422,7 @@ def test_build_gold_oos_quality_report_preserves_asset_after_dim_run_merge() -> 
         ]
     )
 
-    report = RefreshAnalyticsStoreUseCase._build_gold_oos_quality_report(dim_run, fact)
+    report = build_gold_oos_quality_report(dim_run, fact)
 
     run_rows = report[report["scope"] == "run_split_horizon"]
     assert len(run_rows) == 1, "Expected exactly one run/split/horizon row."
@@ -2523,7 +2540,7 @@ def _stage12_candidate_baseline_oos(*, parent_sweep_id: str = "sw_stage12") -> t
 def test_refresh_dm_pairwise_includes_candidate_vs_baseline_when_shared_parent_sweep_id() -> None:
     dim_run, fact_oos, _ = _stage12_candidate_baseline_oos()
 
-    dm = RefreshAnalyticsStoreUseCase._build_gold_dm_pairwise_results(dim_run, fact_oos)
+    dm = build_gold_dm_pairwise_results(dim_run, fact_oos)
     assert not dm.empty, "DM pairwise must contain candidate vs baseline pair when sharing parent_sweep_id"
     assert (dm["parent_sweep_id"] == "sw_stage12").all()
     assert int(dm["n_configs"].iloc[0]) >= 2
@@ -2536,7 +2553,7 @@ def test_refresh_dm_pairwise_includes_candidate_vs_baseline_when_shared_parent_s
 def test_refresh_mcs_includes_candidate_and_baseline_configs_when_shared_parent_sweep_id() -> None:
     dim_run, fact_oos, _ = _stage12_candidate_baseline_oos()
 
-    mcs = RefreshAnalyticsStoreUseCase._build_gold_mcs_results(dim_run, fact_oos)
+    mcs = build_gold_mcs_results(dim_run, fact_oos)
     assert not mcs.empty, "MCS must include the candidate+baseline pool"
     assert (mcs["parent_sweep_id"] == "sw_stage12").all()
     # Ambos configs (tft + baseline) devem aparecer.
@@ -2546,7 +2563,7 @@ def test_refresh_mcs_includes_candidate_and_baseline_configs_when_shared_parent_
 
 def test_refresh_win_rate_pairwise_includes_candidate_vs_baseline_when_shared_parent_sweep_id() -> None:
     dim_run, fact_oos, _ = _stage12_candidate_baseline_oos()
-    win_rate = RefreshAnalyticsStoreUseCase._build_gold_win_rate_pairwise_results(dim_run, fact_oos)
+    win_rate = build_gold_win_rate_pairwise_results(dim_run, fact_oos)
     assert not win_rate.empty, "win_rate pairwise must contain candidate vs baseline pair when sharing parent_sweep_id"
     assert (win_rate["parent_sweep_id"] == "sw_stage12").all()
     # Sweep has exactly 2 configs -> exactly one pair (left, right) per group key.

@@ -1,0 +1,121 @@
+{
+  "column_stats": {
+    "asset": {
+      "n_null": 0,
+      "nunique": 1
+    },
+    "config_signature": {
+      "n_null": 14,
+      "nunique": 6902
+    },
+    "dm_available_rows": {
+      "max": 1.0,
+      "mean": 0.9285714285714286,
+      "min": 0.0,
+      "n_null": 6902,
+      "sum": 13.0
+    },
+    "feature_set_name": {
+      "n_null": 14,
+      "nunique": 13
+    },
+    "group_rows": {
+      "max": 6.0,
+      "mean": 2.4285714285714284,
+      "min": 2.0,
+      "n_null": 6902,
+      "sum": 34.0
+    },
+    "mcs_available_rows": {
+      "max": 1.0,
+      "mean": 0.9285714285714286,
+      "min": 0.0,
+      "n_null": 6902,
+      "sum": 13.0
+    },
+    "model_version": {
+      "n_null": 14,
+      "nunique": 6902
+    },
+    "parent_sweep_id": {
+      "n_null": 6227,
+      "nunique": 13
+    },
+    "quality_passed_all": {
+      "n_null": 14,
+      "nunique": 2
+    },
+    "quality_passed_rows": {
+      "max": 3.0,
+      "mean": 2.0540423065778035,
+      "min": 0.0,
+      "n_null": 14,
+      "sum": 14177.0
+    },
+    "quality_rows": {
+      "max": 4.0,
+      "mean": 2.0557809330628802,
+      "min": 1.0,
+      "n_null": 14,
+      "sum": 14189.0
+    },
+    "run_id": {
+      "n_null": 14,
+      "nunique": 6902
+    },
+    "scope": {
+      "n_null": 0,
+      "nunique": 2
+    },
+    "statistics_ready_rows": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 6902,
+      "sum": 0.0
+    },
+    "win_rate_available_rows": {
+      "max": 1.0,
+      "mean": 0.9285714285714286,
+      "min": 0.0,
+      "n_null": 6902,
+      "sum": 13.0
+    }
+  },
+  "columns": [
+    "run_id",
+    "quality_rows",
+    "quality_passed_rows",
+    "quality_passed_all",
+    "asset",
+    "parent_sweep_id",
+    "feature_set_name",
+    "config_signature",
+    "model_version",
+    "scope",
+    "group_rows",
+    "statistics_ready_rows",
+    "dm_available_rows",
+    "mcs_available_rows",
+    "win_rate_available_rows"
+  ],
+  "dtypes": {
+    "asset": "object",
+    "config_signature": "object",
+    "dm_available_rows": "float64",
+    "feature_set_name": "object",
+    "group_rows": "float64",
+    "mcs_available_rows": "float64",
+    "model_version": "object",
+    "parent_sweep_id": "object",
+    "quality_passed_all": "object",
+    "quality_passed_rows": "float64",
+    "quality_rows": "float64",
+    "run_id": "object",
+    "scope": "object",
+    "statistics_ready_rows": "float64",
+    "win_rate_available_rows": "float64"
+  },
+  "n_cols": 15,
+  "n_rows": 6916
+}

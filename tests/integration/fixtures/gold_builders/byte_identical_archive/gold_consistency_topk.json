@@ -1,0 +1,97 @@
+{
+  "column_stats": {
+    "asset": {
+      "n_null": 0,
+      "nunique": 1
+    },
+    "config_signature": {
+      "n_null": 0,
+      "nunique": 6902
+    },
+    "feature_set_name": {
+      "n_null": 0,
+      "nunique": 13
+    },
+    "parent_sweep_id": {
+      "n_null": 6226,
+      "nunique": 13
+    },
+    "top1_hits": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 0,
+      "sum": 0.0
+    },
+    "top1_pct": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 0,
+      "sum": 0.0
+    },
+    "top3_hits": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 0,
+      "sum": 0.0
+    },
+    "top3_pct": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 0,
+      "sum": 0.0
+    },
+    "top5_hits": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 0,
+      "sum": 0.0
+    },
+    "top5_pct": {
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "n_null": 0,
+      "sum": 0.0
+    },
+    "total_groups": {
+      "max": 1.0,
+      "mean": 1.0,
+      "min": 1.0,
+      "n_null": 0,
+      "sum": 6902.0
+    }
+  },
+  "columns": [
+    "asset",
+    "feature_set_name",
+    "parent_sweep_id",
+    "config_signature",
+    "total_groups",
+    "top1_hits",
+    "top3_hits",
+    "top5_hits",
+    "top1_pct",
+    "top3_pct",
+    "top5_pct"
+  ],
+  "dtypes": {
+    "asset": "object",
+    "config_signature": "object",
+    "feature_set_name": "object",
+    "parent_sweep_id": "object",
+    "top1_hits": "int64",
+    "top1_pct": "float64",
+    "top3_hits": "int64",
+    "top3_pct": "float64",
+    "top5_hits": "int64",
+    "top5_pct": "float64",
+    "total_groups": "int64"
+  },
+  "n_cols": 11,
+  "n_rows": 6902
+}

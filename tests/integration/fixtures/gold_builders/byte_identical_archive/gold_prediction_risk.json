@@ -1,0 +1,139 @@
+{
+  "column_stats": {
+    "asset": {
+      "n_null": 0,
+      "nunique": 1
+    },
+    "config_signature": {
+      "n_null": 0,
+      "nunique": 6902
+    },
+    "downside_risk": {
+      "max": 0.007860571472762723,
+      "mean": 0.0003585487644665507,
+      "min": 0.0,
+      "n_null": 0,
+      "sum": 5.087448419015888
+    },
+    "es_10_approx": {
+      "max": -0.0021171534648530333,
+      "mean": -0.0034817393197711334,
+      "min": -0.004824792904805185,
+      "n_null": 14185,
+      "sum": -0.013926957279084533
+    },
+    "expected_move": {
+      "max": 0.0092965486280977,
+      "mean": 0.0016387500772811247,
+      "min": 9.256683429703117e-05,
+      "n_null": 0,
+      "sum": 23.25222484654188
+    },
+    "feature_set_hash": {
+      "n_null": 0,
+      "nunique": 13
+    },
+    "feature_set_name": {
+      "n_null": 0,
+      "nunique": 13
+    },
+    "fold": {
+      "n_null": 0,
+      "nunique": 1
+    },
+    "horizon": {
+      "max": 7.0,
+      "mean": 1.000845725562055,
+      "min": 1.0,
+      "n_null": 0,
+      "sum": 14201.0
+    },
+    "model_version": {
+      "n_null": 0,
+      "nunique": 6902
+    },
+    "n_samples": {
+      "max": 2767.0,
+      "mean": 543.3419550355909,
+      "min": 99.0,
+      "n_null": 0,
+      "sum": 7709479.0
+    },
+    "parent_sweep_id": {
+      "n_null": 12835,
+      "nunique": 13
+    },
+    "run_id": {
+      "n_null": 0,
+      "nunique": 6902
+    },
+    "seed": {
+      "max": 20260501.0,
+      "mean": 5750.72006483896,
+      "min": 7.0,
+      "n_null": 0,
+      "sum": 81596967.0
+    },
+    "split": {
+      "n_null": 0,
+      "nunique": 3
+    },
+    "status": {
+      "n_null": 0,
+      "nunique": 1
+    },
+    "trial_number": {
+      "n_null": 14189,
+      "nunique": 0
+    },
+    "var_10": {
+      "max": -0.0017241287346491043,
+      "mean": -0.0029432241649106692,
+      "min": -0.004148237110877579,
+      "n_null": 14185,
+      "sum": -0.011772896659642677
+    }
+  },
+  "columns": [
+    "run_id",
+    "asset",
+    "feature_set_name",
+    "config_signature",
+    "split",
+    "fold",
+    "seed",
+    "horizon",
+    "n_samples",
+    "expected_move",
+    "downside_risk",
+    "var_10",
+    "es_10_approx",
+    "model_version",
+    "feature_set_hash",
+    "parent_sweep_id",
+    "trial_number",
+    "status"
+  ],
+  "dtypes": {
+    "asset": "object",
+    "config_signature": "object",
+    "downside_risk": "float64",
+    "es_10_approx": "float64",
+    "expected_move": "float64",
+    "feature_set_hash": "object",
+    "feature_set_name": "object",
+    "fold": "object",
+    "horizon": "int64",
+    "model_version": "object",
+    "n_samples": "int64",
+    "parent_sweep_id": "object",
+    "run_id": "object",
+    "seed": "int64",
+    "split": "object",
+    "status": "object",
+    "trial_number": "object",
+    "var_10": "float64"
+  },
+  "n_cols": 18,
+  "n_rows": 14189
+}

@@ -1,0 +1,238 @@
+{
+  "column_stats": {
+    "abs_error": {
+      "max": 0.15305653307586908,
+      "mean": 0.013510647666280148,
+      "min": 4.656612873077393e-10,
+      "n_null": 0,
+      "sum": 104160.05445958581
+    },
+    "asset": {
+      "n_null": 0,
+      "nunique": 1
+    },
+    "config_signature": {
+      "n_null": 0,
+      "nunique": 6902
+    },
+    "error": {
+      "max": 0.15305653307586908,
+      "mean": -0.00014258201912981629,
+      "min": -0.1502568367868662,
+      "n_null": 0,
+      "sum": -1099.233082258917
+    },
+    "feature_set_hash": {
+      "n_null": 0,
+      "nunique": 13
+    },
+    "feature_set_name": {
+      "n_null": 0,
+      "nunique": 13
+    },
+    "fold": {
+      "n_null": 0,
+      "nunique": 1
+    },
+    "horizon": {
+      "max": 7.0,
+      "mean": 1.0001564308042088,
+      "min": 1.0,
+      "n_null": 0,
+      "sum": 7710685.0
+    },
+    "model_version_x": {
+      "n_null": 6351429,
+      "nunique": 1359
+    },
+    "model_version_y": {
+      "n_null": 0,
+      "nunique": 6902
+    },
+    "parent_sweep_id": {
+      "n_null": 7034257,
+      "nunique": 13
+    },
+    "quantile_guardrail_applied": {
+      "max": 1.0,
+      "mean": 1.0,
+      "min": 1.0,
+      "n_null": 7709077,
+      "sum": 402.0
+    },
+    "quantile_p10": {
+      "max": 0.02276349440217018,
+      "mean": -0.0008255631398537705,
+      "min": -0.0471951887011528,
+      "n_null": 0,
+      "sum": -6364.661689876706
+    },
+    "quantile_p10_post_guardrail": {
+      "max": 0.0008951998315751553,
+      "mean": -0.002925418373208901,
+      "min": -0.006109678186476231,
+      "n_null": 7709077,
+      "sum": -1.176018186029978
+    },
+    "quantile_p50": {
+      "max": 0.02276349440217018,
+      "mean": 0.00092326945415723,
+      "min": -0.022867001593112946,
+      "n_null": 0,
+      "sum": 7117.926468166628
+    },
+    "quantile_p50_post_guardrail": {
+      "max": 0.0037768944166600704,
+      "mean": 0.0013654183061209632,
+      "min": -0.0033322565723210573,
+      "n_null": 7709077,
+      "sum": 0.5488981590606272
+    },
+    "quantile_p90": {
+      "max": 0.04543490707874298,
+      "mean": 0.002585359039648742,
+      "min": -0.022867001593112946,
+      "n_null": 0,
+      "sum": 19931.771223632142
+    },
+    "quantile_p90_post_guardrail": {
+      "max": 0.018740376457571983,
+      "mean": 0.006961066377481251,
+      "min": 0.0005933663342148066,
+      "n_null": 7709077,
+      "sum": 2.798348683747463
+    },
+    "run_id": {
+      "n_null": 0,
+      "nunique": 6902
+    },
+    "schema_version": {
+      "max": 1.0,
+      "mean": 1.0,
+      "min": 1.0,
+      "n_null": 0,
+      "sum": 7709479.0
+    },
+    "seed": {
+      "max": 20260501.0,
+      "mean": 1095.569787141258,
+      "min": 7.0,
+      "n_null": 0,
+      "sum": 8446272267.0
+    },
+    "split": {
+      "n_null": 0,
+      "nunique": 3
+    },
+    "sq_error": {
+      "max": 0.023426302317204606,
+      "mean": 0.00037122233139454347,
+      "min": 2.168404344971009e-19,
+      "n_null": 0,
+      "sum": 2861.9307682172735
+    },
+    "status": {
+      "n_null": 0,
+      "nunique": 1
+    },
+    "target_timestamp_utc": {
+      "n_null": 0,
+      "nunique": 4062
+    },
+    "timestamp_utc": {
+      "n_null": 0,
+      "nunique": 4017
+    },
+    "trial_number": {
+      "n_null": 7709479,
+      "nunique": 0
+    },
+    "y_pred": {
+      "max": 0.02276349440217018,
+      "mean": 0.0009230678383793397,
+      "min": -0.022867001593112946,
+      "n_null": 0,
+      "sum": 7116.372115560913
+    },
+    "y_true": {
+      "max": 0.14261744916439056,
+      "mean": 0.001065649857509156,
+      "min": -0.13770805299282074,
+      "n_null": 0,
+      "sum": 8215.60519781983
+    },
+    "year": {
+      "max": 2025.0,
+      "mean": 2019.7933140488483,
+      "min": 2010.0,
+      "n_null": 0,
+      "sum": 15571554139.0
+    }
+  },
+  "columns": [
+    "schema_version",
+    "run_id",
+    "asset",
+    "feature_set_name",
+    "config_signature",
+    "split",
+    "fold",
+    "seed",
+    "horizon",
+    "timestamp_utc",
+    "target_timestamp_utc",
+    "y_true",
+    "y_pred",
+    "error",
+    "abs_error",
+    "sq_error",
+    "quantile_p10",
+    "quantile_p50",
+    "quantile_p90",
+    "year",
+    "model_version_x",
+    "quantile_p10_post_guardrail",
+    "quantile_p50_post_guardrail",
+    "quantile_p90_post_guardrail",
+    "quantile_guardrail_applied",
+    "model_version_y",
+    "feature_set_hash",
+    "parent_sweep_id",
+    "trial_number",
+    "status"
+  ],
+  "dtypes": {
+    "abs_error": "float64",
+    "asset": "object",
+    "config_signature": "object",
+    "error": "float64",
+    "feature_set_hash": "object",
+    "feature_set_name": "object",
+    "fold": "object",
+    "horizon": "int64",
+    "model_version_x": "object",
+    "model_version_y": "object",
+    "parent_sweep_id": "object",
+    "quantile_guardrail_applied": "float64",
+    "quantile_p10": "float64",
+    "quantile_p10_post_guardrail": "float64",
+    "quantile_p50": "float64",
+    "quantile_p50_post_guardrail": "float64",
+    "quantile_p90": "float64",
+    "quantile_p90_post_guardrail": "float64",
+    "run_id": "object",
+    "schema_version": "int64",
+    "seed": "int64",
+    "split": "object",
+    "sq_error": "float64",
+    "status": "object",
+    "target_timestamp_utc": "object",
+    "timestamp_utc": "object",
+    "trial_number": "object",
+    "y_pred": "float64",
+    "y_true": "float64",
+    "year": "int64"
+  },
+  "n_cols": 30,
+  "n_rows": 7709479
+}

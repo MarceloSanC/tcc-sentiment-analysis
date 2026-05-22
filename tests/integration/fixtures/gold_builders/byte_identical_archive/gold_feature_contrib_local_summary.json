@@ -1,0 +1,138 @@
+{
+  "column_stats": {
+    "asset": {
+      "n_null": 0,
+      "nunique": 1
+    },
+    "feature_name": {
+      "n_null": 0,
+      "nunique": 10
+    },
+    "feature_set_name": {
+      "n_null": 0,
+      "nunique": 1
+    },
+    "horizon": {
+      "max": 1.0,
+      "mean": 1.0,
+      "min": 1.0,
+      "n_null": 0,
+      "sum": 10.0
+    },
+    "local_top3_jaccard_mean": {
+      "max": 1.0,
+      "mean": 1.0,
+      "min": 1.0,
+      "n_null": 0,
+      "sum": 10.0
+    },
+    "local_top3_jaccard_pairs": {
+      "max": 1.0,
+      "mean": 1.0,
+      "min": 1.0,
+      "n_null": 0,
+      "sum": 10.0
+    },
+    "mean_abs_contribution": {
+      "max": 0.00013127951335557025,
+      "mean": 0.00010045636482542215,
+      "min": 1.9453109100865988e-05,
+      "n_null": 0,
+      "sum": 0.0010045636482542216
+    },
+    "mean_contribution": {
+      "max": -1.9453109100865988e-05,
+      "mean": -8.934984344584515e-05,
+      "min": -0.00013127951335557025,
+      "n_null": 0,
+      "sum": -0.0008934984344584515
+    },
+    "median_abs_contribution": {
+      "max": 0.00011641849304425166,
+      "mean": 6.911151760554098e-05,
+      "min": 1.9453109100865988e-05,
+      "n_null": 0,
+      "sum": 0.0006911151760554098
+    },
+    "method": {
+      "n_null": 0,
+      "nunique": 1
+    },
+    "n_inference_runs": {
+      "max": 2.0,
+      "mean": 2.0,
+      "min": 2.0,
+      "n_null": 0,
+      "sum": 20.0
+    },
+    "n_rows": {
+      "max": 78.0,
+      "mean": 39.0,
+      "min": 2.0,
+      "n_null": 0,
+      "sum": 390.0
+    },
+    "parent_sweep_id": {
+      "n_null": 10
+    },
+    "positive_share": {
+      "max": 0.4117647058823529,
+      "mean": 0.15166598107774582,
+      "min": 0.0,
+      "n_null": 0,
+      "sum": 1.516659810777458
+    },
+    "std_abs_contribution": {
+      "max": 0.00013432697645259937,
+      "mean": 7.951643655220431e-05,
+      "min": 6.168395399733918e-11,
+      "n_null": 0,
+      "sum": 0.0007951643655220431
+    },
+    "top3_frequency": {
+      "max": 1.0,
+      "mean": 0.42835164835164835,
+      "min": 0.0,
+      "n_null": 0,
+      "sum": 4.283516483516483
+    }
+  },
+  "columns": [
+    "asset",
+    "feature_set_name",
+    "parent_sweep_id",
+    "horizon",
+    "feature_name",
+    "method",
+    "n_rows",
+    "n_inference_runs",
+    "mean_contribution",
+    "mean_abs_contribution",
+    "median_abs_contribution",
+    "std_abs_contribution",
+    "top3_frequency",
+    "positive_share",
+    "local_top3_jaccard_mean",
+    "local_top3_jaccard_pairs"
+  ],
+  "dtypes": {
+    "asset": "object",
+    "feature_name": "object",
+    "feature_set_name": "object",
+    "horizon": "int64",
+    "local_top3_jaccard_mean": "float64",
+    "local_top3_jaccard_pairs": "int64",
+    "mean_abs_contribution": "float64",
+    "mean_contribution": "float64",
+    "median_abs_contribution": "float64",
+    "method": "object",
+    "n_inference_runs": "int64",
+    "n_rows": "int64",
+    "parent_sweep_id": "float64",
+    "positive_share": "float64",
+    "std_abs_contribution": "float64",
+    "top3_frequency": "float64"
+  },
+  "n_cols": 16,
+  "n_rows": 10
+}
