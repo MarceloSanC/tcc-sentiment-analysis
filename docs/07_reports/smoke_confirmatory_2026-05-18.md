@@ -9,7 +9,40 @@ canonical_for: [smoke_confirmatorio_phase_a_2026_05_18, f1_acceptance_record]
 
 # F.1 Smoke Confirmatório — Relatório (2026-05-18)
 
-## Veredicto
+## F.1 v4 PASS pleno (Stage R-23, 2026-05-22)
+
+**Veredito atual:** PASS pleno. Stage R-23 reexecutou o smoke F.1 com
+`max_epochs=5` (aceite literal), features completas, horizons `[1,7]`,
+`prediction_mode=quantile`, `seed=20260517` e
+`parent_sweep_id=phase_a_smoke_20260522_r23`.
+
+O refresh final foi executado com `scope_mode=cohort_decision`,
+`scope_sweep_prefixes=["phase_a_smoke_"]`,
+`primary_quantile_contract=post_guardrail` e `--fail-on-quality`.
+Resultado: `passed=True`, `failed_checks=[]`, `total_checks=27`, 25 gold
+tables materializadas.
+
+| # | Critério F.1 | Evidência v4 | Status |
+|---|---|---|---|
+| 1 | `% p10==p90 < 5%` | `gold_quantile_degeneracy_report`: max `p10_eq_p90_rate=0.0` em 6 grupos quantile; `gate_passed=True` | PASS |
+| 2 | Zero violações probabilísticas | min `mpiw_post_guardrail=0.031959862662777956`; raw crossing `0/24008 = 0.0` | PASS |
+| 3 | Gold cohort-aware | `gold_quality_statistics_report`: `parent_sweep_id=phase_a_smoke_20260522_r23`; test h=1/h=7 com `statistics_ready=True`, `dm_pairs=3`, `mcs_models=3`, `win_rate_pairs=3`, aligned timestamps `686` | PASS |
+| 4 | `pytest tests/` PASS | `.venv/bin/pytest tests/ -q --ignore=tests/integration/test_quality_registry_bit_identical_archive.py --ignore=tests/integration/test_gold_builders_byte_identical_archive.py` → `605 passed, 9 warnings` | PASS |
+| 5 | CI verde em PRs anteriores | PRs #50, #51, #52 e #53 mergeados; `lint-type-unit=SUCCESS` e `analytics-contract-and-quality=SUCCESS` em todos | PASS |
+| 6 | Refresh + quality 0 FAIL | `main_refresh_analytics_store` exit 0; `failed_checks=[]`; `passed=True`; `total_checks=27` | PASS |
+
+Nota operacional: a primeira validação do smoke v4 mostrou que o JSON padrão
+de baselines ainda derivava `parent_sweep_id=phase_a_smoke_20260518_v2`.
+A tentativa final usou uma cópia temporária do mesmo JSON em `/tmp` com
+apenas `output_subdir=phase_a_smoke_20260522_r23`, mantendo TFT e baselines
+no mesmo cohort R-23 sem alterar código de produção nem config versionada.
+
+Evidências:
+- `docs/07_reports/option_b_execution_log_2026-05-19.md` §R-23.1 e §R-23.2.
+- `tests/integration/test_f1_golden_smoke.py`.
+- `tests/integration/fixtures/f1_golden/expected.json`.
+
+## Veredicto original (2026-05-18)
 
 **FAIL** — critério 6 (refresh + quality gate sem erro) **falhou** (exit 1; 4 de
 26 checks reprovados). Critérios 1, 2, 3, 4 **passam**; critério 5 **PARTIAL**.

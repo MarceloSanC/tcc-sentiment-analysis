@@ -15,6 +15,35 @@ Append-only. Mais recente no topo.
 
 ---
 
+## [2026-05-22 20:01 UTC] Stage R-23.5 — completion (F.1 PASS pleno post-remediation)
+
+**Context:** Fechamento documental do ultimo stage do ciclo de remediacao.
+R-23.1/R-23.2 confirmaram F.1 com aceite literal (`max_epochs=5`) e 6/6
+criterios PASS. R-23.3 preservou o checkbox `[x]` e atualizou apenas a nota
+textual. R-23.4 adicionou golden regression em
+`tests/integration/test_f1_golden_smoke.py`.
+
+**Docs updated:**
+- `docs/07_reports/smoke_confirmatory_2026-05-18.md` — secao
+  "F.1 v4 PASS pleno (Stage R-23, 2026-05-22)".
+- `docs/07_reports/phase-gates/A_audit_closure_2026-05-17.md` — status
+  final atualizado para o ciclo R-20..R-23.
+- `docs/01_architecture/decisions/ADR-0003-multi-horizon-prediction-persister.md`
+  — nota "Validado end-to-end via R-23 smoke v4".
+
+**Validation carried forward:**
+- R-23.2: 6/6 criterios PASS.
+- R-23.4: `pytest tests/integration/test_f1_golden_smoke.py -q` → `4 passed`.
+- `ruff check tests/integration/test_f1_golden_smoke.py` → `All checks passed!`.
+- Final: `.venv/bin/ruff check src/ tests/` → `All checks passed!`.
+- Final: `.venv/bin/pytest tests/ -q --ignore=tests/integration/test_quality_registry_bit_identical_archive.py --ignore=tests/integration/test_gold_builders_byte_identical_archive.py`
+  → `609 passed, 9 warnings`.
+
+**Outcome:** R-23 pronto para push + PR contra `main`; Marcelo mergeia
+manualmente. Nao houve merge nesta sessao.
+
+---
+
 ## [2026-05-22 19:54 UTC] Stage R-23.2 — completion (6/6 criterios F.1 PASS)
 
 **Context:** Validacao dos 6 criterios de aceite literal de F.1 apos o

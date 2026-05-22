@@ -18,6 +18,7 @@ canonical_for: [adr_0003, multi_horizon_prediction_persister, target_timestamp_c
 ## Status
 Accepted (2026-05-19); amendado em 2026-05-20 (Stage R-20, Opcao d) para fechar
 Gap 6 sem alterar a semantica de "h=1 = next-day return after decision".
+Validado end-to-end via R-23 smoke v4 (2026-05-22).
 
 ## Context
 
@@ -130,6 +131,8 @@ e preservada porque a formula passa a indexar backward.
   registro historico documentado, nao debito ativo (Phase B ainda nao
   rodou; F.2 pre-registro nem foi feito; modelos antigos sao throwaway
   de smoke max_epochs=1, hidden_size=16).
+- Validado end-to-end via R-23 smoke v4: TFT + baselines no mesmo cohort
+  `phase_a_smoke_20260522_r23`, `max_epochs=5`, `failed_checks=[]`, F.1 6/6 PASS.
 
 ## Cross-link
 
