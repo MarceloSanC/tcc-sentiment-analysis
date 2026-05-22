@@ -15,6 +15,42 @@ Append-only. Mais recente no topo.
 
 ---
 
+## [2026-05-22 19:48 UTC] Stage R-23.1 — completion (F.1 re-smoke v4 max_epochs=5)
+
+**Context:** Re-smoke F.1 v4 executado com aceite literal
+`max_epochs=5`, features completas
+`BASELINE_FEATURES,TECHNICAL_FEATURES,SENTIMENT_FEATURES,FUNDAMENTAL_FEATURES`,
+horizons `[1, 7]`, `seed=20260517`, `prediction_mode=quantile`.
+Sweep TFT: `phase_a_smoke_20260522_r23`. Baselines executados com
+`--overwrite-on-collision` explicito a partir de
+`config/sweeps/explicit/phase_a_smoke_20260518_v2.json`.
+
+**Commands executed:**
+- `rm -rf data/analytics/silver/* data/analytics/gold/*`
+- `.venv/bin/python -m src.main_train_tft --asset AAPL --features "..."`
+  com `--max-epochs 5 --max-encoder-length 60 --max-prediction-length 7`
+  `--evaluation-horizons "[1, 7]" --parent-sweep-id "phase_a_smoke_20260522_r23"`
+  `--seed 20260517 --prediction-mode quantile`
+- `.venv/bin/python -m src.main_baselines_test_pipeline --asset AAPL`
+  `--config-json config/sweeps/explicit/phase_a_smoke_20260518_v2.json`
+  `--overwrite-on-collision`
+- `.venv/bin/python -m src.main_refresh_analytics_store --scope-mode cohort_decision`
+  `--scope-sweep-prefixes "phase_a_smoke_" --primary-quantile-contract post_guardrail`
+  `--fail-on-quality`
+
+**Evidence:**
+- TFT training reached `max_epochs=5` (`Trainer.fit stopped: max_epochs=5 reached`).
+- TFT run_id: `3e685d043e042307e2f97089a07fad3f5e4ea453c6cae3075d531fc8aaceacfe`.
+- Refresh output captured at `/tmp/r23_smoke_output.txt`.
+- Refresh exit code: 0; `passed=True`; `failed_checks=[]`; `total_checks=27`.
+- Gold outputs generated: 25 parquet tables.
+- `du -sh data/analytics_archive_pre_phase_b/` → `851M` (intact).
+
+**Outcome:** R-23.1 GREEN. Proximo passo R-23.2: validar os 6 criterios F.1
+contra os artefatos gold/silver e checks de CI.
+
+---
+
 ## [2026-05-22 19:45 UTC] Stage R-23.0 — completion (precondicao registrada)
 
 **Context:** F.1 `[x]` em PHASE_B_IMPLEMENTATION_CHECKLIST.md desde commit
