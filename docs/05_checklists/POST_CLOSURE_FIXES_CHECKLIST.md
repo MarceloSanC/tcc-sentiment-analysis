@@ -12,9 +12,14 @@ canonical_for: [post_closure_fixes, smoke_iteration_findings, phase_b_blockers]
 # Post-Closure Fixes — Checklist
 
 **Status:** Stage F.0 mergeado (PR #40, 2026-05-19). Stage F.A registro mergeado
-(PRs #41-#43, 2026-05-20). Gap 6 fechado mecanicamente via PHASE_B §Stage 20
-(PR #44, ADR-0003 Opcao (a) materializada em
-`MultiHorizonPredictionPersister`). Stage 23 (F.1 v3 PASS pleno) em revisao.
+(PRs #41-#43, 2026-05-20). Stages 20-23 originalmente mergeados em
+PRs #44-#47 (2026-05-20) com REQUEST_CHANGES posterior; remediados em
+Stages R-20/R-E/R-21/R-22/R-23 (PRs #50-#54, 2026-05-21 a 2026-05-22)
+e cleanup do bridge transitorio em PR #56 (2026-05-22). Gap 6 fechado via
+**Opcao (d)** do ADR-0003 em R-20 (target_return backward-shifted em
+`build_tft_dataset_use_case`; baseline `y_true_idx = i + h_int`), nao
+mais Opcao (a). F.1 PASS pleno 6/6 em R-23 v4 (`max_epochs=5`,
+sweep `phase_a_smoke_20260522_r23`).
 **Criado:** 2026-05-19 (apos separacao de [`PHASE_B_IMPLEMENTATION_CHECKLIST.md`](PHASE_B_IMPLEMENTATION_CHECKLIST.md)).
 **Pre-requisito:** [`A_audit_closure_2026-05-17.md`](../07_reports/phase-gates/A_audit_closure_2026-05-17.md) com amendment "Findings post-closure".
 **Bloqueante para:** F.1 smoke PASS pleno → abertura da Fase B (ver `Stage final` em PHASE_B).
