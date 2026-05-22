@@ -15,6 +15,16 @@ Append-only. Mais recente no topo.
 
 ---
 
+## [2026-05-22 19:45 UTC] Stage R-23.0 — completion (precondicao registrada)
+
+**Context:** F.1 `[x]` em PHASE_B_IMPLEMENTATION_CHECKLIST.md desde commit
+prematuro em 2026-05-20 (smoke v2 max_epochs=1 nao atendia aceite literal).
+Per memory `feedback_checklist_vs_docs`, checkbox permanece `[x]`; nota
+textual sera atualizada em R-23.3 apos re-smoke max_epochs=5 confirmar 6/6.
+**Outcome:** proximo passo R-23.1.
+
+---
+
 ## [2026-05-22 00:07 UTC] Stage R-22.fix — completion (audit follow-ups)
 
 **Context:** Auditoria 2026-05-21 22:30 UTC sobre PR #53 confirmou
