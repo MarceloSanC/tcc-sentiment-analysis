@@ -15,6 +15,107 @@ Append-only. Mais recente no topo.
 
 ---
 
+## [2026-05-22 20:01 UTC] Stage R-23.5 — completion (F.1 PASS pleno post-remediation)
+
+**Context:** Fechamento documental do ultimo stage do ciclo de remediacao.
+R-23.1/R-23.2 confirmaram F.1 com aceite literal (`max_epochs=5`) e 6/6
+criterios PASS. R-23.3 preservou o checkbox `[x]` e atualizou apenas a nota
+textual. R-23.4 adicionou golden regression em
+`tests/integration/test_f1_golden_smoke.py`.
+
+**Docs updated:**
+- `docs/07_reports/smoke_confirmatory_2026-05-18.md` — secao
+  "F.1 v4 PASS pleno (Stage R-23, 2026-05-22)".
+- `docs/07_reports/phase-gates/A_audit_closure_2026-05-17.md` — status
+  final atualizado para o ciclo R-20..R-23.
+- `docs/01_architecture/decisions/ADR-0003-multi-horizon-prediction-persister.md`
+  — nota "Validado end-to-end via R-23 smoke v4".
+
+**Validation carried forward:**
+- R-23.2: 6/6 criterios PASS.
+- R-23.4: `pytest tests/integration/test_f1_golden_smoke.py -q` → `4 passed`.
+- `ruff check tests/integration/test_f1_golden_smoke.py` → `All checks passed!`.
+- Final: `.venv/bin/ruff check src/ tests/` → `All checks passed!`.
+- Final: `.venv/bin/pytest tests/ -q --ignore=tests/integration/test_quality_registry_bit_identical_archive.py --ignore=tests/integration/test_gold_builders_byte_identical_archive.py`
+  → `609 passed, 9 warnings`.
+
+**Outcome:** R-23 pronto para push + PR contra `main`; Marcelo mergeia
+manualmente. Nao houve merge nesta sessao.
+
+---
+
+## [2026-05-22 19:54 UTC] Stage R-23.2 — completion (6/6 criterios F.1 PASS)
+
+**Context:** Validacao dos 6 criterios de aceite literal de F.1 apos o
+re-smoke R-23.1. A primeira validacao detectou que o JSON padrao de baselines
+derivava `parent_sweep_id=phase_a_smoke_20260518_v2`, deixando o cohort
+`phase_a_smoke_20260522_r23` sem baselines e com `statistics_ready=False`.
+Sem tocar codigo de producao nem arquivo versionado de config, a segunda
+tentativa usou copia temporaria em `/tmp/phase_a_smoke_20260522_r23.json`
+com apenas `output_subdir` alinhado ao sweep R-23. Output final do refresh:
+`/tmp/r23_smoke_output.txt`; output da tentativa inicial preservado em
+`/tmp/r23_smoke_output_attempt1.txt`.
+
+| # | Criterio | Evidencia R-23.2 | Status |
+|---|---|---|---|
+| 1 | `% p10==p90 < 5%` | `gold_quantile_degeneracy_report`: max `p10_eq_p90_rate=0.0` em 6 linhas quantile; `gate_passed=True`; `failed_checks=[]` | PASS |
+| 2 | Zero violacoes probabilisticas | `gold_prediction_metrics_by_run_split_horizon`: min `mpiw_post_guardrail=0.031959862662777956`; raw crossing `0/24008 = 0.0` | PASS |
+| 3 | Gold cohort-aware | `gold_quality_statistics_report`: `parent_sweep_id=phase_a_smoke_20260522_r23`, test h=1/h=7 com `statistics_ready=True`, `dm_pairs=3`, `mcs_models=3`, `win_rate_pairs=3`, aligned timestamps `686` | PASS |
+| 4 | `pytest tests/` PASS | `.venv/bin/pytest tests/ -q --ignore=tests/integration/test_quality_registry_bit_identical_archive.py --ignore=tests/integration/test_gold_builders_byte_identical_archive.py` → `605 passed, 9 warnings` | PASS |
+| 5 | CI verde em PRs anteriores | `gh pr view #50/#51/#52/#53 --json statusCheckRollup`: `lint-type-unit=SUCCESS` e `analytics-contract-and-quality=SUCCESS` em todos; PRs MERGED | PASS |
+| 6 | Refresh + quality 0 FAIL | `main_refresh_analytics_store` exit 0; `passed=True`; `failed_checks=[]`; `total_checks=27`; 25 gold tables geradas | PASS |
+
+**Outcome:** 6/6 criterios PASS. R-23.3 autorizado: atualizar somente a nota
+textual anexada ao F.1, preservando o checkbox `[x]`.
+
+---
+
+## [2026-05-22 19:48 UTC] Stage R-23.1 — completion (F.1 re-smoke v4 max_epochs=5)
+
+**Context:** Re-smoke F.1 v4 executado com aceite literal
+`max_epochs=5`, features completas
+`BASELINE_FEATURES,TECHNICAL_FEATURES,SENTIMENT_FEATURES,FUNDAMENTAL_FEATURES`,
+horizons `[1, 7]`, `seed=20260517`, `prediction_mode=quantile`.
+Sweep TFT: `phase_a_smoke_20260522_r23`. Baselines executados com
+`--overwrite-on-collision` explicito a partir de
+`config/sweeps/explicit/phase_a_smoke_20260518_v2.json`.
+
+**Commands executed:**
+- `rm -rf data/analytics/silver/* data/analytics/gold/*`
+- `.venv/bin/python -m src.main_train_tft --asset AAPL --features "..."`
+  com `--max-epochs 5 --max-encoder-length 60 --max-prediction-length 7`
+  `--evaluation-horizons "[1, 7]" --parent-sweep-id "phase_a_smoke_20260522_r23"`
+  `--seed 20260517 --prediction-mode quantile`
+- `.venv/bin/python -m src.main_baselines_test_pipeline --asset AAPL`
+  `--config-json config/sweeps/explicit/phase_a_smoke_20260518_v2.json`
+  `--overwrite-on-collision`
+- `.venv/bin/python -m src.main_refresh_analytics_store --scope-mode cohort_decision`
+  `--scope-sweep-prefixes "phase_a_smoke_" --primary-quantile-contract post_guardrail`
+  `--fail-on-quality`
+
+**Evidence:**
+- TFT training reached `max_epochs=5` (`Trainer.fit stopped: max_epochs=5 reached`).
+- TFT run_id: `3e685d043e042307e2f97089a07fad3f5e4ea453c6cae3075d531fc8aaceacfe`.
+- Refresh output captured at `/tmp/r23_smoke_output.txt`.
+- Refresh exit code: 0; `passed=True`; `failed_checks=[]`; `total_checks=27`.
+- Gold outputs generated: 25 parquet tables.
+- `du -sh data/analytics_archive_pre_phase_b/` → `851M` (intact).
+
+**Outcome:** R-23.1 GREEN. Proximo passo R-23.2: validar os 6 criterios F.1
+contra os artefatos gold/silver e checks de CI.
+
+---
+
+## [2026-05-22 19:45 UTC] Stage R-23.0 — completion (precondicao registrada)
+
+**Context:** F.1 `[x]` em PHASE_B_IMPLEMENTATION_CHECKLIST.md desde commit
+prematuro em 2026-05-20 (smoke v2 max_epochs=1 nao atendia aceite literal).
+Per memory `feedback_checklist_vs_docs`, checkbox permanece `[x]`; nota
+textual sera atualizada em R-23.3 apos re-smoke max_epochs=5 confirmar 6/6.
+**Outcome:** proximo passo R-23.1.
+
+---
+
 ## [2026-05-22 00:07 UTC] Stage R-22.fix — completion (audit follow-ups)
 
 **Context:** Auditoria 2026-05-21 22:30 UTC sobre PR #53 confirmou

@@ -1,0 +1,239 @@
+{
+  "generated_from": "Stage R-23.1 smoke v4 on 2026-05-22",
+  "gold_oos_quality_report": {
+    "failed_rows": 0,
+    "n_rows": 28,
+    "sweep_failed_rows": 0
+  },
+  "gold_parent_sweep_id_coverage": {
+    "gold_consistency_topk": {
+      "contains_sweep_id": true,
+      "has_parent_sweep_id": true,
+      "n_cols": 11,
+      "n_rows": 1,
+      "null_parent_sweep_id_rows": 0
+    },
+    "gold_dm_pairwise_results": {
+      "contains_sweep_id": true,
+      "has_parent_sweep_id": true,
+      "n_cols": 15,
+      "n_rows": 6,
+      "null_parent_sweep_id_rows": 0
+    },
+    "gold_feature_contrib_local_summary": {
+      "contains_sweep_id": false,
+      "has_parent_sweep_id": false,
+      "n_cols": 0,
+      "n_rows": 0,
+      "null_parent_sweep_id_rows": null
+    },
+    "gold_feature_impact_by_horizon": {
+      "contains_sweep_id": false,
+      "has_parent_sweep_id": false,
+      "n_cols": 0,
+      "n_rows": 0,
+      "null_parent_sweep_id_rows": null
+    },
+    "gold_feature_set_impact": {
+      "contains_sweep_id": true,
+      "has_parent_sweep_id": true,
+      "n_cols": 8,
+      "n_rows": 6,
+      "null_parent_sweep_id_rows": 0
+    },
+    "gold_ic95_by_config_metric": {
+      "contains_sweep_id": true,
+      "has_parent_sweep_id": true,
+      "n_cols": 11,
+      "n_rows": 3,
+      "null_parent_sweep_id_rows": 0
+    },
+    "gold_mcs_results": {
+      "contains_sweep_id": true,
+      "has_parent_sweep_id": true,
+      "n_cols": 10,
+      "n_rows": 6,
+      "null_parent_sweep_id_rows": 0
+    },
+    "gold_model_decision_final": {
+      "contains_sweep_id": true,
+      "has_parent_sweep_id": true,
+      "n_cols": 51,
+      "n_rows": 8,
+      "null_parent_sweep_id_rows": 2
+    },
+    "gold_oos_consolidated": {
+      "contains_sweep_id": true,
+      "has_parent_sweep_id": true,
+      "n_cols": 31,
+      "n_rows": 24008,
+      "null_parent_sweep_id_rows": 0
+    },
+    "gold_oos_quality_report": {
+      "contains_sweep_id": true,
+      "has_parent_sweep_id": true,
+      "n_cols": 24,
+      "n_rows": 28,
+      "null_parent_sweep_id_rows": 0
+    },
+    "gold_paired_oos_intersection_by_horizon": {
+      "contains_sweep_id": true,
+      "has_parent_sweep_id": true,
+      "n_cols": 18,
+      "n_rows": 4,
+      "null_parent_sweep_id_rows": 0
+    },
+    "gold_prediction_calibration": {
+      "contains_sweep_id": true,
+      "has_parent_sweep_id": true,
+      "n_cols": 34,
+      "n_rows": 22,
+      "null_parent_sweep_id_rows": 0
+    },
+    "gold_prediction_generalization_gap": {
+      "contains_sweep_id": true,
+      "has_parent_sweep_id": true,
+      "n_cols": 33,
+      "n_rows": 8,
+      "null_parent_sweep_id_rows": 0
+    },
+    "gold_prediction_metrics_by_config": {
+      "contains_sweep_id": true,
+      "has_parent_sweep_id": true,
+      "n_cols": 92,
+      "n_rows": 22,
+      "null_parent_sweep_id_rows": 0
+    },
+    "gold_prediction_metrics_by_horizon": {
+      "contains_sweep_id": true,
+      "has_parent_sweep_id": true,
+      "n_cols": 91,
+      "n_rows": 10,
+      "null_parent_sweep_id_rows": 0
+    },
+    "gold_prediction_metrics_by_run_split_horizon": {
+      "contains_sweep_id": true,
+      "has_parent_sweep_id": true,
+      "n_cols": 59,
+      "n_rows": 22,
+      "null_parent_sweep_id_rows": 0
+    },
+    "gold_prediction_risk": {
+      "contains_sweep_id": true,
+      "has_parent_sweep_id": true,
+      "n_cols": 18,
+      "n_rows": 22,
+      "null_parent_sweep_id_rows": 0
+    },
+    "gold_prediction_robustness_by_horizon": {
+      "contains_sweep_id": true,
+      "has_parent_sweep_id": true,
+      "n_cols": 13,
+      "n_rows": 136,
+      "null_parent_sweep_id_rows": 0
+    },
+    "gold_quality_run_sweep_summary": {
+      "contains_sweep_id": true,
+      "has_parent_sweep_id": true,
+      "n_cols": 15,
+      "n_rows": 5,
+      "null_parent_sweep_id_rows": 0
+    },
+    "gold_quality_statistics_report": {
+      "contains_sweep_id": true,
+      "has_parent_sweep_id": true,
+      "n_cols": 20,
+      "n_rows": 6,
+      "null_parent_sweep_id_rows": 0
+    },
+    "gold_quantile_degeneracy_report": {
+      "contains_sweep_id": true,
+      "has_parent_sweep_id": true,
+      "n_cols": 10,
+      "n_rows": 12,
+      "null_parent_sweep_id_rows": 0
+    },
+    "gold_quantile_guardrail_audit": {
+      "contains_sweep_id": true,
+      "has_parent_sweep_id": true,
+      "n_cols": 42,
+      "n_rows": 22,
+      "null_parent_sweep_id_rows": 0
+    },
+    "gold_ranking_by_config": {
+      "contains_sweep_id": true,
+      "has_parent_sweep_id": true,
+      "n_cols": 14,
+      "n_rows": 1,
+      "null_parent_sweep_id_rows": 0
+    },
+    "gold_runs_long": {
+      "contains_sweep_id": true,
+      "has_parent_sweep_id": true,
+      "n_cols": 19,
+      "n_rows": 2,
+      "null_parent_sweep_id_rows": 0
+    },
+    "gold_win_rate_pairwise_results": {
+      "contains_sweep_id": true,
+      "has_parent_sweep_id": true,
+      "n_cols": 18,
+      "n_rows": 6,
+      "null_parent_sweep_id_rows": 0
+    }
+  },
+  "gold_table_count": 25,
+  "probabilistic_metrics": {
+    "all_degeneracy_gates_passed": true,
+    "max_p10_eq_p90_rate": 0.0,
+    "min_mpiw_post_guardrail": 0.031959862662777956,
+    "min_pred_interval_width_post_guardrail": 0.031959862662777956,
+    "post_guardrail_crossing_rows": 0,
+    "probabilistic_metric_rows": 10,
+    "quantile_degeneracy_rows": 6,
+    "raw_crossing_rate": 0.0,
+    "raw_crossing_rows": 0,
+    "raw_quantile_rows": 24008
+  },
+  "quality_statistics_test": {
+    "1": {
+      "aligned_timestamps_dm": 686,
+      "aligned_timestamps_mcs": 686,
+      "aligned_timestamps_win_rate": 686,
+      "dm_available": true,
+      "dm_min_pvalue": 0.017531896413815584,
+      "dm_pairs": 3,
+      "mcs_available": true,
+      "mcs_models": 3,
+      "mcs_selected_models": 3,
+      "n_configs_dm": 3,
+      "n_configs_mcs": 3,
+      "quality_passed_all": true,
+      "quality_rows": 5,
+      "statistics_ready": true,
+      "win_rate_available": true,
+      "win_rate_pairs": 3
+    },
+    "7": {
+      "aligned_timestamps_dm": 686,
+      "aligned_timestamps_mcs": 686,
+      "aligned_timestamps_win_rate": 686,
+      "dm_available": true,
+      "dm_min_pvalue": 0.08762877903696098,
+      "dm_pairs": 3,
+      "mcs_available": true,
+      "mcs_models": 3,
+      "mcs_selected_models": 3,
+      "n_configs_dm": 3,
+      "n_configs_mcs": 3,
+      "quality_passed_all": true,
+      "quality_rows": 5,
+      "statistics_ready": true,
+      "win_rate_available": true,
+      "win_rate_pairs": 3
+    }
+  },
+  "rtol": 1e-09,
+  "schema_version": 1,
+  "sweep_id": "phase_a_smoke_20260522_r23"
+}

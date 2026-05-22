@@ -203,15 +203,9 @@ Quando uma re-rodada subsequente do smoke F.1 descobrir novo gap,
 abrir um Stage novo aqui (nao espremer mais sub-IDs em F.0.X).
 Candidato corrente:
 
-- **Gap 6 — TFT y_true convention bug.** **RESOLVIDO** via PHASE_B §Stage 20
-  (PR #44, 2026-05-20). `MultiHorizonPredictionPersister` materializa a
-  convencao Opcao (a) do ADR-0003: `timestamp_utc = dataset_timestamps[decision_idx]`,
-  `target_timestamp_utc = dataset_timestamps[decision_idx + h]`, `y_true`
-  passado pelo caller indexando `target_return[decision_idx + h - 1]`.
-  Ambos TFT trainer e baseline runner usam o mesmo Persister. Schema
-  `fact_oos_predictions.decision_idx` materializa o invariante.
-  Validacao: Stage 23 smoke 2026-05-20 → `oos_pairwise_target_alignment` PASS
-  + `tft_baselines_timestamp_subset_alignment` PASS (ambos eram FAIL pre-Stage 20).
+- **Gap 6 — TFT y_true convention bug.** **Gap 6 RESOLVIDO** (Opção d aplicada em Stage R-20 mergeado 2026-05-21;
+  target_return backward-shift + baseline y_true_idx ajustado; off-by-one
+  corrigido empiricamente; revalidado em Stage R-23 smoke v4).
   Cross-link: [`tft_y_true_investigation_2026-05-18.md`](../07_reports/tft_y_true_investigation_2026-05-18.md);
   [ADR-0003](../01_architecture/decisions/ADR-0003-multi-horizon-prediction-persister.md);
   [`smoke_confirmatory_2026-05-18.md`](../07_reports/smoke_confirmatory_2026-05-18.md) §"Post-Stage 20".

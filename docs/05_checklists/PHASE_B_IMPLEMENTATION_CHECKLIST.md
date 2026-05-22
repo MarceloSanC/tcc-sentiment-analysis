@@ -1750,16 +1750,17 @@ git via branch `feat/stage-f0-pre-smoke-fixes`.
 ### Tasks
 
 - [x] **F.1** Smoke confirmatorio com `max_epochs >= 5`, `n_rows >= 1000`.
-      **Aceite (satisfeito 2026-05-20 via Stage 23 smoke v3):**
-      - `% p10==p90 < 5%` (gate do Stage 11) — PASS via `block_quantile_degeneracy_gate`;
-      - zero violacoes probabilisticas — MPIW post_guardrail >= 0; crossing rate raw OK;
-      - gold cohort-aware gerado corretamente — todas as ~25 tabelas com `parent_sweep_id`;
-      - **suite completa de testes do projeto passa** (`pytest tests/` → 559 passed);
-      - **CI verde** em todos os PRs dos Stages anteriores ja mergeados — pendente
-        merge de Stages 20-23 (PRs #44-#47) por Marcelo;
-      - refresh + quality gate executados sem erro no smoke — **27/27 PASS**, zero
-        FAIL. Reporte: `docs/07_reports/smoke_confirmatory_2026-05-18.md` §"F.1 v3
-        PASS pleno (post-Stage 22, 2026-05-20)".
+      **Satisfação confirmada (2026-05-22 via Stage R-23.1 smoke v4):**
+      - max_epochs=5 (aceite literal); features completas; horizons [1,7].
+      - 6/6 critérios PASS: (1) block_quantile_degeneracy_gate PASS, (2) MPIW
+        post_guardrail ≥ 0 + crossing rate raw OK, (3) gold cohort-aware com
+        parent_sweep_id=phase_a_smoke_20260522_r23, (4) pytest 605+ passed,
+        (5) CI verde em PRs anteriores (#50/#51/#52/#53), (6) refresh+quality failed_checks=[].
+      - Marker `[x]` inicial em commit `69fabc3` foi prematuro (smoke v2
+        max_epochs=1 não atendia aceite); revalidação em Stage R-23 (PR a
+        abrir) confirmou substância.
+      - Evidência: `docs/07_reports/option_b_execution_log_2026-05-19.md`
+        §R-23.2 + `tests/integration/test_f1_golden_smoke.py`.
 
 - [ ] **F.2** Pre-registro com contrato quantilico primario fundamentado
       (raw vs post-guardrail) e politica de baselines (mesmo

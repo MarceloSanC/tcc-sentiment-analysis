@@ -439,18 +439,24 @@ Evidencia completa do smoke em
 Re-rodada do smoke pos-Stage F.0 (data: 2026-05-18 re-run) anexa
 secao final nesse mesmo relatorio.
 
-## Status final (2026-05-20)
+## Status final (2026-05-22, Stage R-23)
 
 Stage F.0 mergeado (PR #40). Stage F.A registro mergeado (PRs #41-#43).
-PHASE_B §Stages 20-23 abertos em revisao (PRs #44-#47):
-- Stage 20 (#44): `MultiHorizonPredictionPersister`, Gap 6 fechado mecanicamente.
-- Stage 21 (#45): `QualityCheckRegistry` skeleton.
-- Stage 22 (#46): `GoldBuilders` skeleton.
-- Stage 23 (#47): F.1 v3 smoke executado com **27/27 quality checks PASS**.
+O ciclo de remediacao pos-auditoria tambem fechou os REDs remanescentes:
+
+- Stage R-20 (#50, mergeado 2026-05-21): Gap 6 fechado pela Opcao d
+  (`target_return` backward-shift + baseline `y_true_idx` ajustado).
+- Stage R-E (#51, mergeado 2026-05-21): regressao do suffix fix isolada.
+- Stage R-21 (#52, mergeado 2026-05-21): 27 quality checks migrados para
+  registry real.
+- Stage R-22 (#53, mergeado 2026-05-22): 25 gold builders migrados; refresh
+  reduzido para 300 LOC.
+- Stage R-23 (este PR): F.1 v4 revalidado com `max_epochs=5` e 6/6 criterios
+  PASS. Apos merge manual por Marcelo, a substancia F.1 fica fechada.
   Reporte: [`smoke_confirmatory_2026-05-18.md`](../smoke_confirmatory_2026-05-18.md)
-  §"F.1 v3 PASS pleno".
+  §"F.1 v4 PASS pleno (Stage R-23, 2026-05-22)".
 
 **F.2 pre-registro:** ainda pendente; documento separado em
 `docs/06_pre_registration/`. **F.3 Gate de saida Fase A:** awaiting F.2.
-Fase B tecnicamente pronta para abrir formalmente apos merge dos PRs #44-#47
-+ conclusao F.2.
+Fase B tecnicamente pronta para abrir formalmente apos merge do Stage R-23
+e conclusao F.2.
