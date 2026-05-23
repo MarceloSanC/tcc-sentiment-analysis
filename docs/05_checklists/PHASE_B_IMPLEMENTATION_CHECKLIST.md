@@ -1847,14 +1847,16 @@ git via branch `feat/stage-f0-pre-smoke-fixes`.
       **Aceite:** documento de pre-registro mergeado em
       `docs/06_pre_registration/` (ou local equivalente).
 
-- [~] **F.3** Marcar `A_code_audit.md` "Gate de saida da Fase A" como
+- [x] **F.3** Marcar `A_code_audit.md` "Gate de saida da Fase A" como
       satisfeito.
       **Aceite:** todos os checkboxes do gate marcados; data de abertura
       da Fase B preenchida.
-      **Estado parcial (2026-05-17):** P0 transversais e RED zerados
-      marcados `[x]`; M1/M2/M3/M6/M7 marcados `[~]` aguardando F.1+F.2;
-      `Data de abertura da Fase B` em branco. Satisfacao plena requer
-      F.1 e F.2 mergeados antes do `[x]` final.
+      **Satisfeito (2026-05-23):** F.1 (R-23 smoke v4 PASS pleno, PR #54
+      mergeado 2026-05-22) e F.2 (pre-registro Phase B, PR #58 mergeado
+      2026-05-23) ambos fechados; M1/M2/M3/M6/M7 e P0 transversais todos
+      `[x]` em `A_code_audit.md` §"Gate de saida da Fase A"; data de
+      abertura da Fase B preenchida (2026-05-23). Fase B confirmatoria
+      autorizada a executar.
 
 ---
 
