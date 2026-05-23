@@ -1236,28 +1236,32 @@ considerar para planejamento.
 
 Criterio para abrir a Fase B:
 
-- [~] M1 GREEN ou YELLOW com acao concluida (codigo Stage 13 mergeado;
-      acao 3 "justificar herdanca de hiperparametros Round 0" depende
-      de F.2 pre-registro)
-- [~] M2 GREEN ou YELLOW com acao concluida (codigo Stages 9, 11
-      mergeados; acao 5 "smoke `max_prediction_length>=7`" depende de
-      F.1 smoke confirmatorio)
-- [~] M3 GREEN ou YELLOW com acao concluida (codigo Stage 14 mergeado;
+- [x] M1 GREEN ou YELLOW com acao concluida (codigo Stage 13 mergeado;
+      acao 3 "justificar herdanca de hiperparametros Round 0" coberta
+      por F.2 §4.2 — `robust_score = mean_val_rmse + λ·std_val_rmse`)
+- [x] M2 GREEN ou YELLOW com acao concluida (codigo Stages 9, 11
+      mergeados; acao 5 "smoke `max_prediction_length>=7`" satisfeita
+      por R-23 smoke v4 — `max_prediction_length=7`, `evaluation_horizons=[1,7]`)
+- [x] M3 GREEN ou YELLOW com acao concluida (codigo Stage 14 mergeado;
       acoes 1, 2 — politica de warmup, artefato source-level AAPL —
-      dependem de F.2 pre-registro)
+      cobertas por F.2 §4 e §10 — `warmup_policy=drop_leading`,
+      `effective_train_start` persistido em `dim_run.metadata`)
 - [x] M4 GREEN ou YELLOW com acao concluida (incluindo decisao sobre
       `run_id=None` em silver de inferencia — Stage 10 mergeado;
       acoes 1, 2, 4 sao future work/Fase C explicitos no texto do audit)
 - [x] M5 GREEN ou YELLOW com acao concluida (todos os P0 + Caminho B
       cobertos por Stages 1, 2, 4-9 mergeados)
-- [~] M6 GREEN ou YELLOW com acao concluida (codigo Stages 3-6 cobre
+- [x] M6 GREEN ou YELLOW com acao concluida (codigo Stages 3-6 cobre
       itens 1, 2, 3, 5; acao 4 "declarar filtro de coorte reproduzivel"
-      depende de F.2; acao 6 "smoke H=7" depende de F.1; acao 7
-      "auditar `fact_inference_*`" e Fase C explicito)
-- [~] M7 GREEN ou YELLOW com acao concluida (codigo Stages 6, 8, 12
+      coberta por F.2 §10 — ScopeSpec congelado; acao 6 "smoke H=7"
+      satisfeita por R-23 smoke v4; acao 7 "auditar `fact_inference_*`"
+      e Fase C explicito)
+- [x] M7 GREEN ou YELLOW com acao concluida (codigo Stages 6, 8, 12
       cobre 3 acoes; 5 acoes — explicit-config vs OFAT, all-features
       podada, contrato quantilico declarado, decisao h=30, smokes —
-      dependem de F.1 e/ou F.2; baselines restantes condicionais a F.2)
+      cobertas por F.1 (R-23) e F.2 §5/§6/§8/§12; baselines `random_walk`,
+      `AR(1)`, `EWMA-vol` declarados out-of-scope Phase B / future work
+      em F.2 §12)
 - [x] Nenhum modulo com veredicto RED em aberto (verificado em
       `A_audit_closure_2026-05-17.md`; nenhum RED restante)
 
@@ -1284,14 +1288,14 @@ Criterio para abrir a Fase B:
 modulo (refresh deprecado) e os itens dele migram para validacao do
 write-time builder. Os itens P0 transversais acima continuam validos.
 
-**Estado da marcacao (2026-05-17):** marcacao parcial — todos os P0
-transversais e RED zerados confirmados. Modulos M1, M2, M3, M6, M7
-permanecem `[~]` ate F.1 (smoke confirmatorio) e F.2 (pre-registro)
-mergeados. Detalhamento completo em
+**Marcacao final (2026-05-23):** F.1 (R-23 smoke v4 PASS pleno,
+PR #54 mergeado 2026-05-22) + F.2 (pre-registro Phase B, PR #58
+mergeado 2026-05-23) ambos satisfeitos. Todos M1-M7 fechados;
+itens P0 transversais [x]; gate de saida satisfeito. Detalhamento
+completo em
 [`A_audit_closure_2026-05-17.md`](A_audit_closure_2026-05-17.md).
 
-**Data de abertura da Fase B:** ___ (preenchida apos F.1 + F.2 mergeados
-e `[~]` viraram `[x]` acima)
+**Data de abertura da Fase B:** 2026-05-23.
 **Responsavel:** Marcelo
 
 ---
