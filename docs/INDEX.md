@@ -156,6 +156,15 @@ Documentacao operacional command-first. Nao explica teoria; mostra como rodar.
 - [`06_runbooks/P2_INFERENCE_EXPLAINABILITY_RUNBOOK.md`](06_runbooks/P2_INFERENCE_EXPLAINABILITY_RUNBOOK.md) : operacao da
   inferencia explicavel em producao.
 
+### `06_pre_registration/` — Pre-registros cientificos
+Pre-registros operacionais versionados, selados antes de rodadas
+confirmatorias. Cada pre-registro vira `canonical_for` da rodada que cobre.
+
+- [`06_pre_registration/preregistration_phase_b.md`](06_pre_registration/preregistration_phase_b.md) : pre-registro F.2
+  da Fase B confirmatoria (TFT all-features, AAPL); fixa hipoteses,
+  candidato, contrato quantilico, baselines, coorte, protocolo
+  estatistico e bandas tier 1/tier 2.
+
 ### `07_reports/` — Pesquisa, Evidencias e TCC
 Camada cientifica e narrativa. Living paper como fonte do TCC, evidence log
 como rastro empirico, phase-gates como auditorias datadas.
