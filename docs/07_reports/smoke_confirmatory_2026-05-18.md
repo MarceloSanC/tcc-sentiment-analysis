@@ -585,6 +585,17 @@ Investigacoes de follow-up nao-bloqueantes (mantidas do run inicial):
 
 ## Post-Stage 20 (2026-05-20) — Gap 6 fechado mecanicamente
 
+> **Atualização 2026-05-22:** esta seção registra o estado em 2026-05-20
+> (pré-remediação). A Opção (a) foi posteriormente substituída por
+> Opção (d) em Stage R-20 (PR [#50](https://github.com/MarceloSanC/financial-time-series-forecasting/pull/50),
+> mergeada 2026-05-21), conforme
+> [ADR-0003](../01_architecture/decisions/ADR-0003-multi-horizon-prediction-persister.md)
+> §"Decision" atual (target_return backward-shifted em
+> `build_tft_dataset_use_case`; baseline `y_true_idx = i + h_int`). O smoke
+> v4 com Opção (d) está documentado em §"F.1 v4 PASS pleno (Stage R-23,
+> 2026-05-22)" no topo deste arquivo. Texto abaixo preservado como
+> registro histórico.
+
 Stage 20 (MultiHorizonPredictionPersister) materializou Opcao (a) do
 ADR-0003 e corrigiu o offset start/end dos baselines. Smoke executada:
 
@@ -621,6 +632,17 @@ e independente e sera tratado em Stage 23.
 range 59..4015 (consistente com indexacao do full df).
 
 ## F.1 v3 PASS pleno (post-Stage 22 + Stage 23 fix, 2026-05-20)
+
+> **Atualização 2026-05-22:** esta seção registra o estado v3 em
+> 2026-05-20 (pré-remediação Stage R-23). O veredito PASS pleno v3 foi
+> obtido com `max_epochs=1` e cohort `phase_a_smoke_20260518_v2`, abaixo
+> do aceite literal F.1 (`max_epochs=5`). Stage R-23 (PR
+> [#54](https://github.com/MarceloSanC/financial-time-series-forecasting/pull/54),
+> mergeada 2026-05-22) reexecutou o smoke com `max_epochs=5` no cohort
+> `phase_a_smoke_20260522_r23` confirmando 6/6 critérios PASS sob
+> Opção (d) do ADR-0003. Ver §"F.1 v4 PASS pleno (Stage R-23,
+> 2026-05-22)" no topo deste arquivo. Texto abaixo preservado como
+> registro histórico.
 
 Stage 23 fix em `_build_gold_oos_quality_report` (refresh_analytics_store_use_case.py
 linha ~1480): merge `fact_oos_predictions + dim_run` agora usa

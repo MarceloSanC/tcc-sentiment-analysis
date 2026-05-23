@@ -1515,17 +1515,46 @@ target_timestamp / y_true / h-ahead**. Pre-requisito do fix do Gap 6.
 - 2026-05-19: Stage criado a partir do debito identificado em
   `B_architectural_debt_2026-05-19.md`. Bloqueia fix do Gap 6
   (registrado como candidate Stage 23 ou Stage F.0.10 promovido).
+- 2026-05-20: PR #44 mergeada com Opção (a) materializada
+  (`MultiHorizonPredictionPersister`). Auditoria independente subsequente
+  (REQUEST_CHANGES) identificou off-by-one estrutural (RED-1) e teste
+  cross-pipeline hollow (RED-2). Tasks permaneceram `[ ]` até remediação.
+- 2026-05-22: Remediação via Stage R-20 (PR [#50](https://github.com/MarceloSanC/financial-time-series-forecasting/pull/50),
+  mergeada 2026-05-21). **Decisão arquitetural — mudança Opção (a) → Opção (d):**
+  em vez de manter o anchor `target_timestamp = decision_day` do
+  Persister (Opção (a)), aplicou-se `target_return` backward-shifted em
+  `build_tft_dataset_use_case`; `y_true_idx = i + h_int` em baselines;
+  [ADR-0003](../01_architecture/decisions/ADR-0003-multi-horizon-prediction-persister.md)
+  amendada para registrar Opção (d) como contrato canônico. RED-1 e RED-2
+  resolvidos. Tasks 20.0-20.6 fechadas por satisfação funcional do Aceite
+  literal (branch desta hygiene PR: `chore/stage-20-23-closure-hygiene`,
+  2026-05-22):
+  - 20.0 ADR-0003 mergeado (PR #42 inicial + amend R-20 PR #50).
+  - 20.1-20.3 Persister + migrações no `train_tft_model_use_case` e
+    `run_baselines_use_case` (PR #44 código + R-20 fix Opção (d)).
+  - 20.4 Teste cross-pipeline não-hollow em
+    [`tests/integration/test_tft_baselines_y_true_alignment.py`](../../tests/integration/test_tft_baselines_y_true_alignment.py)
+    (R-20.2).
+  - 20.5 [`MULTI_HORIZON.md`](../03_modeling/MULTI_HORIZON.md) atualizado
+    para refletir Opção (d) (R-20).
+  - 20.6 Smoke regression em
+    [`smoke_confirmatory_2026-05-18.md`](../07_reports/smoke_confirmatory_2026-05-18.md)
+    §"Post-Stage 20" (registro histórico Opção (a)) + §"F.1 v4 PASS pleno
+    (Stage R-23, 2026-05-22)" (validação atual Opção (d)).
+  Evidência primária:
+  [`option_b_execution_log_2026-05-19.md`](../07_reports/option_b_execution_log_2026-05-19.md)
+  §R-20.
 
 ### Tasks
 
-- [ ] **20.0** ADR-0003 mergeado (doc-only PR, precede codigo).
+- [x] **20.0** ADR-0003 mergeado (doc-only PR, precede codigo).
       **Aceite:** ADR define anchor canonico de `target_timestamp`
       (decision_day), trading-day arithmetic, signature
       `build_record(decision_idx, h, y_true, y_pred, q10, q50, q90,
       dataset_timestamps, run_context)`, e politica de borda
       (`IncompletePredictionWindowError`).
 
-- [ ] **20.1** Criar `src/domain/services/multi_horizon_prediction_persister.py`
+- [x] **20.1** Criar `src/domain/services/multi_horizon_prediction_persister.py`
       com `MultiHorizonPredictionPersister`, `PredictionRecord`,
       `RunContext`, `IncompletePredictionWindowError`.
       **Aceite:** testes unitarios em
@@ -1536,17 +1565,17 @@ target_timestamp / y_true / h-ahead**. Pre-requisito do fix do Gap 6.
       `IncompletePredictionWindowError` quando
       `decision_idx + h > len(dataset_timestamps)`.
 
-- [ ] **20.2** Migrar `train_tft_model_use_case` para usar o persister.
+- [x] **20.2** Migrar `train_tft_model_use_case` para usar o persister.
       **Aceite:** linhas 770-810 viram chamada unica ao persister;
       `pytest tests/` green; teste de regressao de Stage 11.3
       (`_manual_forward_quantiles_and_actuals` H>1) continua passando.
 
-- [ ] **20.3** Migrar `run_baselines_use_case` para usar o persister.
+- [x] **20.3** Migrar `run_baselines_use_case` para usar o persister.
       **Aceite:** linhas 225-280 viram chamada unica; comentario
       enganoso de linhas 244-248 removido; testes em
       `tests/unit/use_cases/test_run_baselines_use_case.py` adaptados.
 
-- [ ] **20.4** Teste de regressao cross-pipeline pareando
+- [x] **20.4** Teste de regressao cross-pipeline pareando
       `(decision_idx, h)` entre TFT e baseline.
       **Aceite:** novo teste em
       `tests/integration/test_tft_baselines_y_true_alignment.py` confirma
@@ -1554,13 +1583,13 @@ target_timestamp / y_true / h-ahead**. Pre-requisito do fix do Gap 6.
       em >= 99.9% das linhas em dataset sintetico. **Fecha a porta para
       a categoria de divergencia que produziu o Gap 6.**
 
-- [ ] **20.5** Atualizar `docs/03_modeling/MULTI_HORIZON.md` declarando
+- [x] **20.5** Atualizar `docs/03_modeling/MULTI_HORIZON.md` declarando
       a convencao canonica (referenciando ADR-0003) e remover
       ambiguidade da definicao atual de `target_timestamp`.
       **Aceite:** doc canonico fixa anchor, h-ahead semantics e
       trading-day arithmetic.
 
-- [ ] **20.6** Smoke regression: F.1 (re-rodada) ainda PASS no gate
+- [x] **20.6** Smoke regression: F.1 (re-rodada) ainda PASS no gate
       `tft_baselines_timestamp_subset_alignment` (F.0.3) e nos demais
       gates nao-Gap-6.
       **Aceite:** relatorio anexo em
@@ -1584,53 +1613,76 @@ para um registry de classes `QualityCheck` independentes, com
 
 - 2026-05-19: Stage criado. Caso clinico E2 (commits `584373e` + `ab79996`)
   documentado no diagnostico.
+- 2026-05-20: PR #45 mergeada como skeleton (registry base + 1 cluster
+  inicial). Auditoria independente subsequente identificou que migração
+  parcial deixava callers ainda no `execute()` monolítico (cobertura
+  insuficiente do contrato Stage 21). Tasks permaneceram `[ ]` até
+  remediação plena.
+- 2026-05-22: Remediação via Stage R-21 (PR [#52](https://github.com/MarceloSanC/financial-time-series-forecasting/pull/52),
+  mergeada 2026-05-21). **27 checks** migrados para
+  `QualityCheckRegistry`; `ValidateAnalyticsQualityUseCase.execute()`
+  reduzido a orquestrador; equivalência bit-identical empírica validada
+  contra cohort `phase_a_smoke_20260518_v2`. Tasks 21.0-21.7 fechadas por
+  satisfação funcional do Aceite literal (branch desta hygiene PR:
+  `chore/stage-20-23-closure-hygiene`, 2026-05-22):
+  - 21.0 ADR-0004 mergeado (PR #42 inicial; status reflete R-21 Implemented).
+  - 21.1 Base do registry em
+    [`src/domain/services/quality_checks/base.py`](../../src/domain/services/quality_checks/base.py)
+    (PR #45 skeleton + R-21 finalização).
+  - 21.2-21.5 27 checks migrados em clusters cardinality/alignment/calibration/contracts (R-21).
+  - 21.6 `execute()` agora itera `registry.applicable(scope)` (R-21).
+  - 21.7 [`ANALYTICS_STORE_ARCHITECTURE.md`](../01_architecture/ANALYTICS_STORE_ARCHITECTURE.md)
+    documenta o registry como ponto de extensão oficial (R-21).
+  Evidência primária:
+  [`option_b_execution_log_2026-05-19.md`](../07_reports/option_b_execution_log_2026-05-19.md)
+  §R-21.
 
 ### Tasks
 
-- [ ] **21.0** ADR-0004 mergeado (doc-only PR, precede codigo).
+- [x] **21.0** ADR-0004 mergeado (doc-only PR, precede codigo).
       **Aceite:** ADR define contrato `QualityCheck` (name,
       applies_when, run), `CheckResult`, `AnalyticsSnapshot`,
       `QualityCheckRegistry`.
 
-- [ ] **21.1** Criar `src/domain/services/quality_checks/base.py` com
+- [x] **21.1** Criar `src/domain/services/quality_checks/base.py` com
       ABC `QualityCheck`, `CheckResult`, `AnalyticsSnapshot`,
       `QualityCheckRegistry`.
       **Aceite:** registry default povoavel; testes em
       `tests/unit/domain/services/quality_checks/test_base.py`.
 
-- [ ] **21.2** Migrar cluster `cardinality.py` (cardinality_config_fold_seed,
+- [x] **21.2** Migrar cluster `cardinality.py` (cardinality_config_fold_seed,
       min_samples_by_split, run_id_execution_consistency,
       inference_predictions_continuity, feature_contrib_local_continuity).
       **Aceite:** 5 checks migrados; testes movidos para
       `tests/unit/domain/services/quality_checks/test_cardinality.py`;
       `execute()` chama via registry em vez de inline.
 
-- [ ] **21.3** Migrar cluster `alignment.py`
+- [x] **21.3** Migrar cluster `alignment.py`
       (tft_baselines_timestamp_subset_alignment,
       oos_pairwise_target_alignment).
       **Aceite:** 2 checks migrados; F.0.3 gate continua falhando
       corretamente para Gap 6 ate Stage 20 fechar.
 
-- [ ] **21.4** Migrar cluster `calibration.py`
+- [x] **21.4** Migrar cluster `calibration.py`
       (gold_confidence_calibrated_by_horizon, dm_mcs_persisted_executable,
       gold_metrics_by_config_n_oos_contract).
       **Aceite:** 3 checks migrados; filtro `is_quantile_genuine` (F.0.6)
       preservado.
 
-- [ ] **21.5** Migrar cluster `contracts.py`
+- [x] **21.5** Migrar cluster `contracts.py`
       (official_contract_quantile_attention, required_metrics_nan,
       baseline_present_per_candidate_sweep, referential_integrity).
       **Aceite:** 4 checks migrados; exclusao de baselines do artifact
       contract (F.0.7) preservada.
 
-- [ ] **21.6** `ValidateAnalyticsQualityUseCase.execute()` vira
+- [x] **21.6** `ValidateAnalyticsQualityUseCase.execute()` vira
       orquestrador: itera `registry.applicable(scope)`.
       **Aceite:** classe principal reduz para ~200 LOC; comportamento
       bit-for-bit identico — smoke regression em `dim_run`
       `parent_sweep_id=phase_a_smoke_20260518_v2` produz mesmos 27
       checks com mesmos verdicts.
 
-- [ ] **21.7** Atualizar
+- [x] **21.7** Atualizar
       [`docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md`](../01_architecture/ANALYTICS_STORE_ARCHITECTURE.md)
       documentando o registry como ponto de extensao oficial.
       **Aceite:** doc canonico explica como adicionar novo check sem
@@ -1657,52 +1709,79 @@ categoria semantica.
 - Se a revisao indicar que diff e grande demais para 1 PR, dividir em
   Stage 22a (22.0 + 22.1 + 22.2 + 22.3) + Stage 22b (22.4 + 22.5 + 22.6
   + 22.7 + 22.8). Comecar como 1 Stage; dividir so se necessario.
+- 2026-05-20: PR #46 mergeada como skeleton (`gold_builders/` package +
+  poucos builders migrados). Auditoria independente subsequente
+  identificou que a maioria dos 26 builders permanecia inline no
+  orquestrador, deixando a redução LOC e o regression byte-identical
+  apenas parcialmente satisfeitos. Tasks permaneceram `[ ]` até remediação.
+- 2026-05-22: Remediação via Stage R-22 (PR [#53](https://github.com/MarceloSanC/financial-time-series-forecasting/pull/53),
+  mergeada 2026-05-21). **25 builders** migrados para
+  `GoldBuildersRegistry`; `RefreshAnalyticsStoreUseCase` reduziu de 2.579
+  → 300 LOC; sentinel byte-identical PASS. Bridge transitória
+  `gold_builder_adapters` removida em
+  [PR #56](https://github.com/MarceloSanC/financial-time-series-forecasting/pull/56)
+  (cleanup pós-R-23). Tasks 22.0-22.8 fechadas por satisfação funcional
+  do Aceite literal (branch desta hygiene PR:
+  `chore/stage-20-23-closure-hygiene`, 2026-05-22):
+  - 22.0 ADR-0005 mergeado (PR #42 inicial; status reflete R-22 Implemented).
+  - 22.1 Base do pacote em
+    [`src/domain/services/gold_builders/`](../../src/domain/services/gold_builders/)
+    (PR #46 skeleton + R-22 finalização).
+  - 22.2-22.6 25 builders migrados em categorias ranking/pairwise/quantile/descriptive/confidence (R-22).
+  - 22.7 `RefreshAnalyticsStoreUseCase` virou orquestrador iterando
+    `gold_builders_registry.applicable(scope_spec)` (R-22).
+  - 22.8 Smoke regression byte-identical validada via sentinel test em
+    [`tests/integration/test_gold_builders_byte_identical_archive.py`](../../tests/integration/test_gold_builders_byte_identical_archive.py)
+    (R-22).
+  Evidência primária:
+  [`option_b_execution_log_2026-05-19.md`](../07_reports/option_b_execution_log_2026-05-19.md)
+  §R-22 (+ §R-22.fix para follow-ups de CI/lint).
 
 ### Tasks
 
-- [ ] **22.0** ADR-0005 mergeado (doc-only PR, precede codigo).
+- [x] **22.0** ADR-0005 mergeado (doc-only PR, precede codigo).
       **Aceite:** ADR define contrato `GoldBuilder`, estrutura do
       pacote `gold_builders/` (5 categorias), e politica de
       `requires: list[str]` explicito.
 
-- [ ] **22.1** Criar `src/domain/services/gold_builders/base.py` com
+- [x] **22.1** Criar `src/domain/services/gold_builders/base.py` com
       ABC `GoldBuilder`, `BuildContext`, `AnalyticsSnapshot` (reusar do
       Stage 21 se mergeado).
       **Aceite:** skeleton do pacote; `__init__.py` com registry default;
       testes em `tests/unit/domain/services/gold_builders/test_base.py`.
 
-- [ ] **22.2** Migrar categoria `ranking.py` (runs_long,
+- [x] **22.2** Migrar categoria `ranking.py` (runs_long,
       ranking_by_config, consistency_topk).
       **Aceite:** 3 builders migrados; refresh continua produzindo
       output byte-identical para `gold_runs_long`,
       `gold_ranking_by_config`, `gold_consistency_topk`.
 
-- [ ] **22.3** Migrar categoria `pairwise.py` (dm_pairwise_results,
+- [x] **22.3** Migrar categoria `pairwise.py` (dm_pairwise_results,
       mcs_results, paired_oos_intersection_by_horizon).
       **Aceite:** 3 builders migrados; refresh byte-identical.
 
-- [ ] **22.4** Migrar categoria `quantile.py` (quantile_guardrail_audit,
+- [x] **22.4** Migrar categoria `quantile.py` (quantile_guardrail_audit,
       quantile_degeneracy_report, prediction_metrics_by_run_split_horizon
       + single_contract variant, prediction_metrics_by_config).
       **Aceite:** 4 builders migrados; gate de degeneracao (Stage 11)
       continua aplicando.
 
-- [ ] **22.5** Migrar categoria `descriptive.py` (ic95,
+- [x] **22.5** Migrar categoria `descriptive.py` (ic95,
       feature_set_impact, model_decision_final).
       **Aceite:** 3 builders migrados.
 
-- [ ] **22.6** Migrar categoria `confidence.py`
+- [x] **22.6** Migrar categoria `confidence.py`
       (confidence_calibrated_by_horizon,
       metrics_by_config_n_oos_contract).
       **Aceite:** 2 builders migrados; filtro `is_quantile_genuine`
       (F.0.6) preservado se nao migrado em outra categoria.
 
-- [ ] **22.7** `RefreshAnalyticsStoreUseCase` vira orquestrador:
+- [x] **22.7** `RefreshAnalyticsStoreUseCase` vira orquestrador:
       itera `gold_builders_registry.applicable(scope_spec)`.
       **Aceite:** classe principal reduz para ~400 LOC (de 2.568); pinball,
       IQR, prob_up viram helpers em `gold_builders/_metrics.py`.
 
-- [ ] **22.8** Smoke regression byte-identical: F.1 v2 (mesmo input)
+- [x] **22.8** Smoke regression byte-identical: F.1 v2 (mesmo input)
       produz todos os 10 gold tables com o mesmo conteudo bit-for-bit
       antes vs depois.
       **Aceite:** script de diff anexo em
