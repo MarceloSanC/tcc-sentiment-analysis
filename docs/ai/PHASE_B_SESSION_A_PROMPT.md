@@ -259,8 +259,9 @@ Registre o hash (64 chars hex).
 **E1.3** — Edite `preregistration_phase_b.md`:
 - §14 "Emendas": adicionar entrada datada conforme template do checklist E1.3.
 - §15 "Execucao": preencher (apenas) **commit hash do pré-registro selado**
-  (use `git log --oneline -1 docs/06_pre_registration/preregistration_phase_b.md`
-  → sha do commit `067cb32` ou superior),
+  com `067cb32` (`docs(pre-reg): F.2 — pre-registro Phase B confirmatorio`).
+  Este campo referencia o selo F.2 original do pre-registro; nao use o commit
+  E1.4, porque ele ainda nao existe durante E1.3 e registra apenas a emenda/config,
   **parent_sweep_id efetivo**, **Hash da config JSON**. Demais slots
   permanecem `<a preencher>` (Sessão-B preenche em E6).
 
@@ -287,7 +288,7 @@ EOF
 ```bash
 git push -u origin feat/phase-b-execution-<YYYYMMDD>
 gh pr create --base main --head feat/phase-b-execution-<YYYYMMDD> \
-  --title "docs(phase-b-exec): config sealing + pre-registro emenda E1" \
+  --title "feat(phase-b-exec): config sealing + pre-registro emenda E1" \
   --body "<body com: link checklist E1, sha256 config, sweep_id E0, top-1 hiperparams, próximos passos E2-E4 após merge>"
 ```
 

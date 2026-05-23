@@ -462,6 +462,13 @@ Edite `preregistration_phase_b.md`:
 ARCHIVE="data/analytics_archive_phase_b_<YYYYMMDD>"
 SWEEP="phase_b_confirmatorio_<YYYYMMDD>"
 
+# Confirmar que o archive sera ignorado pelo git antes de criar/copiar Parquets.
+# A regra esperada hoje eh `.gitignore:data/**`.
+git check-ignore -v "$ARCHIVE/__probe__.parquet" || {
+  echo "ERRO: $ARCHIVE nao esta coberto por .gitignore; corrija antes de criar snapshot."
+  exit 1
+}
+
 mkdir -p "$ARCHIVE/silver" "$ARCHIVE/gold"
 
 # Silver: snapshot apenas da cohort
@@ -521,6 +528,9 @@ touch "$ARCHIVE/test_write" 2>&1 | head -1
 ```
 
 Esperado: erro `Permission denied`.
+Se `git check-ignore` nao mostrar a regra aplicavel antes do `mkdir`, pare e
+corrija `.gitignore` antes de qualquer `git add`. Nunca versionar Parquets do
+snapshot `data/analytics_archive_phase_b_<YYYYMMDD>/`.
 
 Adicione nota em `docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md`:
 ```markdown
