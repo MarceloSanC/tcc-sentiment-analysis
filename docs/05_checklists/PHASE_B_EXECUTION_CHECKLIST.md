@@ -180,7 +180,10 @@ Recomendacao: usar data do dia em que E2 vai disparar.
           heritage E0 (sweep_id phase_b_hpo_<YYYYMMDD>); top-1 robust_score.
         ```
       - §15 "Execucao": preencher
-        - **Commit hash deste pre-registro (selo):** `<sha do PR #58 merge>` (= `7a821e8` ou commit final)
+        - **Commit hash deste pre-registro (selo F.2 original):** `067cb32`
+          (`docs(pre-reg): F.2 — pre-registro Phase B confirmatorio`).
+          Nao usar o commit E1.4 aqui: ele ainda nao existe durante E1.3 e
+          registra apenas a emenda/config, nao o selo original do pre-registro.
         - **parent_sweep_id efetivo:** `phase_b_confirmatorio_<YYYYMMDD>`
         - **Hash da config JSON:** `<sha256>`
         - Demais slots permanecem `<a preencher>` ate E6.
@@ -194,7 +197,7 @@ Recomendacao: usar data do dia em que E2 vai disparar.
       (se houver); diff inclui apenas 1 JSON novo + edits no pre-registro.
 
 - [ ] **E1.5** Push branch + abrir **PR-A**:
-      `docs(phase-b-exec): config sealing + pre-registro emenda E1`. Body cita
+      `feat(phase-b-exec): config sealing + pre-registro emenda E1`. Body cita
       `PHASE_B_EXECUTION_CHECKLIST.md` Stage E1, decisoes D1-D8 fechadas, sha256
       da config, sweep_id E0 heritage.
       **Aceite:** PR criado contra main; CI green (lint + pytest); Marcelo
@@ -465,6 +468,11 @@ abrir PR-B.
       **Aceite:** §15 todos os 6 slots preenchidos; §14 com nova entrada datada.
 
 - [ ] **E6.3** Criar archive snapshot read-only (D5):
+      - Antes de criar o archive, confirmar que `.gitignore` cobre
+        `data/analytics_archive_*` (regra atual esperada: `data/**`):
+        `git check-ignore -v data/analytics_archive_phase_b_<YYYYMMDD>/__probe__.parquet`.
+        Se nao houver match, parar e corrigir `.gitignore` antes de qualquer
+        `git add`, para nao versionar Parquets do snapshot.
       - `mkdir -p data/analytics_archive_phase_b_<YYYYMMDD>/`
       - `cp -r data/analytics/silver/dim_run/asset=AAPL/parent_sweep_id=phase_b_confirmatorio_<YYYYMMDD>/ data/analytics_archive_phase_b_<YYYYMMDD>/silver_dim_run/`
       - Idem para `fact_oos_predictions` (filtered por run_id da coorte) e
@@ -482,7 +490,8 @@ abrir PR-B.
       2. `docs(pre-reg): emenda E6 — preencher §15 execucao + entrada §14`
       3. `chore(archive): snapshot read-only Phase B + nota ANALYTICS_STORE_ARCHITECTURE`
       **Aceite:** 3 commits no padrao governance; passa pre-commit; cada
-      commit isolado.
+      commit isolado; nenhum arquivo sob `data/analytics_archive_phase_b_*`
+      aparece em `git status --short`.
 
 - [ ] **E6.5** Push branch + abrir **PR-B**:
       `docs(phase-b-exec): relatorio Phase B confirmatorio + emenda final + archive snapshot`.
