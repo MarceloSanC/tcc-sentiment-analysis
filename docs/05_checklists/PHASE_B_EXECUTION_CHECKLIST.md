@@ -167,7 +167,7 @@ Recomendacao: usar data do dia em que E2 vai disparar.
 
 ### Tasks
 
-- [ ] **E1.1** Criar `config/sweeps/explicit/phase_b_confirmatorio_<YYYYMMDD>.json`.
+- [~] **E1.1** Criar `config/sweeps/explicit/phase_b_confirmatorio_<YYYYMMDD>.json`.
       Base: template
       [`phase_a_smoke_20260518_v2.json`](../../config/sweeps/explicit/phase_a_smoke_20260518_v2.json)
       com substituicoes:
@@ -187,11 +187,11 @@ Recomendacao: usar data do dia em que E2 vai disparar.
       **Aceite:** JSON valido; `output_subdir` igual a `parent_sweep_id` esperado;
       `walk_forward.folds` tem exatamente 3 entradas; baselines tem exatamente 3 entradas.
 
-- [ ] **E1.2** Computar `sha256sum config/sweeps/explicit/phase_b_confirmatorio_<YYYYMMDD>.json`.
+- [~] **E1.2** Computar `sha256sum config/sweeps/explicit/phase_b_confirmatorio_<YYYYMMDD>.json`.
       Registrar o hash em commit message E1.4 + slot §15 do pre-registro.
       **Aceite:** hash de 64 chars hex registrado; comando reproduzivel.
 
-- [ ] **E1.3** Editar [`docs/06_pre_registration/preregistration_phase_b.md`](../06_pre_registration/preregistration_phase_b.md):
+- [~] **E1.3** Editar [`docs/06_pre_registration/preregistration_phase_b.md`](../06_pre_registration/preregistration_phase_b.md):
       - §14 "Emendas": adicionar entrada datada
         ```
         ### 2026-MM-DD — Emenda E1: selo da config congelada
@@ -212,14 +212,14 @@ Recomendacao: usar data do dia em que E2 vai disparar.
         - Demais slots permanecem `<a preencher>` ate E6.
       **Aceite:** §14 tem nova entrada datada; §15 com 3 dos 6 slots preenchidos.
 
-- [ ] **E1.4** Commit unico:
+- [~] **E1.4** Commit unico:
       `feat(phase-b-exec): selar config phase_b_confirmatorio_<YYYYMMDD> e
       emenda pre-registro E1`. Body do commit cita: sha256 da config, sweep_id
       do E0 heritage, top-1 trial_number/run_id.
       **Aceite:** commit no padrao do governance doc; passa pre-commit hooks
       (se houver); diff inclui apenas 1 JSON novo + edits no pre-registro.
 
-- [ ] **E1.5** Push branch + abrir **PR-A**:
+- [~] **E1.5** Push branch + abrir **PR-A**:
       `feat(phase-b-exec): config sealing + pre-registro emenda E1`. Body cita
       `PHASE_B_EXECUTION_CHECKLIST.md` Stage E1, decisoes D1-D8 fechadas, sha256
       da config, sweep_id E0 heritage.
@@ -228,7 +228,41 @@ Recomendacao: usar data do dia em que E2 vai disparar.
 
 ### Notas de revisao:
 
-_(vazio na criacao; preenchido pela Sessao-A apos E1.5)_
+- 2026-05-24 00:?? UTC: Stage E1 executado pela Sessao-A (em revisao [~]).
+- Branch: `feat/phase-b-execution-20260524` (criada a partir de main em E1.0
+  apos pull --ff-only; commit base `f92bd57`).
+- Decisao D2: `<YYYYMMDD>` = `20260524` (escolhida por Marcelo via question
+  AskUser; data real de inicio de E2 — amanha/domingo). E0 ja rodado em
+  2026-05-23 com sweep_id `phase_b_hpo_20260523`.
+- Validation commands com results:
+  - `.venv/bin/python -c "import json; json.load(...)"` -> JSON valido;
+    todas as substituicoes verificadas (5 seeds, 3 folds, 3 baselines,
+    output_subdir=phase_b_confirmatorio_20260524, hiperparams = trial 19,
+    max_epochs=15).
+  - `sha256sum config/sweeps/explicit/phase_b_confirmatorio_20260524.json`
+    -> `e6972a8ba5d23659eab205d7d403d10a2c1f3c9827329b7a37c5ee8595b9260c`.
+  - `git log --oneline -2` -> commits `83522cc` (E0 deliverables) +
+    `dd9b2d3` (E1.4 confirmatorio + emenda).
+- Decisoes mid-execucao:
+  - 2 commits separados na PR-A (em vez de 1) — commit 1 (E0): optuna
+    config + E0 Notas; commit 2 (E1.4 strict per prompt): confirmatorio
+    config + pre-reg emenda. Razao: prompt E1.4 especifica "1 JSON novo
+    + edits no pre-registro" (commit 2 cumpre isso isoladamente); o E0
+    deliverable nao deveria ficar fora da PR-A por reproducibilidade.
+  - Emenda §14 cross-link cita "branch + PR-A" em vez de pinar commit sha
+    do proprio commit que adiciona a emenda (impossivel sem amend).
+    Merge commit hash registrado em §15 post-merge pela Sessao-A/Marcelo
+    se necessario.
+  - `max_epochs=15` em E1.1: best_epoch=2/stopped_epoch=7 em E0 + 8 margem
+    para variancia de fold/seed (em vez do range 30-50 esperado original).
+- Confirmacoes:
+  - `data/analytics_archive_pre_phase_b/` intacto (du -sh: 851M).
+  - Protected files nao tocados (src/, tests/, dataset_tft_AAPL.parquet,
+    PHASE_B_IMPLEMENTATION_CHECKLIST.md, POST_CLOSURE_FIXES_CHECKLIST.md,
+    ADRs).
+- Cohort esperado pos-E2+E3: 15 TFT runs + 45 baseline = 60 dim_run.
+- Outcome: PASS_PENDING_MERGE (em revisao [~] aguardando PR-A merge antes
+  de E2).
 
 ---
 
