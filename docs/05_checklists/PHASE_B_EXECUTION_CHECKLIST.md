@@ -94,7 +94,7 @@ hidden_continuous_size=4`.
 
 ### Tasks
 
-- [ ] **E0.1** Criar `config/sweeps/optuna/phase_b_hpo_<YYYYMMDD>.json`. Base:
+- [x] **E0.1** Criar `config/sweeps/optuna/phase_b_hpo_<YYYYMMDD>.json`. Base:
       template `0_1_5_optuna_top13_all_feature_sets_hpo.json` com substituicoes:
       `output_subdir=phase_b_hpo_<YYYYMMDD>`, `features="BASELINE_FEATURES,
       TECHNICAL_FEATURES,SENTIMENT_FEATURES,FUNDAMENTAL_FEATURES"` (feature_sets
@@ -108,13 +108,13 @@ hidden_continuous_size=4`.
       **Aceite:** JSON valido (passa `json.load`); `objective_metric=robust_score`;
       `compute_feature_importance=false` (acelera HPO).
 
-- [ ] **E0.2** Executar
+- [x] **E0.2** Executar
       `.venv/bin/python -m src.main_tft_optuna_sweep --asset AAPL --config-json config/sweeps/optuna/phase_b_hpo_<YYYYMMDD>.json`.
       Aceitar `continue_on_error=true` no JSON para nao abortar batch por trial OOM.
       **Aceite:** ≥20 trials completos (`status=ok` em `dim_run`); zero trials
       com `mean_val_rmse=NaN`; tempo total registrado.
 
-- [ ] **E0.3** Identificar top-1 por `robust_score` em
+- [x] **E0.3** Identificar top-1 por `robust_score` em
       `data/analytics/selection/frozen_candidates_<phase_b_hpo_<YYYYMMDD>>.csv`
       (gerado por `main_tft_optuna_sweep`). Documentar hiperparams escolhidos
       em `/tmp/e0_top1_<YYYYMMDD>.json` (intermediario; nao committed em git).
@@ -124,7 +124,30 @@ hidden_continuous_size=4`.
 
 ### Notas de revisao:
 
-_(vazio na criacao; preenchido pela Sessao-A apos E0.3)_
+- 2026-05-23 23:14 UTC: Stage E0 executado autonomamente (Sessao-A).
+- Branch: main (E0 nao requer branch nova; config commit vira em E1.0 com `feat/phase-b-execution-<D2>`).
+- Validation commands com results:
+  - Init pre-flight: `.venv/bin/pytest tests/ -q --ignore=tests/integration/test_quality_registry_bit_identical_archive.py --ignore=tests/integration/test_gold_builders_byte_identical_archive.py` -> `609 passed, 9 warnings`.
+  - `.venv/bin/ruff check src/ tests/` -> `All checks passed!`.
+  - `python -c "import json; json.load(open('config/sweeps/optuna/phase_b_hpo_20260523.json'))"` -> sem erro; substituicoes verificadas (objective=robust_score, max_encoder=60, max_pred=7, prediction_mode=quantile, evaluation_horizons=[1,7], n_trials=25, compute_feature_importance=false).
+  - `.venv/bin/python -m src.main_tft_optuna_sweep --asset AAPL --config-json config/sweeps/optuna/phase_b_hpo_20260523.json` -> exit code 0, 25/25 trials completos, runs_failed=0 em todos os trials, avg_trial_seconds=130.77, wall-clock ~54.5min (abaixo do range estimado 75-125min porque early-stopping ~8 epochs).
+  - `cat data/models/AAPL/optuna/phase_b_hpo_20260523/.../optuna_best_trial.json` -> trial_number=19, robust_score=0.019330283626914024, hidden_size=48, attention_head_size=8, dropout=0.05302, learning_rate=0.0003963, batch_size=128, hidden_continuous_size=8.
+  - `cat data/analytics/silver/fact_epoch_metrics/asset=AAPL/sweep_id=trial_0019/fold=none/fact_epoch_metrics.parquet` -> 8 epochs, best_epoch=2, stopped_epoch=7, early_stop_reason=early_stopping.
+- Decisoes mid-execucao:
+  - Search space: `dropout` e `learning_rate` como `{"type": "float", "log": true (lr only)}` em vez de `uniform/log-uniform` no prompt — o `_suggest_param` em `RunTFTOptunaSearchUseCase` aceita apenas `categorical`, `int`, `float` (com `log` opcional). Equivalente semantico.
+  - `walk_forward.enabled=false` para E0: prompt nao explicita; manter walk_forward 3 folds em HPO triplicaria runtime (~3h) e divergiria da estimativa de 75-125min. HPO single-split eh suficiente para identificar vizinhanca de hiperparams; replica/folds vem em E2.
+- Warmup ROCm: padrao `[epoch=0] train_loss=nan val_loss=nan` -> `[epoch=0] train_loss=0.0X val_loss=0.0X` observado em todos os 25 trials (esperado; auto-recuperado per ADR ambiente; nao retry).
+- Confirmacoes:
+  - `data/analytics_archive_pre_phase_b/` intacto (du -sh: 851M).
+  - Protected files nao tocados (src/, tests/, dataset_tft_AAPL.parquet, checklists imutaveis).
+- Outputs salvos:
+  - Config: `config/sweeps/optuna/phase_b_hpo_20260523.json`
+  - Top-1 metadata: `/tmp/e0_top1_20260523.json`
+  - Log: `/tmp/e0_optuna_20260523.log`
+  - Sweep artifacts: `data/models/AAPL/optuna/phase_b_hpo_20260523/.../`
+- Follow-ups:
+  - Para E1.1: `training_config.max_epochs` recomendado = 15 (8 epochs convergencia observada + 7 margem para variancia de fold/seed; early_stopping_patience=5 truncara naturalmente).
+- Outcome: PASS.
 
 ---
 
@@ -144,7 +167,7 @@ Recomendacao: usar data do dia em que E2 vai disparar.
 
 ### Tasks
 
-- [ ] **E1.1** Criar `config/sweeps/explicit/phase_b_confirmatorio_<YYYYMMDD>.json`.
+- [~] **E1.1** Criar `config/sweeps/explicit/phase_b_confirmatorio_<YYYYMMDD>.json`.
       Base: template
       [`phase_a_smoke_20260518_v2.json`](../../config/sweeps/explicit/phase_a_smoke_20260518_v2.json)
       com substituicoes:
@@ -164,11 +187,11 @@ Recomendacao: usar data do dia em que E2 vai disparar.
       **Aceite:** JSON valido; `output_subdir` igual a `parent_sweep_id` esperado;
       `walk_forward.folds` tem exatamente 3 entradas; baselines tem exatamente 3 entradas.
 
-- [ ] **E1.2** Computar `sha256sum config/sweeps/explicit/phase_b_confirmatorio_<YYYYMMDD>.json`.
+- [~] **E1.2** Computar `sha256sum config/sweeps/explicit/phase_b_confirmatorio_<YYYYMMDD>.json`.
       Registrar o hash em commit message E1.4 + slot §15 do pre-registro.
       **Aceite:** hash de 64 chars hex registrado; comando reproduzivel.
 
-- [ ] **E1.3** Editar [`docs/06_pre_registration/preregistration_phase_b.md`](../06_pre_registration/preregistration_phase_b.md):
+- [~] **E1.3** Editar [`docs/06_pre_registration/preregistration_phase_b.md`](../06_pre_registration/preregistration_phase_b.md):
       - §14 "Emendas": adicionar entrada datada
         ```
         ### 2026-MM-DD — Emenda E1: selo da config congelada
@@ -189,14 +212,14 @@ Recomendacao: usar data do dia em que E2 vai disparar.
         - Demais slots permanecem `<a preencher>` ate E6.
       **Aceite:** §14 tem nova entrada datada; §15 com 3 dos 6 slots preenchidos.
 
-- [ ] **E1.4** Commit unico:
+- [~] **E1.4** Commit unico:
       `feat(phase-b-exec): selar config phase_b_confirmatorio_<YYYYMMDD> e
       emenda pre-registro E1`. Body do commit cita: sha256 da config, sweep_id
       do E0 heritage, top-1 trial_number/run_id.
       **Aceite:** commit no padrao do governance doc; passa pre-commit hooks
       (se houver); diff inclui apenas 1 JSON novo + edits no pre-registro.
 
-- [ ] **E1.5** Push branch + abrir **PR-A**:
+- [~] **E1.5** Push branch + abrir **PR-A**:
       `feat(phase-b-exec): config sealing + pre-registro emenda E1`. Body cita
       `PHASE_B_EXECUTION_CHECKLIST.md` Stage E1, decisoes D1-D8 fechadas, sha256
       da config, sweep_id E0 heritage.
@@ -205,7 +228,41 @@ Recomendacao: usar data do dia em que E2 vai disparar.
 
 ### Notas de revisao:
 
-_(vazio na criacao; preenchido pela Sessao-A apos E1.5)_
+- 2026-05-24 00:?? UTC: Stage E1 executado pela Sessao-A (em revisao [~]).
+- Branch: `feat/phase-b-execution-20260524` (criada a partir de main em E1.0
+  apos pull --ff-only; commit base `f92bd57`).
+- Decisao D2: `<YYYYMMDD>` = `20260524` (escolhida por Marcelo via question
+  AskUser; data real de inicio de E2 — amanha/domingo). E0 ja rodado em
+  2026-05-23 com sweep_id `phase_b_hpo_20260523`.
+- Validation commands com results:
+  - `.venv/bin/python -c "import json; json.load(...)"` -> JSON valido;
+    todas as substituicoes verificadas (5 seeds, 3 folds, 3 baselines,
+    output_subdir=phase_b_confirmatorio_20260524, hiperparams = trial 19,
+    max_epochs=15).
+  - `sha256sum config/sweeps/explicit/phase_b_confirmatorio_20260524.json`
+    -> `e6972a8ba5d23659eab205d7d403d10a2c1f3c9827329b7a37c5ee8595b9260c`.
+  - `git log --oneline -2` -> commits `83522cc` (E0 deliverables) +
+    `dd9b2d3` (E1.4 confirmatorio + emenda).
+- Decisoes mid-execucao:
+  - 2 commits separados na PR-A (em vez de 1) — commit 1 (E0): optuna
+    config + E0 Notas; commit 2 (E1.4 strict per prompt): confirmatorio
+    config + pre-reg emenda. Razao: prompt E1.4 especifica "1 JSON novo
+    + edits no pre-registro" (commit 2 cumpre isso isoladamente); o E0
+    deliverable nao deveria ficar fora da PR-A por reproducibilidade.
+  - Emenda §14 cross-link cita "branch + PR-A" em vez de pinar commit sha
+    do proprio commit que adiciona a emenda (impossivel sem amend).
+    Merge commit hash registrado em §15 post-merge pela Sessao-A/Marcelo
+    se necessario.
+  - `max_epochs=15` em E1.1: best_epoch=2/stopped_epoch=7 em E0 + 8 margem
+    para variancia de fold/seed (em vez do range 30-50 esperado original).
+- Confirmacoes:
+  - `data/analytics_archive_pre_phase_b/` intacto (du -sh: 851M).
+  - Protected files nao tocados (src/, tests/, dataset_tft_AAPL.parquet,
+    PHASE_B_IMPLEMENTATION_CHECKLIST.md, POST_CLOSURE_FIXES_CHECKLIST.md,
+    ADRs).
+- Cohort esperado pos-E2+E3: 15 TFT runs + 45 baseline = 60 dim_run.
+- Outcome: PASS_PENDING_MERGE (em revisao [~] aguardando PR-A merge antes
+  de E2).
 
 ---
 

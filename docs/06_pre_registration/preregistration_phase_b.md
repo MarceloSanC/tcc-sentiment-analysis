@@ -563,22 +563,40 @@ Mudancas a este pre-registro **apos merge** desta PR exigem:
 
 ### Emendas
 
-_(vazio na criacao; preenchido conforme necessario)_
+### 2026-05-24 — Emenda E1: selo da config congelada
+
+- Decisao alterada: §4.2 passo 4 (hash do JSON congelado) e §10 (`parent_sweep_id` efetivo).
+- Hash: sha256 = `e6972a8ba5d23659eab205d7d403d10a2c1f3c9827329b7a37c5ee8595b9260c`
+- `parent_sweep_id` efetivo: `phase_b_confirmatorio_20260524`
+- Cross-link: branch `feat/phase-b-execution-20260524`, PR-A
+  `feat(phase-b-exec): config sealing + pre-registro emenda E1` (commit
+  do selo na propria PR-A; merge commit hash registrado em §15 apos
+  merge em main pela Sessao-A/Marcelo).
+- Justificativa: selo da config confirmatoria apos rodada Optuna heritage E0
+  (sweep_id `phase_b_hpo_20260523`, 25 trials, top-1 robust_score=0.019330
+  trial_number=19, run_id=`9167adec409e0b1f453a737081b6d2ca7b55f4f5102f303f26c815fb3d777198`).
+  Hiperparametros top-1: `hidden_size=48, attention_head_size=8,
+  dropout=0.05302, learning_rate=0.0003963, batch_size=128,
+  hidden_continuous_size=8`. `max_epochs=15` da config E1.1 escolhido com
+  base na convergencia observada em E0 (best_epoch=2, stopped_epoch=7 com
+  early_stopping_patience=5) + margem de 7 para acomodar variancia de
+  fold/seed em E2 (5 seeds × 3 folds).
 
 ---
 
 ## 15. Execucao
 
-_(preenchido apenas apos rodada confirmatoria)_
+_(parcialmente preenchido em E1; slots de execucao final reservados para E6/Sessao-B)_
 
-- **Commit hash deste pre-registro (selo):** `<a preencher apos merge>`
-- **Data de execucao confirmatoria:** `<YYYY-MM-DD>`
-- **`parent_sweep_id` efetivo:** `phase_b_confirmatorio_<YYYYMMDD>`
-- **Hash da config JSON:** `<sha256 de
-  config/sweeps/explicit/phase_b_confirmatorio.json>`
-- **Resultado tier (H1, H2a, H2b por horizonte):** `<reportar tier 1
-  / tier 2 / refutado>`
-- **Relatorio:** `docs/07_reports/phase-gates/B_confirmatory_<YYYY-MM-DD>.md`
+- **Commit hash deste pre-registro (selo F.2 original):** `067cb32`
+  (`docs(pre-reg): F.2 — pre-registro Phase B confirmatorio`)
+- **Data de execucao confirmatoria:** `<a preencher em E6 apos rodada>`
+- **`parent_sweep_id` efetivo:** `phase_b_confirmatorio_20260524`
+- **Hash da config JSON:** `e6972a8ba5d23659eab205d7d403d10a2c1f3c9827329b7a37c5ee8595b9260c`
+  (config `config/sweeps/explicit/phase_b_confirmatorio_20260524.json`,
+  selada via Emenda E1 — ver §14)
+- **Resultado tier (H1, H2a, H2b por horizonte):** `<a preencher em E6 pela Sessao-B>`
+- **Relatorio:** `<a preencher em E6: docs/07_reports/phase-gates/B_confirmatory_<YYYY-MM-DD>.md>`
 
 ---
 
