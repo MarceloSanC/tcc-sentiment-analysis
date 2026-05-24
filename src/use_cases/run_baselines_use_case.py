@@ -103,6 +103,7 @@ class RunBaselinesUseCase:
         parent_sweep_id: str,
         seed: int | None,
         window: int | None,
+        fold_name: str | None = None,
     ) -> str:
         payload = {
             "kind": "baseline",
@@ -111,6 +112,7 @@ class RunBaselinesUseCase:
             "parent_sweep_id": parent_sweep_id,
             "seed": seed,
             "window": window,
+            "fold_name": fold_name,
         }
         canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
         return _sha256_text(canonical)
@@ -302,6 +304,8 @@ class RunBaselinesUseCase:
         split_signature: str,
         model_version: str,
         created_at_utc: str,
+        seed: int | None = None,
+        fold_name: str | None = None,
     ) -> None:
         row = {
             "schema_version": ANALYTICS_SCHEMA_VERSION,
@@ -309,8 +313,8 @@ class RunBaselinesUseCase:
             "execution_id": None,
             "parent_sweep_id": parent_sweep_id,
             "trial_number": None,
-            "fold": None,
-            "seed": None,
+            "fold": fold_name,
+            "seed": seed,
             "asset": asset,
             "feature_set_name": feature_set_name,
             "feature_set_hash": feature_set_hash,
@@ -497,6 +501,7 @@ class RunBaselinesUseCase:
         horizons: list[int],
         baselines: list[str],
         seed: int | None = None,
+        fold_name: str | None = None,
         overwrite_on_collision: bool = False,
         baseline_windows: dict[str, int] | None = None,
         evaluation_start_offset_days: int = 0,
@@ -551,7 +556,12 @@ class RunBaselinesUseCase:
             feature_set_hash = _sha256_text(f"baseline|{baseline_name}|window={spec.window}")
             config_signature = _sha256_text(
                 json.dumps(
-                    {"baseline": baseline_name, "window": spec.window, "horizons": horizons_sorted},
+                    {
+                        "baseline": baseline_name,
+                        "window": spec.window,
+                        "horizons": horizons_sorted,
+                        "fold_name": fold_name,
+                    },
                     sort_keys=True,
                 )
             )
@@ -562,6 +572,7 @@ class RunBaselinesUseCase:
                 parent_sweep_id=str(parent_sweep_id),
                 seed=seed,
                 window=spec.window,
+                fold_name=fold_name,
             )
 
             self._persist_dim_run(
@@ -575,6 +586,8 @@ class RunBaselinesUseCase:
                 split_signature=split_signature,
                 model_version=model_version,
                 created_at_utc=created_at_utc,
+                seed=seed,
+                fold_name=fold_name,
             )
             self._persist_fact_run_snapshot(
                 run_id=run_id,
