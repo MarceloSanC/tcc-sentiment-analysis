@@ -88,7 +88,27 @@
   "explicit_configs": [
     {
       "run_label": "phase_b_tft_all_features",
-      "training_config": {}
+      "training_config": {
+        "max_encoder_length": 60,
+        "max_prediction_length": 7,
+        "evaluation_horizons": [1, 7],
+        "batch_size": 128,
+        "max_epochs": 15,
+        "learning_rate": 0.0003962946655438122,
+        "hidden_size": 48,
+        "attention_head_size": 8,
+        "dropout": 0.05301920468977535,
+        "hidden_continuous_size": 8,
+        "seed": 20260517,
+        "early_stopping_patience": 5,
+        "early_stopping_min_delta": 0.0,
+        "warmup_policy": "drop_leading",
+        "compute_feature_importance": true,
+        "prediction_mode": "quantile",
+        "quantile_levels": [0.1, 0.5, 0.9],
+        "store_split_timestamps_ref": true,
+        "evaluate_train_split": false
+      }
     }
   ]
 }
