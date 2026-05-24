@@ -225,14 +225,14 @@ class RunBaselinesTestPipelineUseCase:
         per_invocation: list[RunBaselinesResult] = []
         for fold in folds:
             for seed in seeds:
-                if len(folds) == 1 and fold.name == "single":
-                    sweep_id = parent_sweep_id_root
-                else:
-                    sweep_id = f"{parent_sweep_id_root}__{fold.name}"
+                # F.2 §5 cohort contract: baselines share parent_sweep_id with the
+                # TFT candidate across all folds; fold identity flows into the
+                # baseline run_id hash (via fold_name) and into dim_run.fold.
                 result = self.baselines_runner.execute(
                     asset=str(asset),
                     dataset_path=dataset_path,
-                    parent_sweep_id=sweep_id,
+                    parent_sweep_id=parent_sweep_id_root,
+                    fold_name=fold.name,
                     split_definitions={
                         "train": fold.train,
                         "val": fold.val,
@@ -254,7 +254,7 @@ class RunBaselinesTestPipelineUseCase:
                     extra={
                         "fold": fold.name,
                         "seed": seed,
-                        "parent_sweep_id": sweep_id,
+                        "parent_sweep_id": parent_sweep_id_root,
                         "baselines": result.baselines_persisted,
                         "n_rows_per_baseline": result.n_rows_per_baseline,
                         "evaluation_start_offset_days": offset_start,

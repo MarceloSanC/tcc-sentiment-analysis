@@ -225,7 +225,15 @@ def test_window_override_per_baseline(tmp_path: Path) -> None:
     assert (cfg["max_encoder_length"] == 10).any()
 
 
-def test_walk_forward_folds_emit_per_fold_sweep_id(tmp_path: Path) -> None:
+def test_walk_forward_folds_share_parent_sweep_id_and_emit_fold_metadata(
+    tmp_path: Path,
+) -> None:
+    """Per F.2 §5 cohort contract: across walk-forward folds, baselines must
+    share `parent_sweep_id` with the TFT candidate; fold identity is encoded
+    in `dim_run.fold` and folded into the baseline run_id hash. This
+    replaces the prior behavior of appending `__<fold.name>` to the sweep id
+    (which split TFT and baselines into distinct cohorts and broke F.2 §5).
+    """
     silver = tmp_path / "silver"
     ds = tmp_path / "dataset.parquet"
     _write_dataset(ds, n_days=400)
@@ -264,8 +272,15 @@ def test_walk_forward_folds_emit_per_fold_sweep_id(tmp_path: Path) -> None:
     assert result.folds_processed == 2
     dim = _load_dim(silver)
     sweep_ids = set(dim["parent_sweep_id"].astype(str).tolist())
-    assert "sw_wf__wf_1" in sweep_ids
-    assert "sw_wf__wf_2" in sweep_ids
+    assert sweep_ids == {"sw_wf"}, sweep_ids
+    folds_seen = set(dim["fold"].dropna().astype(str).tolist())
+    assert folds_seen == {"wf_1", "wf_2"}, folds_seen
+    seeds_seen = set(int(s) for s in dim["seed"].dropna().tolist())
+    assert seeds_seen == {42}, seeds_seen
+    # 1 baseline × 1 seed × 2 folds = 2 rows, run_ids must be distinct
+    # (fold identity must flow into the run_id hash, not the parent_sweep_id).
+    assert len(dim) == 2
+    assert dim["run_id"].nunique() == 2
 
 
 def test_rejects_unsupported_baseline_name(tmp_path: Path) -> None:
