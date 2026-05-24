@@ -563,6 +563,70 @@ Mudancas a este pre-registro **apos merge** desta PR exigem:
 
 ### Emendas
 
+### 2026-05-24 — Emenda E1.7: remediacao tecnica YELLOWs 2 e 3 (bugs do baseline pipeline + alignment check)
+
+- Decisao alterada: nenhuma cientifica; correcao tecnica de bugs do pipeline
+  de baselines (apontados em F.2 §11 nota operacional como divida YELLOW) e
+  de bug correlato no quality check `oos_pairwise_target_alignment`.
+- Hiperparametros, candidato top-1 (trial 19 do E0), 5 seeds, 3 folds, 3
+  baselines pre-declarados, gates Tier 1/Tier 2: TODOS INALTERADOS.
+- Mudancas em src/ (cobertas em PR-A3):
+  - `src/use_cases/run_baselines_use_case.py`:
+    - `_compute_run_id`: aceita `fold_name` e inclui no hash do run_id
+      (evita colisao entre folds com mesmo seed/baseline).
+    - `_persist_dim_run`: aceita `seed` e `fold_name` e popula colunas
+      `dim_run.seed` e `dim_run.fold` (antes hardcoded `None`, fonte do
+      check `cardinality_config_fold_seed` falhar com `duplicate_groups=45`).
+    - `execute`: aceita `fold_name` (default `None` para backwards-compat
+      com standalone CLI) e propaga para `_compute_run_id` e
+      `_persist_dim_run`.
+    - `config_signature` baseline agora inclui `fold_name` (evita
+      diferentes folds de uma mesma baseline compartilharem signature).
+  - `src/use_cases/run_baselines_test_pipeline_use_case.py`:
+    - Removeu sufixo `__{fold.name}` no `parent_sweep_id` quando
+      `walk_forward.folds > 1` (era violacao de F.2 §5 "Mesmo
+      parent_sweep_id do candidato").
+    - Passa `fold.name` explicitamente ao `baselines_runner.execute()`.
+  - `src/domain/services/quality_checks/alignment.py`:
+    - Corrigiu typo `split_signature` -> `split_fingerprint` em
+      `OosPairwiseTargetAlignmentCheck` (a coluna real em dim_run e
+      `split_fingerprint`; sem o fix, group key collapsava entre folds
+      e o check falsamente flageava cohort multi-fold).
+  - `tests/unit/use_cases/test_run_baselines_test_pipeline_use_case.py`:
+    test reescrito `test_walk_forward_folds_share_parent_sweep_id_and_emit_fold_metadata`
+    refletindo a nova semantica (parent_sweep_id unificado, fold em
+    dim_run, run_id distinto por fold).
+  - `tests/unit/use_cases/test_validate_analytics_quality_use_case.py`:
+    test data ajustado para usar mesmo `split_fingerprint` quando o
+    test pretende exercitar a deteccao de mismatch de timestamps
+    within-group.
+- Re-execucao: deletei silver baselines incorretos (45 rows nas 3
+  cohorts `__wf_{1,2,3}`); preservei TFT cohort (15 rows) intacto;
+  re-rodei `main_baselines_test_pipeline` com config selada e mesmos
+  seeds; 45 baselines novos persistidos em cohort UNICA
+  `phase_b_confirmatorio_20260524`. Refresh em duas fases:
+  scope cohort_decision (registro analitico Phase B) + global (saude
+  geral). Quality gate: 3 failed_checks → 0 (passed=True, 27/27).
+- Justificativa do veto F.2 §14 "Alterar parent_sweep_id apos
+  persistencia silver": respeitado. Nao editei dados existentes;
+  deletei silver erroneo (de cohort incorreta, criada por bug) e
+  re-executei pipeline corrigido. Hiperparametros, seeds, folds e
+  baselines pre-declarados preservados; cohort efetiva final
+  alinhada com a declaracao original (parent_sweep_id =
+  `phase_b_confirmatorio_20260524` SEM sufixo, conforme F.2 §5 e §10).
+- Hash da config JSON inalterado (config nao tocada nesta emenda):
+  sha256 = `fc83b56d7605bf60479b4d1ed4c745c1679702e5e5116f642f3c33061d795bd4`.
+- Caveat persistente declarado para Sessao-B: `gold_dm_pairwise_results`
+  e `gold_mcs_results` Phase B contem APENAS pares within-feature_set
+  (60 BTSF-vs-BTSF + 18 baseline-vs-baseline). TFT-vs-baseline cross
+  pairs nao sao automaticamente gerados porque TFT e baselines tem
+  `split_fingerprint` distintos para a mesma fold (TFT calcula via
+  dataset+model config; baseline calcula via periodos apenas). Sessao-B
+  computa TFT-vs-baseline DM via pos-processamento de
+  `fact_oos_predictions` agrupando por fold (agora trivial pois
+  `dim_run.fold` foi populado nesta emenda).
+- Cross-link: PR-A3 + commits.
+
 ### 2026-05-24 — Emenda E1.6: correcao tecnica do schema explicit_configs (semanticamente identica)
 
 - Decisao alterada: nenhuma (hiperparametros e politica permanecem identicos);
