@@ -192,6 +192,32 @@ Valide: `python -c "import json; json.load(open('config/sweeps/optuna/phase_b_hp
 Monitor com tail periódico. Se algum trial falhar com OOM, `continue_on_error=true`
 no JSON garante que o batch prossegue.
 
+**Warmup ROCm — comportamento esperado, NÃO erro** (validado em calibração
+2-trial Optuna em 2026-05-23):
+
+Cada trial mostrará no início:
+```
+[epoch=0] train_loss=nan val_loss=nan       <-- warmup NaN do primeiro batch (ROCm lazy load)
+[epoch=0] train_loss=0.008061 val_loss=0.009792  <-- recovery imediato; treino real começa
+[epoch=1] train_loss=...
+```
+
+Esse padrão é **determinístico** em ROCm (driver lazy load no primeiro forward),
+**auto-recuperado** pelo Lightning (substitui NaN→1e9, segue para próximo batch),
+e o trial **conclui normalmente** com `runs_failed=0` e métricas válidas em
+`top_5_runs`. NÃO interrompa, NÃO retry, NÃO trate como erro. Apenas registre
+em Notas de revisão E0: "Warmup NaN observado em todos os N trials (esperado;
+auto-recuperado per ADR ambiente)".
+
+PAUSE apenas se `runs_failed > 0` ao final do sweep ou se trial completar com
+`train_loss=nan` em **TODAS as epochs** (não só epoch=0 primeira linha).
+
+**Estimativa wall-clock observada (calibração 2026-05-23):** ~2m18s/trial com
+search_space colapsado a 1 ponto + early stopping em ~10 epochs. Para Phase B
+com search_space realista (várias dims combinatorias + max_epochs=30 sem
+early conv.), espere **3-5min/trial**. 25 trials ≈ **75-125min** (não 6-12h
+como estimativa original). Se trial real ultrapassar 10min, investigar.
+
 **E0.3** — Após término, identifique top-1:
 ```bash
 ls data/analytics/selection/frozen_candidates_phase_b_hpo_<YYYYMMDD>*.csv
@@ -323,13 +349,14 @@ git merge --ff-only main  # branch local up-to-date com main pós-merge
 ```
 Esperado: `605+ passed`; `All checks passed!`. Se falhar, ABORTE e reporte.
 
-(b) Bit-byte reproduce R-23:
-```bash
-# Wipe namespace temporário
-rm -rf data/analytics/silver/dim_run/asset=AAPL/parent_sweep_id=e2_repro_check
-rm -rf data/analytics/silver/fact_oos_predictions/asset=AAPL/feature_set_name=*/year=*/parent_sweep_id=e2_repro_check
+(b) Bit-byte sanity reproduce (não é byte-exact; sanity ponto-final):
 
-# Execute 1 epoch
+Para o ambiente ROCm/AMD do projeto, R-23 reference (CUDA) não reproduz
+bit-byte. Este check é **sanity**: pipeline executa 1 epoch sem regressão,
+outputs shape-corretos, quantis válidos. (Bit-byte CUDA reference é
+out-of-scope deste pre-check.)
+
+```bash
 .venv/bin/python -m src.main_train_tft \
   --asset AAPL \
   --features "BASELINE_FEATURES,TECHNICAL_FEATURES,SENTIMENT_FEATURES,FUNDAMENTAL_FEATURES" \
@@ -337,20 +364,71 @@ rm -rf data/analytics/silver/fact_oos_predictions/asset=AAPL/feature_set_name=*/
   --max-encoder-length 60 --max-prediction-length 7 \
   --evaluation-horizons "[1, 7]" \
   --parent-sweep-id "e2_repro_check" \
-  --seed 20260517 --prediction-mode quantile
+  --seed 20260517 --prediction-mode quantile \
+  2>&1 | tee /tmp/e2_repro_check.log
 ```
-Compare primeiros 5 timestamps `y_hat_q50` de `e2_repro_check` com R-23 reference
-(`option_b_execution_log_2026-05-19.md` §R-23.1, run_id
-`3e685d043e042307e2f97089a07fad3f5e4ea453c6cae3075d531fc8aaceacfe`). Diferença <
-1e-6 = PASS. Se diverge significativamente, ABORTE e reporte. Wipe partition
-após check.
+
+PASS se: (i) exit 0; (ii) primeiros 5 rows de `(test, h=1)` têm `y_true`
+não-NaN; (iii) quantis monotônicos (`p10 ≤ p50 ≤ p90` em cada row);
+(iv) `target_timestamp_utc` ∈ `[2023-01-01, 2025-12-31]`.
+
+**Warmup ROCm — esperado (validado em calibração 2026-05-23):** o log mostrará
+no início:
+```
+[epoch=0] train_loss=nan val_loss=nan      <-- warmup NaN (esperado)
+[epoch=0] train_loss=0.008061 val_loss=...  <-- recovery; treino real
+```
+Auto-recuperado pelo Lightning. Trial conclui normalmente. NÃO retry, NÃO
+abort. Apenas registre em Notas E2.0. PAUSE apenas se TODAS epochs forem NaN
+(treino realmente não converge).
+
+Cleanup correto (paths reais — `fact_oos_predictions` não particiona por
+`parent_sweep_id`; remove por `run_id` extraído de `dim_run`):
+
+```bash
+.venv/bin/python <<'PY'
+import pandas as pd
+from pathlib import Path
+sweep = 'e2_repro_check'
+silver = Path('data/analytics/silver')
+
+dim_dir = silver / 'dim_run' / 'asset=AAPL'
+run_ids = set()
+for p in dim_dir.rglob(f'*parent_sweep_id={sweep}*/*.parquet'):
+    df = pd.read_parquet(p)
+    run_ids.update(df['run_id'].tolist())
+print(f'Cohort run_ids: {len(run_ids)}')
+
+fact_dir = silver / 'fact_oos_predictions' / 'asset=AAPL'
+removed_total = 0
+for fact_p in fact_dir.rglob('*.parquet'):
+    df = pd.read_parquet(fact_p)
+    if 'run_id' in df.columns:
+        mask = df['run_id'].isin(run_ids)
+        if mask.any():
+            df_clean = df[~mask]
+            df_clean.to_parquet(fact_p, index=False)
+            removed_total += int(mask.sum())
+print(f'Total fact_oos rows removed: {removed_total}')
+PY
+
+# dim_run + modelo (estes SIM particionados por parent_sweep_id no path)
+rm -rf data/analytics/silver/dim_run/asset=AAPL/parent_sweep_id=e2_repro_check
+rm -rf data/models/AAPL/e2_repro_check 2>/dev/null
+
+# Confirme limpo
+git status --short  # esperado vazio
+find data -path "*e2_repro_check*" 2>/dev/null  # esperado vazio
+```
 
 (c) Hash dataset:
 ```bash
 sha256sum data/processed/dataset_tft/AAPL/dataset_tft_AAPL.parquet
 ```
-Compare com `option_b_execution_log_2026-05-19.md` §Stage R-20.1 (deve coincidir
-com valor pós-R-20).
+**Esperado** (baseline Phase B registrado em pre-flight 2026-05-23):
+`aee6b3ed7d931ff278353d647656effe4f338782292c801d35581f541c6c1298`.
+Se divergir, dataset foi modificado pós-pre-flight — PAUSE e reporte.
+Esse hash entra no commit body E1.4 e no relatório E6.1 como baseline.
 
 (d) Main verde:
 ```bash
