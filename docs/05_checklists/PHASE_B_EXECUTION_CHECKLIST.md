@@ -439,6 +439,30 @@ single-JSON).
   CAVEAT (divida YELLOW de cohort splitting requer pos-processamento em
   Sessao-B para DM/MCS TFT-vs-baseline).
 
+### Remediation 2026-05-24 (PR-A3):
+
+- YELLOWs 2 e 3 corrigidos via PR-A3 (`fix(baselines): cohort isolation +
+  dim_run seed/fold population` + bonus fix em
+  `alignment.py::OosPairwiseTargetAlignmentCheck`).
+- Re-execucao: deletei 45 baselines incorretos das cohorts `__wf_X` e re-rodei
+  `main_baselines_test_pipeline` com mesma config selada. Mesmos hiperparametros,
+  mesmas seeds, mesmos folds. Verificacoes finais:
+  - 60 dim_run em cohort UNICA `phase_b_confirmatorio_20260524` (15 TFT + 45 baseline).
+  - `dim_run.seed` populado (5 valores distintos) e `dim_run.fold` populado
+    (3 valores: wf_1, wf_2, wf_3) nos 45 baselines.
+  - 9 config_signatures distintos em baselines (3 baselines x 3 folds) — antes
+    eram 3 (3 baselines apenas).
+  - 60 run_ids distintos; zero duplicates por
+    (asset, feature_set, config_sig, fold, seed).
+- Divida YELLOW remanescente declarada para Sessao-B: TFT e baselines tem
+  `split_fingerprint` distintos para a mesma fold (TFT calcula hash via
+  dataset/model config; baseline via periodos apenas). Por isso
+  `gold_dm_pairwise_results` agrupa por split_fingerprint e gera APENAS
+  pares within-feature_set (60 BTSF-vs-BTSF + 18 baseline-vs-baseline = 78).
+  Sessao-B computa TFT-vs-baseline DM via pos-processamento de
+  `fact_oos_predictions` agrupando por `dim_run.fold` (agora populado).
+- Outcome pos-remediacao: PASS.
+
 ---
 
 ## Stage E4 — Refresh + quality validation (~30min-1h)
@@ -584,6 +608,42 @@ quality gate exit 0 com `failed_checks=[]`.
   failed_checks=[] nao satisfeito; 3 failures todas em tech debt
   documentado; gold tables completas para Phase B analysis pelos
   caminhos secundarios).
+
+### Remediation 2026-05-24 (PR-A3):
+
+- Apos as fixes do PR-A3 (cohort isolation + dim_run.seed/fold + alignment
+  check column-name typo `split_signature` -> `split_fingerprint`),
+  refresh re-executado em duas fases:
+  - **Fase 1** (registro analitico Phase B): `--scope-mode cohort_decision
+    --scope-sweep-prefixes phase_b_confirmatorio_ ...` per F.2 §10. Quality
+    gate reduziu de 3 failures para 1 (apenas `dm_mcs_persisted_executable`
+    remanescente, causado por design conflict entre scope refresh e
+    global health quality validation — silver tem cohorts pre-existentes
+    como smoke v4 R-23 mas scope restringiu gold a Phase B, deixando R-23
+    silver "feasivel" sem rows em gold).
+  - **Fase 2** (saude global pos-analise): refresh GLOBAL para repopular
+    gold de cohorts pre-existentes e satisfazer
+    `dm_mcs_persisted_executable`. Gold final tem todos os cohorts;
+    Phase B subset preservado (mesmas linhas analiticas).
+- Resultado final: **exit 0, passed=True, failed_checks=[], total_checks=27**.
+- Gold inventario final (84 DM rows total: 78 Phase B + 6 R-23):
+  - `gold_dm_pairwise_results` Phase B: 78 rows em cohort unificada
+    (60 BTSF-vs-BTSF + 18 baseline-vs-baseline). TFT-vs-baseline cross
+    pairs ainda nao em gold (caveat split_fingerprint mismatch).
+  - `gold_paired_oos_intersection_by_horizon` Phase B: 12 rows, todos
+    `aligned_exact=True` per fold.
+  - `gold_quantile_degeneracy_report` Phase B: 12 rows, todos
+    `gate_passed=True`.
+  - `gold_mcs_results` Phase B: 48 rows.
+- Caveat persistente declarado para Sessao-B: TFT-vs-baseline DM/MCS cross-
+  pair AINDA exige pos-processamento (split_fingerprint mismatch entre
+  TFT e baseline para a MESMA fold). Sessao-B computa via
+  `fact_oos_predictions` agrupando por `dim_run.fold`.
+- Logs:
+  - `/tmp/e3_baselines_remediation_v2_20260524.log` (re-run baselines).
+  - `/tmp/e4_refresh_remediation_v3_20260524.log` (refresh cohort_decision; 1 failed).
+  - `/tmp/e4_refresh_global_20260524.log` (refresh global final; 0 failed).
+- Outcome pos-remediacao: PASS.
 
 ---
 
