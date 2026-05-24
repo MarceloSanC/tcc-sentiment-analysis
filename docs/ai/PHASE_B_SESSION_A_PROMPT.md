@@ -192,15 +192,31 @@ Valide: `python -c "import json; json.load(open('config/sweeps/optuna/phase_b_hp
 Monitor com tail periódico. Se algum trial falhar com OOM, `continue_on_error=true`
 no JSON garante que o batch prossegue.
 
-**Warmup ROCm caveat:** se o **primeiro trial** falhar com `Loss is not finite.
-Resetting it to 1e9` + `train_loss=nan` + `RuntimeError: element 0 of tensors
-does not require grad and does not have a grad_fn`, é provável warmup ROCm
-transiente (driver lazy load). Retente o batch automaticamente uma vez (o
-sweep continua para o trial seguinte). Se o mesmo padrão reaparecer em 2+
-trials consecutivos, PAUSE e reporte a Marcelo — pode indicar regressão de
-ambiente real, não warmup. Registre em Notas de revisão E0 quantos trials
-foram afetados (esperado: 0; warmup tipicamente fica para o T5 do pre-flight,
-não para Optuna real, mas registre se ocorrer).
+**Warmup ROCm — comportamento esperado, NÃO erro** (validado em calibração
+2-trial Optuna em 2026-05-23):
+
+Cada trial mostrará no início:
+```
+[epoch=0] train_loss=nan val_loss=nan       <-- warmup NaN do primeiro batch (ROCm lazy load)
+[epoch=0] train_loss=0.008061 val_loss=0.009792  <-- recovery imediato; treino real começa
+[epoch=1] train_loss=...
+```
+
+Esse padrão é **determinístico** em ROCm (driver lazy load no primeiro forward),
+**auto-recuperado** pelo Lightning (substitui NaN→1e9, segue para próximo batch),
+e o trial **conclui normalmente** com `runs_failed=0` e métricas válidas em
+`top_5_runs`. NÃO interrompa, NÃO retry, NÃO trate como erro. Apenas registre
+em Notas de revisão E0: "Warmup NaN observado em todos os N trials (esperado;
+auto-recuperado per ADR ambiente)".
+
+PAUSE apenas se `runs_failed > 0` ao final do sweep ou se trial completar com
+`train_loss=nan` em **TODAS as epochs** (não só epoch=0 primeira linha).
+
+**Estimativa wall-clock observada (calibração 2026-05-23):** ~2m18s/trial com
+search_space colapsado a 1 ponto + early stopping em ~10 epochs. Para Phase B
+com search_space realista (várias dims combinatorias + max_epochs=30 sem
+early conv.), espere **3-5min/trial**. 25 trials ≈ **75-125min** (não 6-12h
+como estimativa original). Se trial real ultrapassar 10min, investigar.
 
 **E0.3** — Após término, identifique top-1:
 ```bash
@@ -356,10 +372,15 @@ PASS se: (i) exit 0; (ii) primeiros 5 rows de `(test, h=1)` têm `y_true`
 não-NaN; (iii) quantis monotônicos (`p10 ≤ p50 ≤ p90` em cada row);
 (iv) `target_timestamp_utc` ∈ `[2023-01-01, 2025-12-31]`.
 
-**Warmup ROCm caveat:** se o log mostra `Loss is not finite. Resetting it to
-1e9` no primeiro batch + `train_loss=nan` ao fim do epoch, é provável warmup
-ROCm transiente (driver lazy load). Retente o comando uma vez. Se reaparecer,
-PAUSE e reporte a Marcelo.
+**Warmup ROCm — esperado (validado em calibração 2026-05-23):** o log mostrará
+no início:
+```
+[epoch=0] train_loss=nan val_loss=nan      <-- warmup NaN (esperado)
+[epoch=0] train_loss=0.008061 val_loss=...  <-- recovery; treino real
+```
+Auto-recuperado pelo Lightning. Trial conclui normalmente. NÃO retry, NÃO
+abort. Apenas registre em Notas E2.0. PAUSE apenas se TODAS epochs forem NaN
+(treino realmente não converge).
 
 Cleanup correto (paths reais — `fact_oos_predictions` não particiona por
 `parent_sweep_id`; remove por `run_id` extraído de `dim_run`):
