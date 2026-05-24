@@ -563,6 +563,39 @@ Mudancas a este pre-registro **apos merge** desta PR exigem:
 
 ### Emendas
 
+### 2026-05-24 — Emenda E1.6: correcao tecnica do schema explicit_configs (semanticamente identica)
+
+- Decisao alterada: nenhuma (hiperparametros e politica permanecem identicos);
+  apenas atualizacao do **Hash da config JSON** em §15 (necessaria por
+  alteracao byte-level no JSON).
+- Hash antigo (Emenda E1, sealed em PR-A #63 commit dd9b2d3): sha256
+  = `e6972a8ba5d23659eab205d7d403d10a2c1f3c9827329b7a37c5ee8595b9260c`
+- Hash novo (apos correcao schema): sha256
+  = `fc83b56d7605bf60479b4d1ed4c745c1679702e5e5116f642f3c33061d795bd4`
+- Mudanca byte-level: `explicit_configs[0].training_config` populado com os
+  mesmos hiperparametros ja declarados no `training_config` top-level (eram
+  `{}` em Emenda E1; o validator `test_pipeline_common.validate_required_type_fields`
+  exige campo nao-vazio para `test_type=explicit_configs` per check L80-91 —
+  validacao adicionada antes do smoke v4 em commit `2305015` 2026-04-03 mas
+  o template `phase_a_smoke_20260518_v2.json` mantinha `{}` por convencao
+  de heranca; smoke v4 R-23 usou copia /tmp populada — divida documentada
+  no template e em F.2 §11 nota operacional).
+- Verificacao semantica: hiperparametros em `explicit_configs[0].training_config`
+  identicos aos do `training_config` top-level — mesmo `hidden_size=48,
+  attention_head_size=8, dropout=0.05301920468977535, learning_rate=0.0003962946655438122,
+  batch_size=128, hidden_continuous_size=8, max_epochs=15, seed=20260517,
+  early_stopping_patience=5, max_encoder_length=60, max_prediction_length=7,
+  evaluation_horizons=[1,7], prediction_mode=quantile, quantile_levels=[0.1,0.5,0.9]`.
+- Trial 19 do E0 (top-1 robust_score) permanece o candidato unico; pre-flight
+  D7 (dataset sha256, pytest, ruff, PRs main MERGED) reexecutado e PASS.
+- Cross-link: branch `feat/phase-b-execution-20260524` (continuada pos-PR-A
+  merge), PR-A2 `fix(phase-b-exec): popular explicit_configs training_config`.
+- Justificativa: bloqueio operacional do `main_tft_test_pipeline` (exit 1 com
+  `ValueError: explicit_configs[0] requires non-empty 'training_config'`)
+  observado em E2.1 launch attempt apos PR-A merge. Correcao tecnica; sem
+  impacto cientifico no pre-registro (mesmos hiperparametros, mesmo pipeline,
+  mesma estatistica). Substitui o §15 hash pelo novo.
+
 ### 2026-05-24 — Emenda E1: selo da config congelada
 
 - Decisao alterada: §4.2 passo 4 (hash do JSON congelado) e §10 (`parent_sweep_id` efetivo).
@@ -592,9 +625,11 @@ _(parcialmente preenchido em E1; slots de execucao final reservados para E6/Sess
   (`docs(pre-reg): F.2 — pre-registro Phase B confirmatorio`)
 - **Data de execucao confirmatoria:** `<a preencher em E6 apos rodada>`
 - **`parent_sweep_id` efetivo:** `phase_b_confirmatorio_20260524`
-- **Hash da config JSON:** `e6972a8ba5d23659eab205d7d403d10a2c1f3c9827329b7a37c5ee8595b9260c`
+- **Hash da config JSON:** `fc83b56d7605bf60479b4d1ed4c745c1679702e5e5116f642f3c33061d795bd4`
   (config `config/sweeps/explicit/phase_b_confirmatorio_20260524.json`,
-  selada via Emenda E1 — ver §14)
+  selada via Emenda E1.6 — ver §14; substituiu hash anterior
+  `e6972a8b...c1f3c98...e8595b9260c` da Emenda E1 original por correcao
+  tecnica do schema `explicit_configs` sem mudanca de hiperparametros)
 - **Resultado tier (H1, H2a, H2b por horizonte):** `<a preencher em E6 pela Sessao-B>`
 - **Relatorio:** `<a preencher em E6: docs/07_reports/phase-gates/B_confirmatory_<YYYY-MM-DD>.md>`
 
