@@ -672,7 +672,12 @@ def test_validate_analytics_quality_fails_on_oos_pairwise_target_alignment(tmp_p
                 "feature_set_hash": "fh",
                 "feature_list_ordered_json": "[]",
                 "config_signature": "cfg2",
-                "split_fingerprint": "sp2",
+                # Same split_fingerprint as r1 so both configs share the
+                # alignment group key (asset, parent_sweep_id,
+                # split_fingerprint, split, horizon); the check then
+                # observes different `target_timestamp_utc` sets across
+                # configs in the same group and is expected to fail.
+                "split_fingerprint": "sp1",
                 "model_version": "v2",
                 "checkpoint_path_final": "/tmp/final.pt",
                 "checkpoint_path_best": "/tmp/best.ckpt",

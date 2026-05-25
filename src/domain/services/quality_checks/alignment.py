@@ -16,10 +16,16 @@ from src.domain.services.quality_checks.base import (
 
 
 class OosPairwiseTargetAlignmentCheck(QualityCheck):
-    """Per (asset, parent_sweep_id, split_signature, split, horizon) and per
+    """Per (asset, parent_sweep_id, split_fingerprint, split, horizon) and per
     `config_signature` within that group, the set of `target_timestamp_utc`
     emitted on val/test splits must be identical across configs (otherwise
     pairwise DM/MCS builders can't intersect them).
+
+    The group keys include `split_fingerprint` (from `dim_run`) so that
+    walk-forward folds sharing a `parent_sweep_id` are still compared
+    independently — without this, configs from different folds collapse
+    into a single group and the timestamp-equality assertion is broken
+    by design (folds cover disjoint OOS periods).
     """
 
     name = "oos_pairwise_target_alignment"
@@ -37,7 +43,14 @@ class OosPairwiseTargetAlignmentCheck(QualityCheck):
             return CheckResult(self.name, True, "ok")
 
         meta_cols = [
-            c for c in ["run_id", "asset", "config_signature", "parent_sweep_id"]
+            c
+            for c in [
+                "run_id",
+                "asset",
+                "config_signature",
+                "parent_sweep_id",
+                "split_fingerprint",
+            ]
             if c in dim_run.columns
         ]
         aligned = fact_oos.merge(
@@ -64,7 +77,13 @@ class OosPairwiseTargetAlignmentCheck(QualityCheck):
         )
         gcols = [
             c
-            for c in ["asset", "parent_sweep_id", "split_signature", "split", "horizon"]
+            for c in [
+                "asset",
+                "parent_sweep_id",
+                "split_fingerprint",
+                "split",
+                "horizon",
+            ]
             if c in aligned.columns
         ]
         issues: list[str] = []
@@ -90,7 +109,7 @@ class OosPairwiseTargetAlignmentCheck(QualityCheck):
                     max_len = max(len(s) for s in sets)
                     issues.append(
                         f"asset={kv.get('asset')}|sweep={kv.get('parent_sweep_id')}"
-                        f"|split_sig={kv.get('split_signature')}|split={kv.get('split')}"
+                        f"|split_fp={kv.get('split_fingerprint')}|split={kv.get('split')}"
                         f"|h={kv.get('horizon')}|configs={len(per_cfg)}"
                         f"|min_ts={min_len}|max_ts={max_len}"
                     )
