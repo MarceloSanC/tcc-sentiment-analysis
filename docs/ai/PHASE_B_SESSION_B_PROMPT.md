@@ -20,14 +20,22 @@ que ainda não está pré-declarada em F.2 vira pergunta a Marcelo.
 ## Contexto verificado (confirme via comandos antes de iniciar)
 
 Estado em main esperado:
-- PR-A da Sessão-A já mergeada; commit registra `config sealing + emenda E1`.
-- Branch `feat/phase-b-execution-<YYYYMMDD>` existe (mesma branch que você
-  empilhará commits de E6).
+- PR-A (Sessão-A E1) **+ PR-A2** (fix técnico schema explicit_configs, Emenda
+  E1.6) **+ PR-A3** (cohort isolation + dim_run.fold + alignment check fix,
+  Emenda E1.7) **+ PR-A4** (tier classification pipeline, Emenda E1.8) **todas
+  mergeadas**. Branch `feat/phase-b-execution-<YYYYMMDD>` existe (mesma branch
+  que você empilhará commits de E6).
 - `parent_sweep_id` efetivo: `phase_b_confirmatorio_<YYYYMMDD>` (extrair de
   Notas de revisão E1 no checklist).
-- Silver: 60 dim_run rows; gold: 25+ tables materializadas; quality gate
-  exit 0.
-- pytest 605+ passed; ruff clean; archive `data/analytics_archive_pre_phase_b/`
+- Silver: 60 dim_run rows em cohort unificada (15 TFT + 45 baseline com
+  `dim_run.fold` e `dim_run.seed` populados); gold: 25+ tables materializadas
+  via refresh global; quality gate exit 0.
+- **Sidecars Phase B prontos** em
+  `data/analytics/reports/phase_b/cohort=phase_b_confirmatorio_<YYYYMMDD>/`
+  (5 parquets gerados pela PR-A4: marginal_coverage, dm_family_6,
+  dm_family_18_sensitivity, delta_pinball, tier_verdict). **Estes são seus
+  inputs primários para E5.** Não recompute DM/Holm/calibração — leia direto.
+- pytest 609+ passed; ruff clean; archive `data/analytics_archive_pre_phase_b/`
   intacto (851M).
 
 Decisões D1–D8 fechadas (não redecidir; consulte tabela em
@@ -40,11 +48,17 @@ Decisões D1–D8 fechadas (não redecidir; consulte tabela em
 
 1. [`PHASE_B_EXECUTION_CHECKLIST.md`](../05_checklists/PHASE_B_EXECUTION_CHECKLIST.md)
    Stages E5–E6 — **fonte primária**. Tasks E5.1–E5.6 + E6.1–E6.6 com Aceite.
-   Leia também Notas de revisão E0–E4 deixadas pela Sessão-A (contexto).
+   Leia também Notas de revisão E0–E4 deixadas pela Sessão-A (contexto) e
+   "PR-A4 (pré-E5)" em E5 Notas (pipeline de pré-processamento que gera
+   seus inputs).
 2. [`preregistration_phase_b.md`](../06_pre_registration/preregistration_phase_b.md)
    §3 (H1/H2a/H2b), §6 (contrato post-guardrail), §7 (DM/MCS/Holm), §9
-   (**Tier 1 / Tier 2 gates** — o coração do E5), §15 (slots a preencher
-   em E6.2).
+   (**Tier 1 / Tier 2 gates** — o coração do E5), §14 (Emendas E1.6, E1.7,
+   E1.8 que formalizam decisões operacionais), §15 (slots a preencher em
+   E6.2). **A Emenda E1.8 é especialmente importante** — declara protocolo
+   operacional DM (unidade timestamp + dedup operationally-latest + seed
+   mean + HAC + HLN + one-sided + Holm-6) que a PR-A4 implementa nos
+   sidecars que você consome.
 3. [`docs/04_evaluation/STATISTICAL_TESTS.md`](../04_evaluation/STATISTICAL_TESTS.md)
    — DM/MCS/Holm + regras de alinhamento OOS.
 4. [`docs/04_evaluation/CALIBRATION_AND_RISK.md`](../04_evaluation/CALIBRATION_AND_RISK.md)
@@ -60,8 +74,42 @@ Decisões D1–D8 fechadas (não redecidir; consulte tabela em
    acadêmicas para o relatório.
 8. [`docs/ai/skills/model-performance-and-research-advisor/SKILL.md`](skills/model-performance-and-research-advisor/SKILL.md)
    — **skill primária desta sessão**. Aplica o protocolo de decisão em E5.
-9. Notas de revisão das Stages E0–E4 no checklist (contexto do que foi
-   executado).
+9. [`docs/06_runbooks/RUN_PHASE_B_TIER_CLASSIFICATION.md`](../06_runbooks/RUN_PHASE_B_TIER_CLASSIFICATION.md)
+   — runbook canônico do CLI `main_compute_phase_b_tier_metrics` que gera
+   seus sidecars (caso precise re-rodar; o output canônico já está em
+   `data/analytics/reports/phase_b/`).
+10. [`docs/04_evaluation/STATISTICAL_TESTS.md`](../04_evaluation/STATISTICAL_TESTS.md)
+    §"Unidade estatística DM em walk-forward com folds sobrepostos"
+    (adicionada pela PR-A4) — justifica a estratégia A refinada e por que
+    sensibilidade D fica como apêndice.
+11. Notas de revisão das Stages E0–E4 + "PR-A4 (pré-E5)" no checklist
+    (contexto do que foi executado).
+
+## Inputs primários E5 — sidecars Phase B
+
+A PR-A4 (Emenda E1.8) entregou pipeline pré-processador que computa
+mecanicamente os 6 testes DM declarados em F.2 §7, a calibração marginal
+(coverage_q10/q50/q90), o delta_pinball_rel, e a classificação tier por
+hipótese — TUDO ANTES da Sessão-B começar.
+
+Você **NÃO recomputa** DM, Holm, calibração ou tier. Você **lê os 5
+sidecars**, valida sanidade, interpreta cientificamente e escreve o
+relatório E6.1.
+
+Sidecars disponíveis em
+`data/analytics/reports/phase_b/cohort=phase_b_confirmatorio_<YYYYMMDD>/`:
+
+| Sidecar | Shape | Conteúdo |
+|---|---|---|
+| `phase_b_marginal_coverage.parquet` | 60 rows | coverage_q10/q50/q90 por (run_id, split, horizon) |
+| `phase_b_dm_family_6.parquet` | 6 rows | DM TFT-vs-baseline cross-fold por (horizon, baseline): dm_stat, pvalue_one_sided, pvalue_two_sided, pvalue_adj_holm (Holm sobre 6), n_obs_effective, hac_lag, hln_applied, direction |
+| `phase_b_dm_family_18_sensitivity.parquet` | 18 rows | Mesma estrutura mas 3 folds × 6 (sensibilidade conservadora; **não** alimenta veredito) |
+| `phase_b_delta_pinball.parquet` | 6 rows | delta_mean_pinball_rel por (horizon, baseline) |
+| `phase_b_tier_verdict.parquet` | 6 rows | tier ∈ {tier_1, tier_2, refutado} por (horizon, hipótese ∈ {H1, H2a, H2b}) + criteria_passed dict + numerical_inputs + justification |
+
+Se algum sidecar não existir ou shape divergir, **PAUSE e reporte** —
+re-rodar via `python -m src.main_compute_phase_b_tier_metrics --asset AAPL
+--parent-sweep-id phase_b_confirmatorio_<YYYYMMDD>` (ver runbook).
 
 ## Autoridade
 
