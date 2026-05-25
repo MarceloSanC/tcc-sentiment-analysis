@@ -647,86 +647,128 @@ quality gate exit 0 com `failed_checks=[]`.
 
 ---
 
-## Stage E5 — Analise vs Tier 1 / Tier 2 gates (~4-8h)
+## Stage E5 — Analise vs Tier 1 / Tier 2 gates (~2-4h)
 
-**Objetivo:** classificar cada horizonte (h=1, h=7) contra Tier 1 (primario)
-ou Tier 2 (secundario) ou "refutado" per F.2 §9, **sem cherry-picking**
-(criterios pre-declarados ex-ante; escolha do tier nao pode depender de
-inspecao dos resultados).
+**Objetivo:** classificar cada hipotese (H1, H2a, H2b) e cada horizonte
+(h=1, h=7) contra Tier 1 (primario) ou Tier 2 (secundario) ou "refutado"
+per F.2 §9, **sem cherry-picking** (criterios pre-declarados ex-ante; tier
+nao pode depender de inspecao dos resultados).
 
-**Cross-link:** F.2 §3 (H1/H2a/H2b) + §9 (Tier 1/Tier 2 + gate degeneracao)
-+ §6 (contrato post-guardrail).
+**Cross-link:** F.2 §3 (H1/H2a/H2b) + §7 (DM/Holm familia 6) + §9 (Tier
+1/Tier 2 + gate degeneracao) + §14 Emenda E1.8 (protocolo operacional DM).
 
 **Sessao:** **Sessao-B** (Marcelo presente; skill
 [model-performance-and-research-advisor](../ai/skills/model-performance-and-research-advisor/SKILL.md)
 ativa).
 
-**Pre-condicao:** E4.2 PASS (gold materializado, quality gate exit 0).
+**Pre-condicao:**
+- E4.2 PASS (gold materializado, quality gate exit 0).
+- **PR-A4 mergeada** (pipeline pre-processador E5; gera os 5 sidecars que
+  voce consome aqui). Detalhes em
+  [`docs/ai/PHASE_B_PR_A4_TIER_PIPELINE_PROMPT.md`](../ai/PHASE_B_PR_A4_TIER_PIPELINE_PROMPT.md).
+- Sidecars existem em
+  `data/analytics/reports/phase_b/cohort=phase_b_confirmatorio_<YYYYMMDD>/`
+  (gerados pelo CLI `main_compute_phase_b_tier_metrics` apos PR-A4 merge;
+  ver [`RUN_PHASE_B_TIER_CLASSIFICATION.md`](../06_runbooks/RUN_PHASE_B_TIER_CLASSIFICATION.md)).
+
+**Nota arquitetural:** O calculo mecanico de DM/Holm/calibracao/tier foi
+movido para o pipeline PR-A4 (Emenda E1.8) para satisfazer separacao
+implementer-vs-analyst e remover ambiguidade metodologica do
+notebook-style. Sessao-B agora **le sidecars + interpreta cientificamente**,
+nao recomputa.
 
 ### Tasks
 
-- [ ] **E5.1** Carregar gold tables relevantes:
-      `gold_prediction_metrics_by_run_split_horizon`,
-      `gold_prediction_metrics_by_config`,
-      `gold_dm_pairwise_results`,
-      `gold_mcs_results`,
-      `gold_win_rate_pairwise_results`,
-      `gold_paired_oos_intersection_by_horizon`,
-      `gold_quantile_degeneracy_report`. Filtrar por
-      `parent_sweep_id=phase_b_confirmatorio_<YYYYMMDD>`, `split=test`,
-      `horizon ∈ {1, 7}`.
-      **Aceite:** dataframes carregados; row counts esperados (15 TFT + 45 baseline
-      × splits relevantes).
+- [ ] **E5.1** Carregar 5 sidecars Phase B em
+      `data/analytics/reports/phase_b/cohort=phase_b_confirmatorio_<YYYYMMDD>/`:
+      - `phase_b_marginal_coverage.parquet` (60 rows: coverage_q10/q50/q90
+        por run_id/split/horizon).
+      - `phase_b_dm_family_6.parquet` (6 rows: dm_stat, pvalue_one_sided,
+        pvalue_adj_holm por horizonte/baseline).
+      - `phase_b_dm_family_18_sensitivity.parquet` (18 rows: sensibilidade
+        conservadora; **nao alimenta veredito**).
+      - `phase_b_delta_pinball.parquet` (6 rows: delta_mean_pinball_rel por
+        horizonte/baseline).
+      - `phase_b_tier_verdict.parquet` (6 rows: tier por (horizonte,
+        hipotese) com criteria_passed_dict e numerical_inputs).
+      Filtrar tudo por `parent_sweep_id=phase_b_confirmatorio_<YYYYMMDD>`
+      ja eh implicito (sidecars sao por cohort).
+      **Aceite:** 5 sidecars carregados com shapes esperados; se qualquer
+      shape divergir, PAUSE e reporte (provavel bug PR-A4).
 
-- [ ] **E5.2** Verificar **gate de degeneracao** (precondicao para qualquer
-      tier per F.2 §9): `p10_eq_p90_rate < 0.05` em todos os 60 grupos
-      quantile (30 TFT + 30 baselines × 2 horizontes; baselines `zero_return`
-      e `historical_mean_rolling` sao point, ignorar).
-      **Aceite:** gate PASS para o candidato TFT em ambos horizontes; relatorio
-      explicito se alguma run TFT falhou (exclusao automatica de claims
-      probabilisticos).
+- [ ] **E5.2** Confirmar **gate de degeneracao quantilica** (precondicao
+      para qualquer tier per F.2 §9) ja foi validado pela Sessao-A em E2.3
+      (60 grupos `p10_eq_p90_rate=0.0`) e pelo refresh em E4
+      (`gold_quantile_degeneracy_report.gate_passed=True` em todos grupos
+      `prediction_mode=quantile`). Spot-recheck rapido:
+      ```python
+      deg = pd.read_parquet('data/analytics/gold/gold_quantile_degeneracy_report.parquet')
+      pb = deg[deg['parent_sweep_id'] == 'phase_b_confirmatorio_<YYYYMMDD>']
+      assert pb[pb['prediction_mode'] == 'quantile']['gate_passed'].all()
+      ```
+      **Aceite:** gate confirmado; se algum grupo TFT falhar, PAUSE e
+      reporte (exclusao automatica de claims probabilisticos).
 
-- [ ] **E5.3** Para cada horizonte h ∈ {1, 7}, agregar metricas TFT
-      (mediana ou media de 15 runs) e calcular:
-      - `coverage_q10_post_guardrail`, `coverage_q50_post_guardrail`,
-        `coverage_q90_post_guardrail` → verificar bandas Tier 1.
-      - `coverage_error_post_guardrail` (= PICP_p10p90 − 0.80) → `|.| ≤ 0.02`.
-      - `mpiw_post_guardrail` > 0 e finito.
-      **Aceite:** tabela `tier_eligibility_calibration_<YYYYMMDD>.csv` em `/tmp`
-      com `passa_tier_1_calibracao` boolean per horizonte.
+- [ ] **E5.3** Validar sanidade dos sidecars (smoke checks, NAO
+      interpretacao):
+      - `dm_family_6`: 6 rows totais; `pvalue_one_sided ∈ [0, 1]`;
+        `pvalue_adj_holm ≥ pvalue_one_sided` (Holm monotonic); colunas
+        `hac_lag_used`, `hln_applied`, `direction` populadas.
+      - `marginal_coverage`: coverage_qX ∈ [0, 1]; n_obs > 0 por run.
+      - `delta_pinball`: 6 rows; delta_mean_pinball_rel finito.
+      - `tier_verdict`: 6 rows (2 horizontes × 3 hipoteses); tier ∈
+        {tier_1, tier_2, refutado}.
+      **Aceite:** todas as sanidades PASS. Se algum sidecar tem NaN
+      inesperado, PAUSE e debug PR-A4 (nao "ajuste" durante E5).
 
-- [ ] **E5.4** Aplicar **Holm-Bonferroni** sobre familia unica de 6 testes DM
-      (2 horizontes × 3 baselines) per F.2 §7. Output esperado: coluna
-      `pvalue_adj_holm` em `gold_dm_pairwise_results` para os 6 pares
-      `(TFT vs baseline_i, h)`. Confirmar que a coluna ja vem preenchida
-      pelo refresh (Holm aplicado em `gold_dm_pairwise_results` per
-      ADR-0004 ou Stage 7); se nao vier, calcular manualmente seguindo
-      convencao `statsmodels.stats.multitest.multipletests` `method='holm'`.
-      **Aceite:** 6 pvalues ajustados disponiveis; classificacao `pvalue_adj_holm
-      < 0.05` per horizonte/baseline registrada.
+- [ ] **E5.4** Ler `phase_b_tier_verdict.parquet` e produzir tabela
+      consolidada para revisao com Marcelo (formato sugerido):
+      | hipotese | horizonte | tier | criterios_passed | numerical_inputs_summary |
+      |---|---|---|---|---|
+      | H1 | 1 | <tier> | <dict> | coverage_q10=..., coverage_q50=..., coverage_q90=..., picp_error=..., mpiw=... |
+      | H1 | 7 | ... | ... | ... |
+      | H2a | 1 | ... | ... | dm_pvalue_adj_holm_zero_return=..., delta_pinball_rel_zero_return=... |
+      | H2a | 7 | ... | ... | ... |
+      | H2b | 1 | ... | ... | dm_pvalues_adj_holm_by_baseline=..., delta_pinball_rel_by_baseline=... |
+      | H2b | 7 | ... | ... | ... |
+      Salvar em `/tmp/tier_verdict_consolidado_<YYYYMMDD>.csv`.
+      **Aceite:** 6 rows consolidadas com todos os inputs numericos
+      auditaveis (sem perda de informacao vs sidecar).
 
-- [ ] **E5.5** Calcular `delta_mean_pinball_rel` por horizonte: para cada
-      baseline, `(mean_pinball_baseline_post - mean_pinball_TFT_post) /
-      mean_pinball_baseline_post`. Verificar Tier 1: `≥ 3%`. H2a usa baseline
-      primario `zero_return`; H2b usa todos baselines.
-      **Aceite:** tabela com delta_rel per (baseline, horizon); flag Tier 1.
+- [ ] **E5.5** **Apresentar a Marcelo** o tabela E5.4 + sidecar
+      `tier_verdict` raw para revisao + aprovacao. Em particular:
+      - Tier classificado por hipotese segue mecanicamente F.2 §9.
+      - Sensibilidade D (Holm-18) reportada como apendice (nao primario).
+      - Eventual divergencia tier_1 vs tier_2 entre H1 e H2 deve ser
+        notada (ex: TFT bem calibrado mas sem vencer baseline em pinball).
+      **Aceite:** Marcelo aprova ou solicita reanalise; sem aprovacao,
+      **NAO commitar** o relatorio em E6.
 
-- [ ] **E5.6** **Classificar tier por horizonte** (decisao final ex-ante, sem
-      cherry-picking):
-      - **Tier 1** se: calibracao (E5.3) PASS **E** DM Holm-corrected (E5.4)
-        PASS **E** delta_pinball_rel ≥ 3% (E5.5) PASS **E** MPIW > 0.
-      - **Tier 2** se Tier 1 falhar mas: calibracao Tier 2 bands (q10 ∈ [0.05,
-        0.15], q50 ∈ [0.40, 0.60], q90 ∈ [0.85, 0.95], PICP_err ≤ 0.05) PASS
-        **E** DM Holm `< 0.10` PASS **E** delta_pinball_rel ≥ 0%.
-      - **Refutado** se nem Tier 1 nem Tier 2 satisfeitos.
-      Registrar veredicto por hipotese (H1, H2a, H2b) per horizonte.
-      **Aceite:** tabela `tier_verdict_<YYYYMMDD>.csv` com colunas
-      `(horizon, hypothesis, tier, justificativa)`; output unicamente derivado
-      de criterios pre-declarados (sem inspecao livre).
+- [ ] **E5.6** Apos aprovacao de Marcelo em E5.5, registrar veredito final
+      em `/tmp/tier_verdict_<YYYYMMDD>.csv` com colunas
+      `(horizon, hypothesis, tier, justificativa, criterios_inputs)`.
+      **Aceite:** arquivo CSV produzido; veredito unicamente derivado dos
+      sidecars (mecanico) + aprovacao Marcelo registrada timestamp.
 
 ### Notas de revisao:
 
-_(vazio na criacao; preenchido pela Sessao-B apos E5.6)_
+#### PR-A4 (pré-E5): pipeline tier metrics
+
+_(preenchido pela Sessao-A ou Marcelo apos merge PR-A4; template:)_
+
+- 2026-MM-DD HH:MM UTC: PR-A4 mergeada (commit `<sha>`).
+- Branch: `feat/phase-b-tier-pipeline-<YYYYMMDD>`.
+- CLI `main_compute_phase_b_tier_metrics` executado contra cohort
+  `phase_b_confirmatorio_<YYYYMMDD>`. 5 sidecars criados em
+  `data/analytics/reports/phase_b/cohort=phase_b_confirmatorio_<YYYYMMDD>/`.
+- Sidecars shapes: marginal_coverage=60 rows, dm_family_6=6, dm_family_18=18,
+  delta_pinball=6, tier_verdict=6.
+- Emenda E1.8 anexada em §14 do pre-registro (data: `<YYYY-MM-DD>`).
+- Sessao-B retoma E5 a partir deste ponto (consome sidecars, nao recalcula).
+
+#### E5 execucao (Sessao-B)
+
+_(vazio na criacao; preenchido pela Sessao-B apos E5.6 com aprovacao Marcelo)_
 
 ---
 
