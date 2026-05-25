@@ -111,6 +111,18 @@ def _prepare_loss_frame(
     meta = dim_run[keep].copy()
     meta["run_id"] = meta["run_id"].astype(str)
     df = df.merge(meta.drop_duplicates("run_id"), on="run_id", how="left")
+    if "fold_y" in df.columns:
+        df["fold"] = df["fold_y"]
+    elif "fold" not in df.columns and "fold_x" in df.columns:
+        df["fold"] = df["fold_x"]
+    if "model_version_y" in df.columns:
+        df["model_version"] = df["model_version_y"]
+    elif "model_version" not in df.columns and "model_version_x" in df.columns:
+        df["model_version"] = df["model_version_x"]
+    if "seed_y" in df.columns:
+        df["seed"] = df["seed_y"]
+    elif "seed" not in df.columns and "seed_x" in df.columns:
+        df["seed"] = df["seed_x"]
     df["target_timestamp_utc"] = pd.to_datetime(
         df["target_timestamp_utc"],
         utc=True,
@@ -294,4 +306,3 @@ def compute_dm_family(
                 }
             )
     return pd.DataFrame(rows)
-
