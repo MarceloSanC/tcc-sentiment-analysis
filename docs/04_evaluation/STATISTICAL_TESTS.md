@@ -56,6 +56,30 @@ somente dados OOS persistidos e alinhados temporalmente.
 - Resultado significativo:
   - `pvalue_adj_holm < 0.05`
 
+## Unidade Estatistica DM Em Walk-forward Com Folds Sobrepostos
+
+Para a Phase B confirmatoria, a unidade estatistica primaria do DM
+TFT-vs-baseline e um `target_timestamp_utc` unico por par
+(`TFT`, `baseline`, `horizon`). Essa regra evita contar duas vezes o mesmo
+evento de mercado quando folds walk-forward possuem janelas OOS sobrepostas.
+
+Operacionalizacao declarada na Emenda E1.8 do pre-registro:
+- manter, por timestamp, o fold operacionalmente mais recente cujo
+  `train_end_utc < target_timestamp_utc - horizon`;
+- em empate defensivo, ordenar por nome do fold;
+- agregar seeds por media aritmetica dos diferenciais de perda `d_t`;
+- usar `pinball_loss_post_guardrail` como perda primaria;
+- aplicar HAC Newey-West com lag `max(horizon - 1, 1)`;
+- aplicar correcao Harvey-Leybourne-Newbold;
+- reportar como pvalue primario `pvalue_one_sided_less` para H1:
+  `E[d_t] < 0`;
+- aplicar Holm-Bonferroni sobre a familia primaria de 6 testes
+  (`2 horizontes x 3 baselines`).
+
+O pos-processador `src.main_compute_phase_b_tier_metrics` materializa esse
+protocolo em sidecars fora de `data/analytics/gold/`, preservando gold como
+artefato canonico do refresh e deixando a interpretacao cientifica para E5.
+
 ## Scope and Horizon Rules
 - Nunca misturar horizontes no mesmo teste.
 - Nunca comparar coortes com `split_signature` incompativel.
