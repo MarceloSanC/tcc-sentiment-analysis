@@ -766,6 +766,30 @@ _(preenchido pela Sessao-A ou Marcelo apos merge PR-A4; template:)_
 - Emenda E1.8 anexada em §14 do pre-registro (data: `<YYYY-MM-DD>`).
 - Sessao-B retoma E5 a partir deste ponto (consome sidecars, nao recalcula).
 
+#### PR-A4 fix (pos-revisao humana)
+
+- 2026-05-25 UTC: revisao humana bloqueou merge do PR #67 por dois bugs nos
+  sidecars E5:
+  - `phase_b_dm_family_6.parquet` e `phase_b_dm_family_18_sensitivity.parquet`
+    tinham `n_obs_effective=0` e p-values `NaN` porque os 15 runs TFT nao
+    carregavam `fold` em `dim_run`/`fact_oos_predictions`; fix aplicado:
+    resolver fold TFT via `fact_run_snapshot.train_end_utc` e periodos
+    `wf_1/wf_2/wf_3` antes do DM.
+  - `phase_b_delta_pinball.parquet` tinha `NaN` para baselines pontuais
+    (`zero_return`, `historical_mean_rolling`) porque o gold calibration mascara
+    pinball probabilistico de `prediction_mode=point`; fix aplicado: calcular
+    delta pinball diretamente de `fact_oos_predictions` com a convencao
+    degenerada `q10=q50=q90=y_pred`, declarada na Emenda E1.8.
+- Smoke pos-fix contra `phase_b_confirmatorio_20260524`:
+  - shapes PASS: marginal_coverage=60, dm_family_6=6, dm_family_18=18,
+    delta_pinball=6, tier_verdict=6.
+  - `dm_family_6`: todos `n_obs_effective=937`; p-values Holm finitos em
+    `[0, 1]`.
+  - `delta_pinball`: todos `delta_mean_pinball_rel` finitos; zero_return
+    h=1 `0.299089`, h=7 `0.287852`.
+  - `tier_verdict` mecanico pos-fix: H1 h=1 tier_2, H1 h=7 tier_1,
+    H2a h=1 tier_1, H2a h=7 tier_1, H2b h=1/h=7 refutado.
+
 #### E5 execucao (Sessao-B)
 
 _(vazio na criacao; preenchido pela Sessao-B apos E5.6 com aprovacao Marcelo)_

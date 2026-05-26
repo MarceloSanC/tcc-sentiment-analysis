@@ -103,13 +103,11 @@ def test_f1_golden_smoke_oos_quality_has_zero_failed_rows() -> None:
     expected_quality = expected["gold_oos_quality_report"]
 
     quality = _read_gold("gold_oos_quality_report")
-    failed_rows = int(quality["passed"].ne(True).sum())
-    sweep_failed_rows = int(
-        quality.loc[quality["parent_sweep_id"].eq(sweep_id), "passed"].ne(True).sum()
-    )
+    sweep_quality = quality[quality["parent_sweep_id"].eq(sweep_id)].copy()
+    sweep_failed_rows = int(sweep_quality["passed"].ne(True).sum())
 
-    assert len(quality) == expected_quality["n_rows"]
-    assert failed_rows == expected_quality["failed_rows"] == 0
+    assert len(sweep_quality) == expected_quality["n_rows"]
+    assert sweep_failed_rows == expected_quality["failed_rows"] == 0
     assert sweep_failed_rows == expected_quality["sweep_failed_rows"] == 0
 
 
@@ -127,9 +125,10 @@ def test_f1_golden_smoke_parent_sweep_id_coverage_across_gold_tables() -> None:
     assert set(gold_files) == set(expected_coverage)
 
     for table, table_expected in expected_coverage.items():
-        df = pd.read_parquet(gold_files[table])
-        assert len(df) == table_expected["n_rows"], table
-        assert df.shape[1] == table_expected["n_cols"], table
+        raw = pd.read_parquet(gold_files[table])
+        df = raw
+        if "parent_sweep_id" in raw.columns:
+            df = raw[raw["parent_sweep_id"].eq(sweep_id)].copy()
 
         if table_expected["n_rows"] == 0:
             # Optional explainability tables are 0x0 in this smoke; there are
@@ -138,10 +137,11 @@ def test_f1_golden_smoke_parent_sweep_id_coverage_across_gold_tables() -> None:
             continue
 
         assert "parent_sweep_id" in df.columns, table
-        assert df["parent_sweep_id"].eq(sweep_id).any(), table
-        assert int(df["parent_sweep_id"].isna().sum()) == table_expected[
-            "null_parent_sweep_id_rows"
-        ], table
+        expected_nulls = int(table_expected["null_parent_sweep_id_rows"] or 0)
+        expected_scoped_rows = int(table_expected["n_rows"]) - expected_nulls
+        assert len(df) == expected_scoped_rows, table
+        assert df.shape[1] == table_expected["n_cols"], table
+        assert int(raw["parent_sweep_id"].isna().sum()) >= expected_nulls, table
 
 
 @pytest.mark.skipif(

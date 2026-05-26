@@ -150,6 +150,8 @@ Documentacao operacional command-first. Nao explica teoria; mostra como rodar.
   com secao de purge.
 - [`06_runbooks/RUN_REFRESH_ANALYTICS.md`](06_runbooks/RUN_REFRESH_ANALYTICS.md) : refresh do analytics store com
   `--fail-on-quality` e flags de escopo.
+- [`06_runbooks/RUN_PHASE_B_TIER_CLASSIFICATION.md`](06_runbooks/RUN_PHASE_B_TIER_CLASSIFICATION.md) :
+  pos-processador E5 da Phase B para sidecars DM/Holm/tier.
 - [`06_runbooks/RUN_TESTS.md`](06_runbooks/RUN_TESTS.md) : execucao de testes unitarios e de integracao.
 - [`06_runbooks/TROUBLESHOOTING.md`](06_runbooks/TROUBLESHOOTING.md) : solucao de problemas comuns no setup
   Windows e PATH.

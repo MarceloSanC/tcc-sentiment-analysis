@@ -341,6 +341,10 @@ Per [`STATISTICAL_TESTS.md`](../04_evaluation/STATISTICAL_TESTS.md).
   mais conservadora; alinha com
   [`STRATEGIC_DIRECTION.md`](../00_overview/STRATEGIC_DIRECTION.md)
   §B.2 "Holm-Bonferroni sobre o conjunto de DMs reportados".
+- **Operacionalizacao PR-A4:** o protocolo DM/Holm declarado aqui e
+  operacionalizado na Emenda E1.8 (§14) pelo pos-processador
+  `main_compute_phase_b_tier_metrics`, que gera sidecars E5 sem alterar
+  silver/gold.
 
 ---
 
@@ -562,6 +566,153 @@ Mudancas a este pre-registro **apos merge** desta PR exigem:
 - Alterar `parent_sweep_id` apos persistencia silver.
 
 ### Emendas
+
+### 2026-05-25 — Emenda E1.8: operacionalizacao do protocolo estatistico DM/Holm (unidade timestamp + dedup + seed mean + HAC + HLN + one-sided + Holm-6)
+
+- Decisao alterada: nenhuma cientifica do pre-registro original; este texto
+  OPERACIONALIZA o protocolo estatistico declarado em §7 ("familia unica
+  Holm-Bonferroni sobre 6 testes = 2 horizontes x 3 baselines") que estava
+  declarado mas nao especificado em nivel de implementacao.
+- Hiperparametros, candidato top-1 trial 19 do E0, 5 seeds, 3 folds, 3
+  baselines pre-declarados, bandas Tier 1/Tier 2: TODOS INALTERADOS.
+- Hash da config JSON inalterado:
+  sha256 = `fc83b56d7605bf60479b4d1ed4c745c1679702e5e5116f642f3c33061d795bd4`
+
+#### Especificacao operacional do teste Diebold-Mariano
+
+A unidade estatistica primaria do teste Diebold-Mariano sera o
+`target_timestamp_utc` no periodo OOS. Para cada par modelo-baseline
+{candidato_TFT, baseline_i} e cada horizonte h em {1, 7}, sera construida
+uma unica serie temporal de diferenciais de perda
+
+```text
+d_t = pinball_loss_post_guardrail_TFT(t, h) - pinball_loss_post_guardrail_baseline_i(t, h)
+```
+
+usando apenas timestamps presentes em ambos os metodos (suporte comum OOS).
+
+Para baselines com `prediction_mode=point` (`zero_return` e
+`historical_mean_rolling`), a perda pinball post-guardrail usada em H2a/H2b
+sera computada pela convencao degenerada `q10=q50=q90=y_pred`. Assim, a media
+das perdas pinball em `q={0.1,0.5,0.9}` equivale a
+`0.5 * |y_true - y_pred|`. Essa convencao explicita a comparacao entre a
+previsao probabilistica TFT e baselines pontuais sem introduzir novo baseline
+nem alterar os gates Tier 1/Tier 2.
+
+##### Resolucao de duplicatas inter-fold (regra operationally-latest)
+
+Walk-forward folds tem janelas OOS sobrepostas: wf_1 test cobre 2022-2023,
+wf_2 test cobre 2023-2024, wf_3 test cobre 2024-2025; portanto 2023 e
+coberto por wf_1+wf_2 e 2024 por wf_2+wf_3. Concatenar todas as previsoes
+cria pseudo-observacoes duplicadas do mesmo evento de mercado, o que infla
+artificialmente o tamanho amostral e subestima incerteza.
+
+Regra de dedup, declarada antes de inspecionar resultados:
+
+```text
+Para cada target_timestamp_utc, manter a previsao do fold/window
+operacionalmente mais proximo do uso real: o fold cujo train_end e
+mais recente antes do forecast_origin = target_timestamp_utc - h dias.
+Tiebreak defensivo: ordem alfabetica de fold.name.
+```
+
+Isso simula o que seria feito em producao: no tempo (t - h), usa-se o modelo
+treinado com a janela mais atual disponivel sem usar informacao futura.
+
+##### Agregacao de seeds
+
+Quando multiplos seeds produzirem previsoes para o mesmo timestamp sob a
+mesma configuracao temporal (mesmo fold escolhido pela regra acima), a
+aleatoriedade de seed sera integrada por **media aritmetica dos diferenciais
+de perda d_t** no timestamp, antes de calcular DM. Outras agregacoes (mediana,
+IQR-trimmed mean) ficam como sensibilidade no apendice se reportadas.
+
+##### Teste estatistico
+
+O teste primario sera Diebold-Mariano com:
+- erro-padrao robusto HAC Newey-West com lag minimo = `max(h - 1, 1)`
+  (previsoes multi-step induzem autocorrelacao residual em h - 1 lags);
+- correcao Harvey-Leybourne-Newbold (1997) para amostras finitas:
+  `DM_HLN = DM * sqrt((n + 1 - 2h + h(h-1)/n) / n)`;
+- hipotese alternativa **unilateral**: H1: `E[d_t] < 0` (TFT tem menor
+  pinball loss esperado);
+- nivel de significancia alpha = 0.05.
+
+A coluna pvalue primaria sera `pvalue_one_sided_less`. A coluna
+`pvalue_two_sided` sera reportada como suplementar (informativa, nao alimenta
+decisao tier).
+
+##### Correcao para multiplos testes
+
+A correcao Holm-Bonferroni (Holm 1979) sera aplicada sobre a **familia unica
+primaria de 6 testes**, definida por:
+
+```text
+{(h, baseline) : h in {1, 7}, baseline in {zero_return,
+                 historical_mean_rolling, historical_quantiles_rolling}}
+```
+
+Resultado significativo exige `pvalue_adj_holm < 0.05` (sobre o pvalue
+unilateral). Esta correcao sera computada pelo modulo
+`src/domain/services/holm_family_6.py` (PR-A4), nao pela coluna
+`pvalue_adj_holm` de `gold_dm_pairwise_results` (que aplica Holm sobre escopo
+ampliado por design legacy do gold builder e nao corresponde a familia 6
+declarada aqui).
+
+##### Sensibilidade
+
+Como analise de sensibilidade conservadora (apendice do relatorio E6), sera
+tambem reportada a familia expandida de 18 testes (3 folds x 6 testes
+primarios), com Holm sobre 18. Nao alimenta decisao tier; serve apenas como
+robustness check.
+
+#### Tabelas sidecar produzidas (cohort `phase_b_confirmatorio_20260524`)
+
+O CLI `main_compute_phase_b_tier_metrics` produz 5 parquets em
+`data/analytics/reports/phase_b/cohort=phase_b_confirmatorio_20260524/`:
+
+- `phase_b_marginal_coverage.parquet`: coverage_q10/q50/q90 por (run_id,
+  split, horizon) dos runs TFT.
+- `phase_b_dm_family_6.parquet`: 6 rows (2h x 3 baselines) com dm_stat,
+  pvalue_one_sided_less, pvalue_two_sided, pvalue_adj_holm, n_obs_effective,
+  hac_lag_used, hln_applied, direction, dedup_rule, seed_aggregation.
+- `phase_b_dm_family_18_sensitivity.parquet`: 18 rows (3 folds x 6) com
+  `analysis_role="sensitivity_conservative"`.
+- `phase_b_delta_pinball.parquet`: 6 rows com delta_mean_pinball_rel por
+  (horizon, baseline).
+- `phase_b_tier_verdict.parquet`: 6 rows (3 hipoteses x 2 horizontes) com
+  tier in {tier_1, tier_2, refutado}, criteria_passed_dict,
+  numerical_inputs, justification.
+
+#### Justificativa
+
+Tres opcoes alternativas foram consideradas e descartadas:
+
+- Concatenacao naive fold-seed: infla tamanho amostral via pseudo-observacoes
+  duplicadas; viola pressuposto DM de independencia/estacionariedade da serie
+  d_t (Diebold-Mariano 1995).
+- DM por fold-seed + meta-analise (~15 DMs agregados): seeds compartilham
+  timestamps e baseline; meta-analise exigiria modelo dependencia explicito
+  (fixed/random effects) sem precedente claro no pre-registro.
+- Familia Holm de 18 testes como primario: diverge de F.2 §7 literal (6
+  testes); mantido apenas como sensibilidade conservadora.
+
+A estrategia A refinada (unidade timestamp + dedup operationally-latest +
+seed mean) e a mais alinhada com a definicao classica DM e mais defensavel
+academicamente (Diebold 2015 — twenty years later; ver
+`STATISTICAL_TESTS.md`).
+
+#### Cross-link
+
+- PR-A4 + commits.
+- `src/use_cases/compute_phase_b_tier_metrics_use_case.py` orchestrator.
+- `src/main_compute_phase_b_tier_metrics.py` CLI.
+- `docs/04_evaluation/STATISTICAL_TESTS.md` documentacao canonica.
+- `docs/06_runbooks/RUN_PHASE_B_TIER_CLASSIFICATION.md` runbook.
+
+Sem impacto nas hipoteses cientificas H1, H2a, H2b nem nos gates Tier 1/Tier
+2. Apenas formaliza COMO os 6 pvalues unilaterais sao computados a partir dos
+dados, deixando a interpretacao para Sessao-B em E5.
 
 ### 2026-05-24 — Emenda E1.7: remediacao tecnica YELLOWs 2 e 3 (bugs do baseline pipeline + alignment check)
 
