@@ -74,6 +74,38 @@ do pre-registro da Phase B. Se Stages 4+ precisarem de rollback de dados,
 restaurar a partir de `data/analytics_archive_pre_phase_b/` e o caminho oficial;
 nao recomputar nem editar manualmente o snapshot arquivado.
 
+### Archive Phase B confirmatorio (2026-05-25)
+
+`data/analytics_archive_phase_b_20260524/` (read-only, `chmod a-w` aplicado em
+Stage E6.3 do
+[`PHASE_B_EXECUTION_CHECKLIST.md`](../05_checklists/PHASE_B_EXECUTION_CHECKLIST.md))
+preserva o subset de evidencia confirmatoria da Phase B filtrado por
+`parent_sweep_id=phase_b_confirmatorio_20260524`. Tamanho total: 9.4M.
+Conteudo:
+
+- `silver/dim_run/sweep_id=phase_b_confirmatorio_20260524/` — 60 dim_run
+  rows (15 TFT + 45 baseline) com `fold` e `seed` populados per Emenda E1.7.
+- `silver/fact_oos_predictions/` — 330.050 rows filtradas por `run_id` nos
+  60 da cohort (todas as 21 particoes hive que continham linhas da cohort).
+- `gold/` — 24 das 25 tabelas gold filtradas por `parent_sweep_id` (uma
+  tabela nao contem coluna `parent_sweep_id` por design ou ficou vazia
+  para a cohort; nao bloqueador).
+- `sidecars/` — 5 sidecars Phase B (PR-A4, Emenda E1.8):
+  `phase_b_marginal_coverage.parquet`, `phase_b_dm_family_6.parquet`,
+  `phase_b_dm_family_18_sensitivity.parquet`, `phase_b_delta_pinball.parquet`,
+  `phase_b_tier_verdict.parquet`.
+
+Dados referenciados pelo relatorio
+[`docs/07_reports/phase-gates/B_confirmatory_2026-05-25.md`](../07_reports/phase-gates/B_confirmatory_2026-05-25.md)
+e pelo pre-registro §15. Nao modificar. Em caso de necessidade de re-derivar
+metricas, reproduzir via
+`config/sweeps/explicit/phase_b_confirmatorio_20260524.json` (sealed sha256
+`fc83b56d7605bf60479b4d1ed4c745c1679702e5e5116f642f3c33061d795bd4`) +
+`main_compute_phase_b_tier_metrics` (runbook
+[`docs/06_runbooks/RUN_PHASE_B_TIER_CLASSIFICATION.md`](../06_runbooks/RUN_PHASE_B_TIER_CLASSIFICATION.md)).
+Archive nao versionado em git (parquets cobertos por `.gitignore:data/**`);
+apenas esta nota documental.
+
 ## Contratos minimos por linha (exemplos)
 
 | Tabela | Grao logico | Chaves obrigatorias |

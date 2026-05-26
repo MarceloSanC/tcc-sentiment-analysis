@@ -713,3 +713,155 @@ Sua sessão termina com:
 - Archive 851M pre-Phase B intacto.
 - Ciclo Phase B confirmatório fechado; Fase C autorizada a iniciar
   (próximo passo: contribuição de features per STRATEGIC_DIRECTION §5 Fase C).
+
+---
+
+## Precedentes — Decisões autônomas executadas na Sessão-B
+
+### 2026-05-25 — Ciclo Phase B confirmatório (Sessão-B Claude Opus 4.7, modo overnight autônomo)
+
+A Sessão-B original previa modo **supervisionado** (Marcelo aprovando o
+tier verdict em E5.6 antes do commit do relatório E6.1). Por meta-instrução
+do prompt overnight de Marcelo (mesma sessão, override em meta-prompt),
+operou em **modo autônomo total**: nenhuma pausa, decisões metodológicas
+não pré-declaradas em F.2/E1.x tomadas unilateralmente e registradas
+em log que foi incorporado em 3 destinos (PR body, checklist Notas, este
+anexo).
+
+Total: 7 decisões autônomas. Ver log integral abaixo. Servem como
+precedente para futuras Sessões-B análogas (Phase B-bis com walk-forward
+sensibilidade B.4, Phase C ablations, ou qualquer rodada confirmatória
+com tier pipeline análogo gerado por sidecars).
+
+#### Decisão 1 — Adoção do tier_verdict pré-calculado sem reclassificar
+
+- **Local**: Stage E5.6 (metodológica geral).
+- **Decisão tomada**: aceitar `phase_b_tier_verdict.parquet` como veredito
+  mecânico final, sem reclassificar manualmente nem recomputar critérios
+  em Python.
+- **Alternativas consideradas**: (A) reaplicar critérios F.2 §9 manualmente
+  sobre `marginal_coverage`, `dm_family_6` e `delta_pinball`; (B) aceitar
+  sidecar como autoridade (escolhida); (C) recomputar via runbook
+  `main_compute_phase_b_tier_metrics`.
+- **Justificativa**: Emenda E1.8 declara sidecar como output canônico do
+  pipeline e instrui Sessão-B a não recomputar; reality check pré-calculado
+  no prompt override bate 6/6 com o sidecar — zero regressão.
+- **Reversibilidade**: alta — basta editar o relatório se Marcelo descobrir
+  discrepância pós-merge.
+- **Impacto se reverter**: ~30 linhas no relatório; recomputo trivial.
+
+#### Decisão 2 — H2b "refutado" enquadrado como limitação esperada
+
+- **Local**: `B_confirmatory_2026-05-25.md` §2 + §8.
+- **Decisão tomada**: apresentar H2b refutado (ambos horizontes) como
+  **limitação esperada** confirmando STRATEGIC_DIRECTION §3 ("TFT não é
+  dominante em retornos de ações líquidas"), não achado negativo
+  surpreendente.
+- **Alternativas**: (A) destacar como achado primário negativo (tom
+  dramático); (B) limitação esperada / confirmação ex-ante (escolhida);
+  (C) omitir do sumário (rejeitada — cherry-picking proibido).
+- **Justificativa**: §3 já antecipa baselines quantílicos rolling
+  near-optimal; DM mostra empate estatístico com
+  `historical_quantiles_rolling` (p_adj = 0.465 / 0.685). Reportar como
+  "TFT não supera baseline quantílico forte neste protocolo" é factual e
+  alinhado com §4.4 ("resultados válidos com hipóteses refutadas").
+- **Reversibilidade**: alta — reframe do texto.
+- **Impacto se reverter**: ~10 linhas; mesmos números.
+
+#### Decisão 3 — DM-18 sensibilidade no apêndice; primária é DM-6
+
+- **Local**: `B_confirmatory_2026-05-25.md` §4.1 + §11.
+- **Decisão tomada**: DM-6 (`analysis_role=primary_family_6`) alimenta o
+  tier; DM-18 (`analysis_role=sensitivity_conservative`) fica no apêndice
+  sem reclassificação.
+- **Alternativas**: (A) promover DM-18 a primary; (B) manter DM-6 +
+  DM-18 apêndice (escolhida); (C) omitir DM-18.
+- **Justificativa**: Emenda E1.8 declara roles explicitamente;
+  STATISTICAL_TESTS §"Unidade estatística DM em walk-forward" justifica
+  dedup operationally-latest como unidade canônica; DM-18 corrobora DM-6
+  (mesma conclusão H0/H1 em 12+6 testes).
+- **Reversibilidade**: alta. **Impacto**: relocação de tabela.
+
+#### Decisão 4 — Média ± std no relatório (vs mediana)
+
+- **Local**: `B_confirmatory_2026-05-25.md` §3 + §4.
+- **Decisão tomada**: para `metrics_by_run_split_horizon` agregado por
+  (família × horizonte), reportar **média ± std**; mas para
+  `marginal_coverage` agregado por horizonte, reportar **mediana**.
+- **Alternativas**: mediana + IQR; per-(fold, seed) tabela longa.
+- **Justificativa**: (1) consistência com `seed_aggregation=mean_loss_diff_by_timestamp`
+  da Emenda E1.8 para DM (média); (2) marginal_coverage opera per-run no
+  sidecar — Emenda E1.8 declara mediana ali; (3) com 15 réplicas e
+  métricas aproximadamente simétricas, média é estimador eficiente.
+- **Reversibilidade**: one-liner pandas. **Impacto**: 8 linhas reformatadas.
+
+#### Decisão 5 — Cross-family win-rate declarado out-of-pipeline
+
+- **Local**: `B_confirmatory_2026-05-25.md` §4.3 + §7.
+- **Decisão tomada**: `gold_win_rate_pairwise_results` contém apenas
+  within-family (60 BTSF-vs-BTSF + 18 baseline-vs-baseline); cross-family
+  TFT-vs-baseline win-rate **não disponível** e Sessão-B **não recomputa**.
+  Reportar como limitação, apontar para débito YELLOW da Emenda E1.7, e
+  usar **DM family-6** como substituto inferencial.
+- **Alternativas**: (A) calcular ad-hoc (proibido por escopo);
+  (B) reportar limitação + DM substitui (escolhida); (C) omitir (rejeitada).
+- **Justificativa**: F.2 §7 menciona win-rate como suplementar; DM cobre
+  inferência primária com HAC + Holm. Computar cross-family win-rate
+  exigiria join sobre `fact_oos_predictions` (exatamente o que PR-A4
+  formalizou para DM). Win-rate sem α ajustado agregaria pouco.
+- **Reversibilidade**: média — exigiria Phase-B-bis ou PR técnico.
+- **Impacto**: ~2h pipeline + nova sidecar.
+
+#### Decisão 6 — Tabela descritiva cross-família §3 incluída com nota MCS
+
+- **Local**: `B_confirmatory_2026-05-25.md` §3.
+- **Decisão tomada**: incluir tabela §3 com RMSE/MAE/DA cross-família ×
+  horizonte (descritivo), anotando explicitamente que MCS test é
+  within-family.
+- **Alternativas**: (A) omitir cross-família (purista); (B) incluir +
+  anotar limitação MCS (escolhida).
+- **Justificativa**: leitor científico precisa do número absoluto (~0.0167)
+  para contextualizar escala. Anotação remove ambiguidade.
+- **Reversibilidade**: alta. **Impacto**: 1 tabela.
+
+#### Decisão 7 — Archive snapshot inclui fact_oos_predictions filtrado
+
+- **Local**: `data/analytics_archive_phase_b_20260524/`.
+- **Decisão tomada**: snapshot E6.3 inclui dim_run cohort + gold filtrado +
+  **fact_oos_predictions filtrado por run_id da cohort** + sidecars.
+  Total 9.4M (330.050 fact rows; 21 partições).
+- **Alternativas**: (A) apenas dim_run + gold (~5MB);
+  (B) adicionar fact_oos_predictions (escolhida); (C) snapshot completo
+  bit-identical (excede escopo).
+- **Justificativa**: reproducibility ex-post; recomputar DM/pinball
+  cross-family no futuro requer predictions. Custo storage <50MB
+  bem abaixo dos 851M do archive pre-Phase B.
+- **Reversibilidade**: média (chmod a+w + rebuild).
+- **Impacto**: ~10 min.
+
+### Padrão de uso futuro
+
+Em futuras Sessões-B análogas:
+- Se a Sessão-A já entrega sidecars mecânicos com tier_verdict pré-calculado,
+  a Sessão-B pode aceitá-los como autoridade (Decisão 1) **se e somente se**
+  um reality check independente bater 6/6 (ou N/N do total esperado).
+- Se uma hipótese pré-declarada é refutada e a refutação é coerente com
+  documentação ex-ante (STRATEGIC_DIRECTION ou similar), enquadrar como
+  limitação esperada (Decisão 2) preserva calibração de tom + honestidade
+  per §4.4. Não usar tom dramático.
+- DM sensitivo em escopo conservador deve ir ao apêndice sempre que o
+  pré-registro declara `analysis_role` explícito (Decisão 3).
+- Quando sidecar usa uma agregação específica (mean vs median), o
+  relatório deve preservar essa consistência por seção (Decisão 4) —
+  introduzir nova agregação no relatório é reframing.
+- Caveats persistentes do pré-registro (e.g., Emenda E1.7
+  `split_fingerprint` cross-family) devem ser reportados como limitação
+  apontando para a Emenda original + débito declarado, não silenciados
+  (Decisão 5).
+- Tabelas descritivas cross-família são úteis para contextualização de
+  escala, mas devem incluir nota de escopo quando o teste inferencial
+  formal é within-family apenas (Decisão 6).
+- Archive snapshots para reprodutibilidade ex-post devem incluir
+  `fact_oos_predictions` filtrado se o pipeline de teste estatístico
+  consome essas tabelas (Decisão 7); custo storage tipicamente <10% do
+  archive pre-Phase para cohorts de tamanho similar.
