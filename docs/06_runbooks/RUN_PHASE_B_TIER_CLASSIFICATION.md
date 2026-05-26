@@ -68,6 +68,14 @@ print('SMOKE PASS')
 PY
 ```
 
+## Integrity Gate
+
+O use case falha antes de gravar sidecars se `dm_family_6` ou
+`dm_family_18_sensitivity` tiverem `n_obs_effective <= 0`, estatisticas DM
+`NaN`, ou se `delta_pinball` tiver `delta_mean_pinball_rel` `NaN`. Esse gate
+assume um cohort Phase B com suporte OOS comum valido; falha indica regressao
+de lookup de folds, DM ou tratamento de baselines pontuais.
+
 ## Scope Semantics
 
 Escopo: `cohort_decision`.

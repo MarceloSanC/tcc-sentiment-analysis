@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -9,6 +10,7 @@ from src.domain.services.dm_tft_vs_baseline import (
     build_loss_diff_series,
     compute_dm_family,
     compute_dm_hln_hac,
+    mean_pinball_post_guardrail,
 )
 from src.domain.services.fold_dedup_resolver import FoldPeriod
 
@@ -125,6 +127,48 @@ def test_build_loss_diff_series_preserves_fact_fold_when_dim_fold_missing() -> N
     )
 
     assert series[pd.Timestamp("2020-01-04", tz="UTC")] == pytest.approx(-0.10)
+
+
+def test_build_loss_diff_series_uses_dim_fold_when_fact_fold_is_none_literal() -> None:
+    fact = pd.DataFrame(
+        [
+            _row("tft", "2020-01-04", 0.50, fold="none"),
+            _row("baseline", "2020-01-04", 0.60, fold="wf_1"),
+        ]
+    )
+    dim = pd.DataFrame(
+        [
+            {"run_id": "tft", "fold": "wf_1", "model_version": "tft", "seed": 1},
+            {"run_id": "baseline", "fold": "wf_1", "model_version": "baseline", "seed": 1},
+        ]
+    )
+    series = build_loss_diff_series(
+        fact,
+        dim,
+        {"tft"},
+        {"baseline"},
+        {"wf_1": FoldPeriod("wf_1", pd.Timestamp("2020-01-01", tz="UTC"))},
+        horizon=1,
+        split="test",
+    )
+
+    assert series[pd.Timestamp("2020-01-04", tz="UTC")] == pytest.approx(-0.10)
+
+
+def test_mean_pinball_post_guardrail_degenerate_point_equals_half_abs_error() -> None:
+    df = pd.DataFrame(
+        {
+            "y_true": [1.0, -2.0, 3.0],
+            "quantile_p10_post_guardrail": [0.0, -1.0, 5.0],
+            "quantile_p50_post_guardrail": [0.0, -1.0, 5.0],
+            "quantile_p90_post_guardrail": [0.0, -1.0, 5.0],
+        }
+    )
+    expected = 0.5 * np.abs(np.array([1.0 - 0.0, -2.0 - (-1.0), 3.0 - 5.0]))
+
+    result = mean_pinball_post_guardrail(df).to_numpy()
+
+    np.testing.assert_allclose(result, expected, rtol=1e-12)
 
 
 def test_build_loss_diff_series_validates_required_columns() -> None:

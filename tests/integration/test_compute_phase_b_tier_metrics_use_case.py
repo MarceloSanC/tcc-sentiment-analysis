@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from src.adapters.parquet_phase_b_tier_sidecar_writer import (
     ParquetPhaseBTierSidecarWriter,
@@ -236,3 +237,41 @@ def test_compute_phase_b_tier_metrics_use_case_writes_five_sidecars(tmp_path: Pa
     assert ordered["pvalue_adj_holm"].is_monotonic_increasing
     assert dm18["analysis_role"].eq("sensitivity_conservative").all()
     assert delta["delta_mean_pinball_rel"].notna().all()
+
+
+def test_compute_phase_b_tier_metrics_use_case_integrity_gate_rejects_invalid_dm_and_delta() -> None:
+    valid_dm = pd.DataFrame(
+        {
+            "n_obs_effective": [10],
+            "dm_stat": [-2.0],
+            "pvalue_one_sided_less": [0.02],
+            "pvalue_adj_holm": [0.04],
+        }
+    )
+    valid_delta = pd.DataFrame({"delta_mean_pinball_rel": [0.1]})
+
+    zero_n_obs = valid_dm.copy()
+    zero_n_obs["n_obs_effective"] = [0]
+    with pytest.raises(ValueError, match="zero n_obs_effective"):
+        ComputePhaseBTierMetricsUseCase._validate_pre_write_integrity(
+            zero_n_obs,
+            valid_dm,
+            valid_delta,
+        )
+
+    nan_dm = valid_dm.copy()
+    nan_dm["pvalue_one_sided_less"] = [float("nan")]
+    with pytest.raises(ValueError, match="NaN statistics"):
+        ComputePhaseBTierMetricsUseCase._validate_pre_write_integrity(
+            nan_dm,
+            valid_dm,
+            valid_delta,
+        )
+
+    nan_delta = pd.DataFrame({"delta_mean_pinball_rel": [float("nan")]})
+    with pytest.raises(ValueError, match="delta_pinball has NaN"):
+        ComputePhaseBTierMetricsUseCase._validate_pre_write_integrity(
+            valid_dm,
+            valid_dm,
+            nan_delta,
+        )

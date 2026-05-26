@@ -80,7 +80,7 @@ class ComputePhaseBTierMetricsUseCase:
         policy: PhaseBTierPolicy | None = None,
     ) -> None:
         self.silver_dir = Path(silver_dir)
-        self.gold_dir = Path(gold_dir)
+        del gold_dir  # Kept for constructor compatibility with the PR-A4 CLI.
         self.sidecar_writer = sidecar_writer
         self.policy = policy or default_phase_b_policy()
 
@@ -128,26 +128,6 @@ class ComputePhaseBTierMetricsUseCase:
         if "asset" in snapshot.columns:
             snapshot = snapshot[snapshot["asset"].astype(str).eq(str(asset))].copy()
         return snapshot.reset_index(drop=True)
-
-    def _load_gold_calibration(self, dim_run: pd.DataFrame, asset: str, parent_sweep_id: str) -> pd.DataFrame:
-        path = self.gold_dir / "gold_prediction_calibration.parquet"
-        calibration = _read_parquet_tree(path)
-        if calibration.empty:
-            raise ValueError(f"gold_prediction_calibration not found at {path}")
-        calibration = calibration.copy()
-        calibration["run_id"] = calibration["run_id"].astype(str)
-        calibration = calibration[
-            calibration["asset"].astype(str).eq(str(asset))
-            & calibration["parent_sweep_id"].astype(str).eq(str(parent_sweep_id))
-            & calibration["run_id"].isin(set(dim_run["run_id"].astype(str)))
-        ].copy()
-        if calibration.empty:
-            raise ValueError(
-                f"no gold_prediction_calibration rows for asset={asset} parent_sweep_id={parent_sweep_id}"
-            )
-        meta = dim_run[["run_id", "model_version", "feature_set_name", "fold", "seed"]].drop_duplicates("run_id")
-        calibration = calibration.merge(meta, on="run_id", how="left", suffixes=("", "_dim"))
-        return calibration.reset_index(drop=True)
 
     @staticmethod
     def _resolve_fold_periods(
@@ -436,6 +416,36 @@ class ComputePhaseBTierMetricsUseCase:
                 )
         return pd.DataFrame(rows), verdicts
 
+    @staticmethod
+    def _validate_pre_write_integrity(
+        dm_family_6: pd.DataFrame,
+        dm_family_18: pd.DataFrame,
+        delta_pinball: pd.DataFrame,
+    ) -> None:
+        """Fail loud for invalid Phase B-shaped cohorts before sidecars are written."""
+        dm_stat_cols = ["dm_stat", "pvalue_one_sided_less", "pvalue_adj_holm"]
+        for name, dm in [
+            ("dm_family_6", dm_family_6),
+            ("dm_family_18_sensitivity", dm_family_18),
+        ]:
+            if dm.empty:
+                raise ValueError(f"{name} is empty; Phase B DM integrity gate failed")
+            missing = sorted({"n_obs_effective", *dm_stat_cols} - set(dm.columns))
+            if missing:
+                raise ValueError(f"{name} missing required integrity columns: {missing}")
+            n_obs = pd.to_numeric(dm["n_obs_effective"], errors="coerce")
+            if n_obs.isna().any() or n_obs.le(0).any():
+                raise ValueError(f"{name} has empty or zero n_obs_effective rows; fold lookup likely broken")
+            if dm[dm_stat_cols].isna().any().any():
+                raise ValueError(f"{name} has NaN statistics; DM pipeline regression")
+
+        if delta_pinball.empty:
+            raise ValueError("delta_pinball is empty; Phase B delta integrity gate failed")
+        if "delta_mean_pinball_rel" not in delta_pinball.columns:
+            raise ValueError("delta_pinball missing delta_mean_pinball_rel")
+        if delta_pinball["delta_mean_pinball_rel"].isna().any():
+            raise ValueError("delta_pinball has NaN rows; point baseline handling broken")
+
     def execute(self, *, asset: str, parent_sweep_id: str) -> PhaseBTierMetricsResult:
         dim_run = self._load_dim_run(asset, parent_sweep_id)
         fact_oos = self._load_fact_oos(dim_run, asset)
@@ -463,6 +473,7 @@ class ComputePhaseBTierMetricsUseCase:
             fold_periods,
         )
         delta_pinball = self._delta_pinball(fact_oos, dim_run, tft_run_ids)
+        self._validate_pre_write_integrity(dm_family_6, dm_family_18, delta_pinball)
         tier_verdict, verdicts = self._classify(
             marginal_coverage,
             dm_family_6,
