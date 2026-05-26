@@ -283,76 +283,50 @@ imediatamente; pause E5.
 
 #### E5.3 — Calibration eligibility (Tier 1/2)
 
-Para cada (run, split=test, horizon ∈ {1,7}), extraia de
-`metrics_by_run_split_horizon` colunas `*_post_guardrail`:
-- `coverage_q10_post_guardrail`, `coverage_q50_post_guardrail`,
-  `coverage_q90_post_guardrail` (= `picp_qN_post_guardrail` se existir;
-  caso contrário derive de `quantile_pN` vs `y_true`).
-- `coverage_error_post_guardrail` (= `picp_post_guardrail - 0.80`).
-- `mpiw_post_guardrail`.
+Leia `phase_b_marginal_coverage.parquet` e `phase_b_tier_verdict.parquet`.
+Nao recompute eligibility a partir de gold: o sidecar ja materializa a regra
+da Emenda E1.8. Verifique apenas sanidade:
 
-Filtre só rows do TFT (`feature_set_name != 'baseline'`). Para cada
-horizonte, agregue (mediana ou média) sobre os 15 runs (5 seeds × 3 folds).
-
-Aplique gates **Tier 1** (F.2 §9):
-- `cov_q10 ∈ [0.07, 0.13]` AND `cov_q50 ∈ [0.45, 0.55]` AND `cov_q90 ∈ [0.87, 0.93]`
-- `|coverage_error_post_guardrail| ≤ 0.02`
-- `mpiw_post_guardrail > 0` e finito
-
-E **Tier 2** (mais permissivo):
-- `cov_q10 ∈ [0.05, 0.15]` AND `cov_q50 ∈ [0.40, 0.60]` AND `cov_q90 ∈ [0.85, 0.95]`
-- `|coverage_error_post_guardrail| ≤ 0.05`
-
-Salve `/tmp/tier_eligibility_calibration_<YYYYMMDD>.csv` com colunas
-`(horizon, agg_method, cov_q10, cov_q50, cov_q90, picp_err, mpiw, passa_tier1_calib, passa_tier2_calib)`.
+```python
+marginal = pd.read_parquet(base / 'phase_b_marginal_coverage.parquet')
+verdict = pd.read_parquet(base / 'phase_b_tier_verdict.parquet')
+assert len(marginal) == 60
+assert marginal['n_obs'].gt(0).all()
+assert marginal[['coverage_q10', 'coverage_q50', 'coverage_q90']].between(0, 1).all().all()
+assert set(verdict['tier']) <= {'tier_1', 'tier_2', 'refutado'}
+```
 
 #### E5.4 — DM Holm-Bonferroni
 
-Carregue `dm_pairwise_results` para split=test, horizon ∈ {1,7}. Confirme
-existência de coluna `pvalue_adj_holm`.
+Leia `phase_b_dm_family_6.parquet` e
+`phase_b_dm_family_18_sensitivity.parquet`. Nao use
+`gold_dm_pairwise_results` para H2a/H2b da Sessao-B; o gold legacy tem escopo
+Holm diferente da familia 6 declarada.
 
-- Se existe: filtre TFT vs cada baseline (6 pares); registre
-  `pvalue_adj_holm < 0.05` (Tier 1) e `< 0.10` (Tier 2).
-- Se NÃO existe: calcule manualmente:
-  ```python
-  from statsmodels.stats.multitest import multipletests
-  dm = tables['gold_dm_pairwise_results']
-  dm = dm[(dm['split'] == 'test') & (dm['horizon'].isin([1, 7]))]
-  # Filtre pares TFT vs baseline (não baseline vs baseline)
-  is_tft_vs_baseline = (
-      (dm['model_a'].str.contains('TFT', case=False)) ^
-      (dm['model_b'].str.contains('TFT', case=False))
-  )
-  family = dm[is_tft_vs_baseline].copy()
-  assert len(family) == 6, f'Esperado 6 pares; obtido {len(family)}'
-  family['pvalue_adj_holm_manual'] = multipletests(family['pvalue'], method='holm')[1]
-  ```
-  Declare no commit body que calculou manualmente.
+```python
+dm6 = pd.read_parquet(base / 'phase_b_dm_family_6.parquet')
+dm18 = pd.read_parquet(base / 'phase_b_dm_family_18_sensitivity.parquet')
+assert len(dm6) == 6
+assert len(dm18) == 18
+assert dm6['n_obs_effective'].gt(0).all()
+assert dm6['pvalue_one_sided_less'].between(0, 1).all()
+assert dm6['pvalue_adj_holm'].between(0, 1).all()
+assert dm18['n_obs_effective'].gt(0).all()
+```
 
 #### E5.5 — Delta pinball relativo
 
 ```python
-metrics = tables['gold_prediction_metrics_by_run_split_horizon']
-metrics = metrics[metrics['split'] == 'test']
-
-# Agregue mean_pinball_post_guardrail por (model_label, feature_set_name, horizon)
-agg = metrics.groupby(['feature_set_name', 'horizon'])['mean_pinball_post_guardrail'].median()
-
-# Para cada horizonte:
-for h in [1, 7]:
-    tft = agg.xs((<TFT_feature_set_name>, h))  # ex: 'BASELINE+TECHNICAL+SENTIMENT+FUNDAMENTAL'
-    for baseline_name in ['zero_return', 'historical_mean_rolling', 'historical_quantiles_rolling']:
-        try:
-            base = agg.xs(('baseline', h))  # ou conforme schema
-            # Filtre por model_label = baseline_name
-            delta_rel = (base - tft) / base
-            print(f'h={h}, baseline={baseline_name}: delta_rel={delta_rel:.4f}, passa_tier1={delta_rel >= 0.03}')
-        except KeyError:
-            pass
+delta = pd.read_parquet(base / 'phase_b_delta_pinball.parquet')
+assert len(delta) == 6
+assert delta['delta_mean_pinball_rel'].notna().all()
+print(delta[['horizon', 'baseline_model_version', 'delta_mean_pinball_rel']])
 ```
 
-(Ajuste schema baseado nos colunas reais; pode ser que TFT esteja como
-`feature_set_name='BTSF'` ou similar — inspecione `metrics.feature_set_name.unique()`.)
+Para baselines pontuais, a perda pinball ja foi computada no PR-A4 pela
+convencao degenerada `q10=q50=q90=y_pred` declarada na Emenda E1.8. Nao
+substitua por `gold_prediction_calibration`, pois esse gold mascara pinball
+probabilistico para `prediction_mode=point`.
 
 #### E5.6 — Classificação tier (PAUSE para Marcelo aprovar)
 

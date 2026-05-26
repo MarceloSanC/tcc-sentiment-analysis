@@ -16,6 +16,7 @@ BASELINES = {
     "baseline_historical_mean_rolling_v1": 0.05,
     "baseline_historical_quantiles_rolling_v1": 0.06,
 }
+POINT_BASELINES = {"baseline_zero_return_v1", "baseline_historical_mean_rolling_v1"}
 FOLDS = {
     "wf_1": pd.Timestamp("2020-01-01", tz="UTC"),
     "wf_2": pd.Timestamp("2020-02-01", tz="UTC"),
@@ -24,18 +25,29 @@ FOLDS = {
 SEEDS = [20260517, 20260518, 20260519, 20260520, 20260521]
 
 
-def _quantile_row(run_id: str, split: str, horizon: int, target_ts: pd.Timestamp, width: float) -> dict[str, object]:
+def _quantile_row(
+    run_id: str,
+    split: str,
+    horizon: int,
+    target_ts: pd.Timestamp,
+    width: float,
+    *,
+    fold: str,
+    point: bool = False,
+) -> dict[str, object]:
+    q10, q50, q90 = (width, width, width) if point else (-width, 0.0, width)
     return {
         "run_id": run_id,
         "asset": "AAPL",
         "feature_set_name": "BTSF" if run_id.startswith("tft") else "baseline",
         "split": split,
+        "fold": fold,
         "horizon": horizon,
         "target_timestamp_utc": target_ts,
         "y_true": 0.0,
-        "quantile_p10_post_guardrail": -width,
-        "quantile_p50_post_guardrail": 0.0,
-        "quantile_p90_post_guardrail": width,
+        "quantile_p10_post_guardrail": q10,
+        "quantile_p50_post_guardrail": q50,
+        "quantile_p90_post_guardrail": q90,
     }
 
 
@@ -64,7 +76,7 @@ def _build_synthetic_store(tmp_path: Path) -> tuple[Path, Path, Path]:
                     "parent_sweep_id": cohort,
                     "feature_set_name": "BTSF",
                     "model_version": "tft_phase_b",
-                    "fold": fold_name,
+                    "fold": None,
                     "seed": seed,
                     "status": "ok",
                 }
@@ -81,7 +93,16 @@ def _build_synthetic_store(tmp_path: Path) -> tuple[Path, Path, Path]:
                 for horizon in [1, 7]:
                     for idx in range(12):
                         target_ts = train_end + pd.Timedelta(days=offset + idx + horizon)
-                        oos_rows.append(_quantile_row(tft_run_id, split, horizon, target_ts, 0.03))
+                        oos_rows.append(
+                            _quantile_row(
+                                tft_run_id,
+                                split,
+                                horizon,
+                                target_ts,
+                                0.03,
+                                fold="none",
+                            )
+                        )
             for horizon in [1, 7]:
                 calibration_rows.append(
                     {
@@ -122,7 +143,15 @@ def _build_synthetic_store(tmp_path: Path) -> tuple[Path, Path, Path]:
                         for idx in range(12):
                             target_ts = train_end + pd.Timedelta(days=offset + idx + horizon)
                             oos_rows.append(
-                                _quantile_row(baseline_run_id, split, horizon, target_ts, width)
+                                _quantile_row(
+                                    baseline_run_id,
+                                    split,
+                                    horizon,
+                                    target_ts,
+                                    width,
+                                    fold=fold_name,
+                                    point=baseline_model_version in POINT_BASELINES,
+                                )
                             )
                 for horizon in [1, 7]:
                     calibration_rows.append(
@@ -133,7 +162,11 @@ def _build_synthetic_store(tmp_path: Path) -> tuple[Path, Path, Path]:
                             "parent_sweep_id": cohort,
                             "split": "test",
                             "horizon": horizon,
-                            "mean_pinball_post_guardrail": width / 20.0,
+                            "mean_pinball_post_guardrail": (
+                                float("nan")
+                                if baseline_model_version in POINT_BASELINES
+                                else width / 20.0
+                            ),
                         }
                     )
 
@@ -194,9 +227,12 @@ def test_compute_phase_b_tier_metrics_use_case_writes_five_sidecars(tmp_path: Pa
 
     assert (dm6["pvalue_one_sided_less"] >= 0.0).all()
     assert (dm6["pvalue_one_sided_less"] <= 1.0).all()
+    assert dm6["n_obs_effective"].gt(0).all()
+    assert dm6["pvalue_one_sided_less"].notna().all()
+    assert dm18["n_obs_effective"].gt(0).all()
+    assert dm18["pvalue_one_sided_less"].notna().all()
     assert (dm6["pvalue_adj_holm"] >= dm6["pvalue_one_sided_less"]).all()
     ordered = dm6.sort_values("pvalue_one_sided_less")
     assert ordered["pvalue_adj_holm"].is_monotonic_increasing
     assert dm18["analysis_role"].eq("sensitivity_conservative").all()
     assert delta["delta_mean_pinball_rel"].notna().all()
-

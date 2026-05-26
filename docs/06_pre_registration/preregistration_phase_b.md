@@ -591,6 +591,14 @@ d_t = pinball_loss_post_guardrail_TFT(t, h) - pinball_loss_post_guardrail_baseli
 
 usando apenas timestamps presentes em ambos os metodos (suporte comum OOS).
 
+Para baselines com `prediction_mode=point` (`zero_return` e
+`historical_mean_rolling`), a perda pinball post-guardrail usada em H2a/H2b
+sera computada pela convencao degenerada `q10=q50=q90=y_pred`. Assim, a media
+das perdas pinball em `q={0.1,0.5,0.9}` equivale a
+`0.5 * |y_true - y_pred|`. Essa convencao explicita a comparacao entre a
+previsao probabilistica TFT e baselines pontuais sem introduzir novo baseline
+nem alterar os gates Tier 1/Tier 2.
+
 ##### Resolucao de duplicatas inter-fold (regra operationally-latest)
 
 Walk-forward folds tem janelas OOS sobrepostas: wf_1 test cobre 2022-2023,

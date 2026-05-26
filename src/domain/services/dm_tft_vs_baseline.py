@@ -25,6 +25,9 @@ class DMResult:
     n_obs: int
 
 
+_MISSING_FOLD_LABELS = {"", "none", "nan", "None", "NaT", "<NA>"}
+
+
 def _norm_cdf(x: float) -> float:
     return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
 
@@ -43,12 +46,23 @@ def _pinball(y_true: pd.Series, y_hat: pd.Series, q: float) -> pd.Series:
     return np.maximum(q * diff, (q - 1.0) * diff)
 
 
-def _mean_pinball_post_guardrail(df: pd.DataFrame) -> pd.Series:
+def mean_pinball_post_guardrail(df: pd.DataFrame) -> pd.Series:
     y = pd.to_numeric(df["y_true"], errors="coerce")
     q10 = pd.to_numeric(df["quantile_p10_post_guardrail"], errors="coerce")
     q50 = pd.to_numeric(df["quantile_p50_post_guardrail"], errors="coerce")
     q90 = pd.to_numeric(df["quantile_p90_post_guardrail"], errors="coerce")
     return (_pinball(y, q10, 0.1) + _pinball(y, q50, 0.5) + _pinball(y, q90, 0.9)) / 3.0
+
+
+def _is_missing_fold(series: pd.Series) -> pd.Series:
+    return series.isna() | series.astype(str).str.strip().isin(_MISSING_FOLD_LABELS)
+
+
+def _coalesce_valid_fold(primary: pd.Series, fallback: pd.Series) -> pd.Series:
+    out = primary.copy()
+    missing = _is_missing_fold(out)
+    out.loc[missing] = fallback.loc[missing]
+    return out
 
 
 def _candidate_for_run(
@@ -111,7 +125,9 @@ def _prepare_loss_frame(
     meta = dim_run[keep].copy()
     meta["run_id"] = meta["run_id"].astype(str)
     df = df.merge(meta.drop_duplicates("run_id"), on="run_id", how="left")
-    if "fold_y" in df.columns:
+    if "fold_y" in df.columns and "fold_x" in df.columns:
+        df["fold"] = _coalesce_valid_fold(df["fold_y"], df["fold_x"])
+    elif "fold_y" in df.columns:
         df["fold"] = df["fold_y"]
     elif "fold" not in df.columns and "fold_x" in df.columns:
         df["fold"] = df["fold_x"]
@@ -128,7 +144,7 @@ def _prepare_loss_frame(
         utc=True,
         errors="coerce",
     )
-    df["loss"] = _mean_pinball_post_guardrail(df)
+    df["loss"] = mean_pinball_post_guardrail(df)
     df = df.dropna(subset=["target_timestamp_utc", "loss", "fold"])
     return df
 

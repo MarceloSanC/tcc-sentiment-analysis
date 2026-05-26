@@ -55,6 +55,15 @@ expected = {
 for name, rows in expected.items():
     df = pd.read_parquet(base / name)
     assert len(df) == rows, (name, len(df), rows)
+dm6 = pd.read_parquet(base / 'phase_b_dm_family_6.parquet')
+dm18 = pd.read_parquet(base / 'phase_b_dm_family_18_sensitivity.parquet')
+delta = pd.read_parquet(base / 'phase_b_delta_pinball.parquet')
+assert dm6['n_obs_effective'].gt(0).all()
+assert dm6['pvalue_one_sided_less'].between(0, 1).all()
+assert dm6['pvalue_adj_holm'].between(0, 1).all()
+assert dm18['n_obs_effective'].gt(0).all()
+assert dm18['pvalue_one_sided_less'].between(0, 1).all()
+assert delta['delta_mean_pinball_rel'].notna().all()
 print('SMOKE PASS')
 PY
 ```

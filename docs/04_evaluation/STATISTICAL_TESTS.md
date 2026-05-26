@@ -69,6 +69,8 @@ Operacionalizacao declarada na Emenda E1.8 do pre-registro:
 - em empate defensivo, ordenar por nome do fold;
 - agregar seeds por media aritmetica dos diferenciais de perda `d_t`;
 - usar `pinball_loss_post_guardrail` como perda primaria;
+  para baselines pontuais, a Emenda E1.8 fixa a convencao degenerada
+  `q10=q50=q90=y_pred`;
 - aplicar HAC Newey-West com lag `max(horizon - 1, 1)`;
 - aplicar correcao Harvey-Leybourne-Newbold;
 - reportar como pvalue primario `pvalue_one_sided_less` para H1:

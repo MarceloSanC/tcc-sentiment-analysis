@@ -13,9 +13,16 @@ from src.domain.services.dm_tft_vs_baseline import (
 from src.domain.services.fold_dedup_resolver import FoldPeriod
 
 
-def _row(run_id: str, ts: str, loss: float, *, horizon: int = 1) -> dict[str, object]:
+def _row(
+    run_id: str,
+    ts: str,
+    loss: float,
+    *,
+    horizon: int = 1,
+    fold: str | None = None,
+) -> dict[str, object]:
     q = 2.0 * float(loss)
-    return {
+    row: dict[str, object] = {
         "run_id": run_id,
         "split": "test",
         "horizon": horizon,
@@ -25,6 +32,9 @@ def _row(run_id: str, ts: str, loss: float, *, horizon: int = 1) -> dict[str, ob
         "quantile_p50_post_guardrail": q,
         "quantile_p90_post_guardrail": q,
     }
+    if fold is not None:
+        row["fold"] = fold
+    return row
 
 
 def _fixtures() -> tuple[pd.DataFrame, pd.DataFrame, dict[str, FoldPeriod]]:
@@ -91,6 +101,32 @@ def test_build_loss_diff_series_excludes_missing_common_support() -> None:
     assert pd.Timestamp("2020-02-01", tz="UTC") not in set(series.index)
 
 
+def test_build_loss_diff_series_preserves_fact_fold_when_dim_fold_missing() -> None:
+    fact = pd.DataFrame(
+        [
+            _row("tft", "2020-01-04", 0.50, fold="wf_1"),
+            _row("baseline", "2020-01-04", 0.60, fold="wf_1"),
+        ]
+    )
+    dim = pd.DataFrame(
+        [
+            {"run_id": "tft", "fold": None, "model_version": "tft", "seed": 1},
+            {"run_id": "baseline", "fold": "wf_1", "model_version": "baseline", "seed": 1},
+        ]
+    )
+    series = build_loss_diff_series(
+        fact,
+        dim,
+        {"tft"},
+        {"baseline"},
+        {"wf_1": FoldPeriod("wf_1", pd.Timestamp("2020-01-01", tz="UTC"))},
+        horizon=1,
+        split="test",
+    )
+
+    assert series[pd.Timestamp("2020-01-04", tz="UTC")] == pytest.approx(-0.10)
+
+
 def test_build_loss_diff_series_validates_required_columns() -> None:
     fact, dim, fold_periods = _fixtures()
     with pytest.raises(ValueError, match="fact_oos missing"):
@@ -144,4 +180,3 @@ def test_compute_dm_hln_hac_returns_nan_for_insufficient_observations() -> None:
     result = compute_dm_hln_hac(pd.Series([1.0]), horizon=1)
     assert result.n_obs == 1
     assert math.isnan(result.dm_stat)
-

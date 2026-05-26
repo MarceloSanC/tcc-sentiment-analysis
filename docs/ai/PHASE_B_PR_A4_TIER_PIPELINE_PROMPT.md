@@ -289,7 +289,8 @@ class PhaseBTierSidecarWriter(Protocol):
 **`src/use_cases/compute_phase_b_tier_metrics_use_case.py`** (novo)
 - Constructor injection:
   - `silver_dir: Path` (lê `dim_run`, `fact_oos_predictions` via path globs).
-  - `gold_dir: Path` (lê `gold_prediction_calibration` filtrado por cohort).
+  - `gold_dir: Path` (mantido por compatibilidade do CLI; o delta pinball
+    pós-revisão humana é calculado de `fact_oos_predictions`).
   - `sidecar_writer: PhaseBTierSidecarWriter`.
   - `policy: PhaseBTierPolicy` (default `default_phase_b_policy()`).
 - Método único `execute(asset: str, parent_sweep_id: str) -> PhaseBTierMetricsResult`:
@@ -304,8 +305,9 @@ class PhaseBTierSidecarWriter(Protocol):
   6. Calcula DM family 18 (sensibilidade): mesma função mas grupos por
      `(horizon, baseline, fold)` em vez de agregar folds; aplica Holm sobre 18.
   7. Aplica `holm_family_6` sobre os 6 pvalues unilaterais.
-  8. Calcula delta_pinball_rel agregando `gold_prediction_calibration.mean_pinball_post_guardrail`
-     via mediana sobre seeds+folds por (horizon, model_version) — TFT vs cada baseline.
+  8. Calcula delta_pinball_rel a partir de `fact_oos_predictions` usando a
+     mesma loss pinball post-guardrail do DM; para baselines pontuais, aplica
+     a convenção degenerada `q10=q50=q90=y_pred` declarada na Emenda E1.8.
   9. Classifica H1/H2a/H2b por horizonte via `tier_classifier_per_hypothesis`.
   10. Persiste 5 sidecars via writer.
   11. Retorna `PhaseBTierMetricsResult(cohort_id, sidecar_paths: dict, verdicts: list[TierVerdict])`.
@@ -579,8 +581,10 @@ Após autorização:
 - Validar que os 5 sidecars são criados em
   `data/analytics/reports/phase_b/cohort=phase_b_confirmatorio_20260524/`.
 - Validar shapes esperados (6/18/6/6 rows; coverage_marginal com 60 rows).
-- Validar que `phase_b_dm_family_6.parquet` tem 6 rows com pvalue_one_sided ≤ 1.0
-  e pvalue_adj_holm monotonic.
+- Validar que `phase_b_dm_family_6.parquet` tem 6 rows com
+  `n_obs_effective > 0`, `pvalue_one_sided <= 1.0` e pvalue_adj_holm monotonic.
+- Validar que `phase_b_delta_pinball.parquet` tem 6 rows com
+  `delta_mean_pinball_rel` finito.
 - NÃO interpretar veredito; apenas confirmar mecânica.
 - Se algum sidecar tiver shape inesperado, debugar + ajuste mínimo + commit
   separado "fix(phase-b-tier): ajuste pós smoke contra cohort real".

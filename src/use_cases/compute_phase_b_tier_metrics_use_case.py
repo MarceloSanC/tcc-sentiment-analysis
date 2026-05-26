@@ -8,7 +8,10 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.domain.services.dm_tft_vs_baseline import compute_dm_family
+from src.domain.services.dm_tft_vs_baseline import (
+    compute_dm_family,
+    mean_pinball_post_guardrail,
+)
 from src.domain.services.fold_dedup_resolver import FoldPeriod
 from src.domain.services.holm_family_6 import apply_holm_one_sided
 from src.domain.services.marginal_coverage_calculator import compute_marginal_coverage
@@ -51,6 +54,20 @@ def _median(series: pd.Series) -> float:
 
 def _json(data: dict[str, object]) -> str:
     return json.dumps(data, sort_keys=True, ensure_ascii=False)
+
+
+_MISSING_FOLD_LABELS = {"", "none", "nan", "None", "NaT", "<NA>"}
+
+
+def _is_missing_fold(series: pd.Series) -> pd.Series:
+    return series.isna() | series.astype(str).str.strip().isin(_MISSING_FOLD_LABELS)
+
+
+def _utc_timestamp(value: object) -> pd.Timestamp:
+    ts = pd.Timestamp(value)
+    if ts.tzinfo is None:
+        return ts.tz_localize("UTC")
+    return ts.tz_convert("UTC")
 
 
 class ComputePhaseBTierMetricsUseCase:
@@ -166,6 +183,52 @@ class ComputePhaseBTierMetricsUseCase:
             raise ValueError("no fold periods could be resolved")
         return periods
 
+    @staticmethod
+    def _enrich_missing_tft_folds(
+        dim_run: pd.DataFrame,
+        fact_run_snapshot: pd.DataFrame,
+        fold_periods: dict[str, FoldPeriod],
+    ) -> pd.DataFrame:
+        out = dim_run.copy()
+        if "fold" not in out.columns:
+            raise ValueError("dim_run must contain fold for Phase B tier metrics")
+
+        tft_mask = out["feature_set_name"].astype(str).ne("baseline")
+        missing_tft_fold = tft_mask & _is_missing_fold(out["fold"])
+        if not missing_tft_fold.any():
+            return out.reset_index(drop=True)
+
+        if fact_run_snapshot.empty or "train_end_utc" not in fact_run_snapshot.columns:
+            raise ValueError("cannot resolve missing TFT folds without fact_run_snapshot.train_end_utc")
+
+        train_end_to_fold = {
+            _utc_timestamp(period.train_end_utc): str(fold_name)
+            for fold_name, period in fold_periods.items()
+        }
+        snapshot = fact_run_snapshot[["run_id", "train_end_utc"]].copy()
+        snapshot["run_id"] = snapshot["run_id"].astype(str)
+        snapshot["_snapshot_train_end_utc"] = pd.to_datetime(
+            snapshot["train_end_utc"],
+            utc=True,
+            errors="coerce",
+        )
+        snapshot = snapshot.drop(columns=["train_end_utc"]).drop_duplicates("run_id")
+
+        out["run_id"] = out["run_id"].astype(str)
+        out = out.merge(snapshot, on="run_id", how="left")
+        tft_mask = out["feature_set_name"].astype(str).ne("baseline")
+        missing_tft_fold = tft_mask & _is_missing_fold(out["fold"])
+        out.loc[missing_tft_fold, "fold"] = out.loc[
+            missing_tft_fold,
+            "_snapshot_train_end_utc",
+        ].map(train_end_to_fold)
+        unresolved = tft_mask & _is_missing_fold(out["fold"])
+        if unresolved.any():
+            sample = ", ".join(out.loc[unresolved, "run_id"].astype(str).head(5))
+            raise ValueError(f"unresolved TFT fold mapping for Phase B DM: {sample}")
+
+        return out.drop(columns=["_snapshot_train_end_utc"]).reset_index(drop=True)
+
     def _run_groups(self, dim_run: pd.DataFrame) -> tuple[set[str], dict[str, set[str]]]:
         tft = dim_run[dim_run["feature_set_name"].astype(str).ne("baseline")].copy()
         baselines = dim_run[dim_run["feature_set_name"].astype(str).eq("baseline")].copy()
@@ -248,13 +311,40 @@ class ComputePhaseBTierMetricsUseCase:
 
     def _delta_pinball(
         self,
-        calibration: pd.DataFrame,
+        fact_oos: pd.DataFrame,
+        dim_run: pd.DataFrame,
         tft_run_ids: set[str],
     ) -> pd.DataFrame:
-        cal = calibration[calibration["split"].astype(str).eq("test")].copy()
+        required = {
+            "run_id",
+            "split",
+            "horizon",
+            "y_true",
+            "quantile_p10_post_guardrail",
+            "quantile_p50_post_guardrail",
+            "quantile_p90_post_guardrail",
+        }
+        missing = sorted(required - set(fact_oos.columns))
+        if missing:
+            raise ValueError(f"fact_oos missing required columns for delta pinball: {missing}")
+
+        oos = fact_oos[fact_oos["split"].astype(str).eq("test")].copy()
+        oos["run_id"] = oos["run_id"].astype(str)
+        oos["horizon"] = pd.to_numeric(oos["horizon"], errors="coerce")
+        oos["mean_pinball_post_guardrail"] = mean_pinball_post_guardrail(oos)
+        oos = oos.dropna(subset=["run_id", "horizon", "mean_pinball_post_guardrail"])
+        per_run = (
+            oos.groupby(["run_id", "horizon"], dropna=False)["mean_pinball_post_guardrail"]
+            .mean()
+            .reset_index()
+        )
+        meta = dim_run[["run_id", "model_version", "feature_set_name"]].copy()
+        meta["run_id"] = meta["run_id"].astype(str)
+        per_run = per_run.merge(meta.drop_duplicates("run_id"), on="run_id", how="left")
+
         rows: list[dict[str, object]] = []
         for horizon in self.policy.confirmatory_horizons:
-            horizon_rows = cal[pd.to_numeric(cal["horizon"], errors="coerce").eq(int(horizon))]
+            horizon_rows = per_run[per_run["horizon"].eq(int(horizon))]
             tft_pinball = _median(
                 horizon_rows[horizon_rows["run_id"].astype(str).isin(tft_run_ids)][
                     "mean_pinball_post_guardrail"
@@ -350,9 +440,9 @@ class ComputePhaseBTierMetricsUseCase:
         dim_run = self._load_dim_run(asset, parent_sweep_id)
         fact_oos = self._load_fact_oos(dim_run, asset)
         fact_run_snapshot = self._load_fact_run_snapshot(dim_run, asset)
-        calibration = self._load_gold_calibration(dim_run, asset, parent_sweep_id)
-        tft_run_ids, baselines_by_model_version = self._run_groups(dim_run)
         fold_periods = self._resolve_fold_periods(dim_run, fact_run_snapshot)
+        dim_run = self._enrich_missing_tft_folds(dim_run, fact_run_snapshot, fold_periods)
+        tft_run_ids, baselines_by_model_version = self._run_groups(dim_run)
 
         marginal_coverage = compute_marginal_coverage(
             fact_oos,
@@ -372,7 +462,7 @@ class ComputePhaseBTierMetricsUseCase:
             baselines_by_model_version,
             fold_periods,
         )
-        delta_pinball = self._delta_pinball(calibration, tft_run_ids)
+        delta_pinball = self._delta_pinball(fact_oos, dim_run, tft_run_ids)
         tier_verdict, verdicts = self._classify(
             marginal_coverage,
             dm_family_6,
@@ -410,4 +500,3 @@ class ComputePhaseBTierMetricsUseCase:
             sidecar_paths=sidecar_paths,
             verdicts=verdicts,
         )
-
