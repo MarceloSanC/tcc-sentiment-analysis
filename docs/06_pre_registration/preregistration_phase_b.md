@@ -567,6 +567,42 @@ Mudancas a este pre-registro **apos merge** desta PR exigem:
 
 ### Emendas
 
+### 2026-05-25 — Emenda E6: execucao concluida (Sessao-B autonoma overnight)
+
+- Decisao alterada: nenhuma cientifica nem operacional; preenchimento dos
+  3 slots restantes de §15 (data de execucao confirmatoria, resultado tier
+  por hipotese/horizonte, link para relatorio).
+- Tier reportado (mecanicamente derivado de F.2 §9 via PR-A4 sidecars):
+  `H1@h=1: tier_2; H1@h=7: tier_1; H2a@h=1: tier_1; H2a@h=7: tier_1;`
+  `H2b@h=1: refutado; H2b@h=7: refutado`. Ver §15 para sintese narrativa.
+- Cross-link:
+  - Relatorio:
+    [`docs/07_reports/phase-gates/B_confirmatory_2026-05-25.md`](../07_reports/phase-gates/B_confirmatory_2026-05-25.md)
+    (420 LOC; cobre parametros executados, tier_verdict, calibracao
+    marginal, DM family-6, MCS within-family, gate degeneracao,
+    robustez, limitacoes, conclusao + apendice DM-18 sensibilidade +
+    apendice decisoes autonomas Sessao-B).
+  - Archive read-only: `data/analytics_archive_phase_b_20260524/`
+    (silver cohort + gold filtrado + fact_oos_predictions filtrado +
+    sidecars; `chmod a-w` aplicado em E6.3).
+  - Checklist:
+    [`docs/05_checklists/PHASE_B_EXECUTION_CHECKLIST.md`](../05_checklists/PHASE_B_EXECUTION_CHECKLIST.md)
+    `Status: completo (2026-05-25)` apos merge PR-B.
+  - PR-B: `docs(phase-b-exec): relatorio Phase B + emenda final + archive
+    snapshot` (a abrir; commits empilhados em
+    `feat/phase-b-execution-20260524`).
+- Modo de operacao: Sessao-B executou em modo **autonomo overnight**
+  (override do prompt primario `docs/ai/PHASE_B_SESSION_B_PROMPT.md`).
+  7 decisoes metodologicas tomadas sem aprovacao Marcelo; registradas em
+  3 destinos (PR body, checklist Notas E5/E6, anexo "Precedentes" no
+  PHASE_B_SESSION_B_PROMPT.md). Marcelo revisa PR-B + mergeia + executa
+  E6.6 (close checklist) ao acordar.
+- Justificativa: encerramento operacional do ciclo Phase B confirmatorio.
+  Nenhuma reclassificacao de tier, nenhuma mudanca de hiperparametros,
+  nenhuma re-execucao de treino/baseline/refresh (outputs Sessao-A sao
+  canonicos). Reality check pre-registrado no prompt primario bateu 6/6
+  contra `phase_b_tier_verdict.parquet` — zero regressao detectada.
+
 ### 2026-05-25 — Emenda E1.8: operacionalizacao do protocolo estatistico DM/Holm (unidade timestamp + dedup + seed mean + HAC + HLN + one-sided + Holm-6)
 
 - Decisao alterada: nenhuma cientifica do pre-registro original; este texto
@@ -834,19 +870,36 @@ dados, deixando a interpretacao para Sessao-B em E5.
 
 ## 15. Execucao
 
-_(parcialmente preenchido em E1; slots de execucao final reservados para E6/Sessao-B)_
+_(completo apos Emenda E6 Sessao-B 2026-05-25; ver §14 entrada datada)_
 
 - **Commit hash deste pre-registro (selo F.2 original):** `067cb32`
   (`docs(pre-reg): F.2 — pre-registro Phase B confirmatorio`)
-- **Data de execucao confirmatoria:** `<a preencher em E6 apos rodada>`
+- **Data de execucao confirmatoria:** `2026-05-24` (Sessao-A E2.1 launch;
+  60 dim_run rows persistidos em silver na cohort
+  `phase_b_confirmatorio_20260524`; analise E5-E6 conduzida em 2026-05-25
+  pela Sessao-B).
 - **`parent_sweep_id` efetivo:** `phase_b_confirmatorio_20260524`
 - **Hash da config JSON:** `fc83b56d7605bf60479b4d1ed4c745c1679702e5e5116f642f3c33061d795bd4`
   (config `config/sweeps/explicit/phase_b_confirmatorio_20260524.json`,
   selada via Emenda E1.6 — ver §14; substituiu hash anterior
   `e6972a8b...c1f3c98...e8595b9260c` da Emenda E1 original por correcao
   tecnica do schema `explicit_configs` sem mudanca de hiperparametros)
-- **Resultado tier (H1, H2a, H2b por horizonte):** `<a preencher em E6 pela Sessao-B>`
-- **Relatorio:** `<a preencher em E6: docs/07_reports/phase-gates/B_confirmatory_<YYYY-MM-DD>.md>`
+- **Resultado tier (H1, H2a, H2b por horizonte):**
+  `H1@h=1: tier_2; H1@h=7: tier_1; H2a@h=1: tier_1; H2a@h=7: tier_1;`
+  `H2b@h=1: refutado; H2b@h=7: refutado`. Tier verdict mecanicamente
+  derivado de F.2 §9 sobre `data/analytics/reports/phase_b/`
+  `cohort=phase_b_confirmatorio_20260524/phase_b_tier_verdict.parquet`
+  (5 sidecars gerados pela PR-A4 per Emenda E1.8). Sintese: TFT entrega
+  evidencia confirmatoria primaria para calibracao h=7 (H1) e dominancia
+  sobre `zero_return` em ambos horizontes (H2a); evidencia secundaria
+  para calibracao h=1 (PICP error 2,02% fora da banda Tier 1 ±2,0% por
+  0,02 pp); H2b refutado por empate estatistico com
+  `historical_quantiles_rolling` (DM p_adj_holm = 0,465 h=1; 0,685 h=7),
+  consistente com STRATEGIC_DIRECTION §3.
+- **Relatorio:**
+  [`docs/07_reports/phase-gates/B_confirmatory_2026-05-25.md`](../07_reports/phase-gates/B_confirmatory_2026-05-25.md)
+  (420 LOC). Cross-link: PR-B `docs(phase-b-exec): relatorio Phase B +
+  emenda final + archive snapshot`.
 
 ---
 
