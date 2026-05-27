@@ -15,13 +15,13 @@ confirmatoria a partir desse commit hash).
 **Bloqueante para:** abertura formal da Fase B (treino confirmatorio) e
 fechamento de F.3 (gate de saida da Fase A).
 **Supersede:** rascunho `preregistration_round1_<date>.md` mencionado em
-[`STRATEGIC_DIRECTION.md`](../00_overview/STRATEGIC_DIRECTION.md) §A.3
+[`STRATEGIC_DIRECTION.md`](../../00_overview/STRATEGIC_DIRECTION.md) §A.3
 (local de destino atualizado para `docs/06_pre_registration/`).
 
 Este documento operacionaliza a Fase B per
-[`STRATEGIC_DIRECTION.md`](../00_overview/STRATEGIC_DIRECTION.md) §5
+[`STRATEGIC_DIRECTION.md`](../../00_overview/STRATEGIC_DIRECTION.md) §5
 (Fase B) e fecha as 7 pendencias F.2 listadas em
-[`A_audit_closure_2026-05-17.md`](../07_reports/phase-gates/A_audit_closure_2026-05-17.md)
+[`A_audit_closure_2026-05-17.md`](../../07_reports/phase-gates/phase-a/A_audit_closure_2026-05-17.md)
 §"Pendencias para F.2". Decisoes nao redeclaradas aqui herdam dos
 documentos canonicos referenciados.
 
@@ -31,31 +31,31 @@ documentos canonicos referenciados.
 
 - F.1 smoke confirmatorio **PASS pleno** (Stage R-23, 2026-05-22; 6/6
   criterios). Evidencia em
-  [`smoke_confirmatory_2026-05-18.md`](../07_reports/smoke_confirmatory_2026-05-18.md)
+  [`smoke_confirmatory_2026-05-18.md`](../../07_reports/phase-gates/phase-a/smoke_confirmatory_2026-05-18.md)
   §"F.1 v4 PASS pleno (Stage R-23, 2026-05-22)".
 - Audit closure: **todos os RED zerados**, P0 transversais marcados `[x]`
   (per
-  [`A_audit_closure_2026-05-17.md`](../07_reports/phase-gates/A_audit_closure_2026-05-17.md)
+  [`A_audit_closure_2026-05-17.md`](../../07_reports/phase-gates/phase-a/A_audit_closure_2026-05-17.md)
   §"Status final (2026-05-22, Stage R-23)").
 - Stages 1-14 + 20-23 + R-20..R-23 mergeados em main (PRs #14-#54 + #56
   cleanup); decisao Caminho B registrada em
-  [`PHASE_B_IMPLEMENTATION_CHECKLIST.md`](../05_checklists/PHASE_B_IMPLEMENTATION_CHECKLIST.md)
+  [`PHASE_B_IMPLEMENTATION_CHECKLIST.md`](../../05_checklists/phase-b/PHASE_B_IMPLEMENTATION_CHECKLIST.md)
   §"Decisao Caminho B vs C".
 - Archive pre-Phase B preservado em
   `data/analytics_archive_pre_phase_b/` (851 MB read-only) conforme
-  [`ANALYTICS_STORE_ARCHITECTURE.md`](../01_architecture/ANALYTICS_STORE_ARCHITECTURE.md).
+  [`ANALYTICS_STORE_ARCHITECTURE.md`](../../01_architecture/ANALYTICS_STORE_ARCHITECTURE.md).
   Dados anteriores a 2026-05-10 sao **diagnostico historico**, nao
   evidencia confirmatoria.
 - Convencao `target_timestamp_utc` / `y_true` materializada por
   `MultiHorizonPredictionPersister` (Opcao d, Stage R-20) per
-  [ADR-0003](../01_architecture/decisions/ADR-0003-multi-horizon-prediction-persister.md).
+  [ADR-0003](../../01_architecture/decisions/ADR-0003-multi-horizon-prediction-persister.md).
 
 ---
 
 ## 2. Escopo e ativo
 
 - **Ativo piloto unico:** AAPL. Per
-  [`STRATEGIC_DIRECTION.md`](../00_overview/STRATEGIC_DIRECTION.md) §2 e
+  [`STRATEGIC_DIRECTION.md`](../../00_overview/STRATEGIC_DIRECTION.md) §2 e
   §6.5: claim limitado ao ativo avaliado sob este protocolo. Multi-asset
   e *future work*, **out-of-scope Phase B**.
 - **Dataset:** `data/processed/dataset_tft/AAPL/dataset_tft_AAPL.parquet`
@@ -74,7 +74,7 @@ documentos canonicos referenciados.
 
 ## 3. Hipoteses operacionais
 
-Reproduzem [`STRATEGIC_DIRECTION.md`](../00_overview/STRATEGIC_DIRECTION.md)
+Reproduzem [`STRATEGIC_DIRECTION.md`](../../00_overview/STRATEGIC_DIRECTION.md)
 §7 sem reformulacao; aqui apenas fixadas para a rodada confirmatoria.
 
 - **H1 (calibracao):** o candidato TFT all-features produz, para pelo
@@ -94,12 +94,12 @@ Reproduzem [`STRATEGIC_DIRECTION.md`](../00_overview/STRATEGIC_DIRECTION.md)
   (Stage 12 MVP).
 - **H3 (contribuicao de familias):** **out-of-scope Phase B**. Fica
   declarada para a **Fase C** explicativa per
-  [`STRATEGIC_DIRECTION.md`](../00_overview/STRATEGIC_DIRECTION.md) §5
-  e [`EXPLAINABILITY.md`](../04_evaluation/EXPLAINABILITY.md). H3 nao
+  [`STRATEGIC_DIRECTION.md`](../../00_overview/STRATEGIC_DIRECTION.md) §5
+  e [`EXPLAINABILITY.md`](../../04_evaluation/EXPLAINABILITY.md). H3 nao
   e pre-registrada aqui.
 
 **Resultados de refutacao sao validos** e nao invalidam o trabalho per
-[`STRATEGIC_DIRECTION.md`](../00_overview/STRATEGIC_DIRECTION.md)
+[`STRATEGIC_DIRECTION.md`](../../00_overview/STRATEGIC_DIRECTION.md)
 §4.4 "Resultados validos mesmo com hipoteses refutadas".
 
 ---
@@ -107,14 +107,14 @@ Reproduzem [`STRATEGIC_DIRECTION.md`](../00_overview/STRATEGIC_DIRECTION.md)
 ## 4. Candidato declarado (M1.3)
 
 **Selecao do candidato unico** segue o pivo metodologico em
-[`STRATEGIC_DIRECTION.md`](../00_overview/STRATEGIC_DIRECTION.md) §4 e
-[`SWEEPS_AND_SELECTION.md`](../03_modeling/SWEEPS_AND_SELECTION.md):
+[`STRATEGIC_DIRECTION.md`](../../00_overview/STRATEGIC_DIRECTION.md) §4 e
+[`SWEEPS_AND_SELECTION.md`](../../03_modeling/SWEEPS_AND_SELECTION.md):
 **1 candidato all-features com poda minima**, sem comparacao entre
 feature sets.
 
 ### 4.1 Features (poda minima por principio)
 
-Per [`STRATEGIC_DIRECTION.md`](../00_overview/STRATEGIC_DIRECTION.md)
+Per [`STRATEGIC_DIRECTION.md`](../../00_overview/STRATEGIC_DIRECTION.md)
 §4.2:
 
 - **Familias incluidas:** PRICE (OHLCV), TECHNICAL, SENTIMENT,
@@ -192,11 +192,11 @@ sem validade confirmatoria):**
 - **`seed_base`:** `20260517` (mesma do F.1 v4, ja registrada em
   metadados de dim_run; auditavel).
 - **Numero de seeds replica:** **5** per
-  [`STRATEGIC_DIRECTION.md`](../00_overview/STRATEGIC_DIRECTION.md)
+  [`STRATEGIC_DIRECTION.md`](../../00_overview/STRATEGIC_DIRECTION.md)
   §B.1. Seeds derivadas:
   `[20260517, 20260518, 20260519, 20260520, 20260521]`.
 - **Folds walk-forward:** **3** per
-  [`STRATEGIC_DIRECTION.md`](../00_overview/STRATEGIC_DIRECTION.md)
+  [`STRATEGIC_DIRECTION.md`](../../00_overview/STRATEGIC_DIRECTION.md)
   §B.1. Walk-forward folds especificos serao listados na config
   congelada (4.2 passo 4) e auditados via
   `data/analytics/silver/dim_run.fold`.
@@ -222,7 +222,7 @@ rodada confirmatoria**:
 
 - **Fundamentals:** confirmar `reported_date` ou fallback `+45 dias`
   apos `fiscal_date_end` per
-  [`DATA_SOURCES.md`](../02_data/DATA_SOURCES.md) §"Fallback de
+  [`DATA_SOURCES.md`](../../02_data/DATA_SOURCES.md) §"Fallback de
   reported_date" (cobertura 17/81 reports AAPL com fallback aplicado,
   21%). Coluna `fundamentals_effective_date` materializada no dataset
   (Stage 14) preserva rastreabilidade direta.
@@ -243,7 +243,7 @@ rodada confirmatoria**:
 
 ## 5. Baselines pre-declarados (M7-Q2)
 
-Per [`BASELINES.md`](../04_evaluation/BASELINES.md) §"Baselines
+Per [`BASELINES.md`](../../04_evaluation/BASELINES.md) §"Baselines
 Recomendados". Lista minima admitida para Phase B confirmatoria
 (Stage 12 MVP):
 
@@ -256,7 +256,7 @@ Recomendados". Lista minima admitida para Phase B confirmatoria
 - **Baseline primario para H2a:** `zero_return`. Justificativa: random
   walk de retorno e o null model canonico em forecasting financeiro
   (default sugerido em
-  [`STRATEGIC_DIRECTION.md`](../00_overview/STRATEGIC_DIRECTION.md)
+  [`STRATEGIC_DIRECTION.md`](../../00_overview/STRATEGIC_DIRECTION.md)
   §A.2); ja persistido com mesma convencao temporal do TFT via
   `MultiHorizonPredictionPersister` (Stage R-20).
 - **Baseline probabilistico para H2b:** `historical_quantiles_rolling`
@@ -264,21 +264,21 @@ Recomendados". Lista minima admitida para Phase B confirmatoria
   Comparacao pinball post-guardrail vs TFT post-guardrail.
 - **Baselines adicionais (`random_walk` distinto de `zero_return`,
   `AR(1)`, `EWMA-vol`) listados em
-  [`BASELINES.md`](../04_evaluation/BASELINES.md) §"Baselines
+  [`BASELINES.md`](../../04_evaluation/BASELINES.md) §"Baselines
   Recomendados" sao OUT-OF-SCOPE Phase B.** Sua adicao em rodadas
   futuras exige Stage 12-bis ou emenda datada.
 
 **Requisitos de comparabilidade** (per
-[`BASELINES.md`](../04_evaluation/BASELINES.md) §"Requisitos De
+[`BASELINES.md`](../../04_evaluation/BASELINES.md) §"Requisitos De
 Comparabilidade"):
 
 - Mesmo `parent_sweep_id` do candidato (config sweep JSON unico
   agrupa TFT + baselines per
-  [`SWEEPS_AND_SELECTION.md`](../03_modeling/SWEEPS_AND_SELECTION.md)
+  [`SWEEPS_AND_SELECTION.md`](../../03_modeling/SWEEPS_AND_SELECTION.md)
   §"Schema da secao baselines").
 - Mesmas seeds e folds.
 - Mesmo grao em `fact_oos_predictions` (per
-  [`MULTI_HORIZON.md`](../03_modeling/MULTI_HORIZON.md) §"Persistencia").
+  [`MULTI_HORIZON.md`](../../03_modeling/MULTI_HORIZON.md) §"Persistencia").
 - Alinhamento OOS estrito por
   `(asset, split, horizon, target_timestamp)`.
 
@@ -286,9 +286,9 @@ Comparabilidade"):
 
 ## 6. Contrato quantilico primario (M5/M6/M7.5)
 
-Per [`METRICS_DEFINITIONS.md`](../04_evaluation/METRICS_DEFINITIONS.md)
+Per [`METRICS_DEFINITIONS.md`](../../04_evaluation/METRICS_DEFINITIONS.md)
 §"Variante quantilica" (categorizacao A/B/C) e justificativa academica
-em [`20_method.md`](../07_reports/living-paper/20_method.md)
+em [`20_method.md`](../../07_reports/living-paper/20_method.md)
 §"Politica de variante quantilica":
 
 - **Primario para H1, H2a, H2b:** `post_guardrail`. Default tecnico
@@ -309,14 +309,14 @@ em [`20_method.md`](../07_reports/living-paper/20_method.md)
 
 ## 7. Protocolo estatistico
 
-Per [`STATISTICAL_TESTS.md`](../04_evaluation/STATISTICAL_TESTS.md).
+Per [`STATISTICAL_TESTS.md`](../../04_evaluation/STATISTICAL_TESTS.md).
 
 - **Alinhamento OOS estrito:** por
   `(asset, split, horizon, target_timestamp)`. Intersecao exata via
   `gold_paired_oos_intersection_by_horizon`. Sem intersecao exata, o
   par TFT-vs-baseline e excluido (Stage 12 lesson learned do smoke
   F.1 v1 →
-  [`smoke_confirmatory_2026-05-18.md`](../07_reports/smoke_confirmatory_2026-05-18.md)
+  [`smoke_confirmatory_2026-05-18.md`](../../07_reports/phase-gates/phase-a/smoke_confirmatory_2026-05-18.md)
   §6.a; F.1 v4 PASS pleno confirmou alinhamento exato em todas as
   combinacoes).
 - **Diebold-Mariano (DM)** pareado com correcao HAC e ajuste
@@ -339,7 +339,7 @@ Per [`STATISTICAL_TESTS.md`](../04_evaluation/STATISTICAL_TESTS.md).
   = `2 horizontes × 3 baselines = 6 testes`. Resultado significativo
   exige `pvalue_adj_holm < 0.05`. Justificativa: familia unica e
   mais conservadora; alinha com
-  [`STRATEGIC_DIRECTION.md`](../00_overview/STRATEGIC_DIRECTION.md)
+  [`STRATEGIC_DIRECTION.md`](../../00_overview/STRATEGIC_DIRECTION.md)
   §B.2 "Holm-Bonferroni sobre o conjunto de DMs reportados".
 - **Operacionalizacao PR-A4:** o protocolo DM/Holm declarado aqui e
   operacionalizado na Emenda E1.8 (§14) pelo pos-processador
@@ -350,7 +350,7 @@ Per [`STATISTICAL_TESTS.md`](../04_evaluation/STATISTICAL_TESTS.md).
 
 ## 8. Horizontes oficiais
 
-Per [`MULTI_HORIZON.md`](../03_modeling/MULTI_HORIZON.md) §"Decisoes e
+Per [`MULTI_HORIZON.md`](../../03_modeling/MULTI_HORIZON.md) §"Decisoes e
 escolhas":
 
 - **Horizontes confirmatorios:** `h = 1` (curto prazo) e `h = 7`
@@ -358,10 +358,10 @@ escolhas":
 - **`h = 30` OUT-OF-SCOPE Phase B.** Justificativa: audit M7 acao 9
   ja recomendou exclusao do smoke inicial; N efetivo nao-sobreposto
   ~25 para 3 anos OOS, poder estatistico DM/MCS muito baixo per
-  [`STRATEGIC_DIRECTION.md`](../00_overview/STRATEGIC_DIRECTION.md)
+  [`STRATEGIC_DIRECTION.md`](../../00_overview/STRATEGIC_DIRECTION.md)
   §3. Permanece como *future work* documentado.
 - **Reportagem por horizonte separada**, nunca agregada
-  (per [`MULTI_HORIZON.md`](../03_modeling/MULTI_HORIZON.md)).
+  (per [`MULTI_HORIZON.md`](../../03_modeling/MULTI_HORIZON.md)).
 - Inferencia rolling multi-horizonte (engine, nao trainer) e
   out-of-scope per audit M4 acao 1: a Fase B usa
   `fact_oos_predictions` gerado pelo trainer, nao pelo engine de
@@ -371,7 +371,7 @@ escolhas":
 
 ## 9. Bandas de tolerancia e gates tier 1 / tier 2
 
-Per [`CALIBRATION_AND_RISK.md`](../04_evaluation/CALIBRATION_AND_RISK.md)
+Per [`CALIBRATION_AND_RISK.md`](../../04_evaluation/CALIBRATION_AND_RISK.md)
 §"Calibration Acceptance Thresholds". Politica em **dois tiers**
 declarados ex-ante para preservar honestidade do trabalho mesmo sob
 poder estatistico baixo.
@@ -402,7 +402,7 @@ Aplicada **somente se nenhum candidato Tier 1 emergir** apos a rodada
 confirmatoria. Reporta o resultado com label explicito **"evidencia
 secundaria / nao confirmatoria"** no texto, mantendo o trabalho
 publicavel sob limite empirico declarado per
-[`STRATEGIC_DIRECTION.md`](../00_overview/STRATEGIC_DIRECTION.md) §4.4
+[`STRATEGIC_DIRECTION.md`](../../00_overview/STRATEGIC_DIRECTION.md) §4.4
 ("Resultados validos mesmo com hipoteses refutadas"). Criterios
 permissivos:
 
@@ -422,7 +422,7 @@ tier reportado nao pode ser feita apos inspecao dos resultados. Se
 nenhum tier for satisfeito, reportar resultado como **"hipotese
 refutada / TFT nao supera baselines neste protocolo"** e direcionar
 trabalho para diagnostico de calibracao, conforme
-[`STRATEGIC_DIRECTION.md`](../00_overview/STRATEGIC_DIRECTION.md) §3
+[`STRATEGIC_DIRECTION.md`](../../00_overview/STRATEGIC_DIRECTION.md) §3
 e §4.4.
 
 ### Gate de degeneracao quantilica (M2 Stage 11)
@@ -440,7 +440,7 @@ horizontes = 30 grupos).
 
 ## 10. Politica de coorte e ScopeSpec (M6)
 
-Per [`SWEEPS_AND_SELECTION.md`](../03_modeling/SWEEPS_AND_SELECTION.md):
+Per [`SWEEPS_AND_SELECTION.md`](../../03_modeling/SWEEPS_AND_SELECTION.md):
 
 - **Identificador unico de coorte:**
   `parent_sweep_id = phase_b_confirmatorio_<YYYYMMDD>`
@@ -470,7 +470,7 @@ Per [`SWEEPS_AND_SELECTION.md`](../03_modeling/SWEEPS_AND_SELECTION.md):
 
 ## 11. Tipo de sweep e operacao
 
-Per [`SWEEPS_AND_SELECTION.md`](../03_modeling/SWEEPS_AND_SELECTION.md)
+Per [`SWEEPS_AND_SELECTION.md`](../../03_modeling/SWEEPS_AND_SELECTION.md)
 §"Schema da secao baselines":
 
 - **`test_type=explicit_configs`** (sweep declarativo via JSON
@@ -522,15 +522,15 @@ congelado**, sem reotimizacao por janela. Resultado suplementar.
 
 Toda execucao confirmatoria deve produzir, **no minimo**:
 
-- `data/analytics/silver/dim_run/asset=AAPL/parent_sweep_id=phase_b_confirmatorio_<YYYYMMDD>/`
+- `data/analytics/silver/dim_run/asset=AAPL/sweep_id=phase_b_confirmatorio_<YYYYMMDD>/`
   com 15 runs TFT + 3 baselines × 15 = 45 runs baseline.
 - `data/analytics/silver/fact_oos_predictions/asset=AAPL/...` com
   cobertura completa de `(run_id, split, horizon)` per
-  [`MULTI_HORIZON.md`](../03_modeling/MULTI_HORIZON.md)
+  [`MULTI_HORIZON.md`](../../03_modeling/MULTI_HORIZON.md)
   §"Validacoes obrigatorias".
 - `data/analytics/gold/gold_prediction_metrics_by_run_split_horizon.parquet`
   com colunas `*_raw` e `*_post_guardrail` per
-  [`METRICS_DEFINITIONS.md`](../04_evaluation/METRICS_DEFINITIONS.md)
+  [`METRICS_DEFINITIONS.md`](../../04_evaluation/METRICS_DEFINITIONS.md)
   §"Variante quantilica".
 - `data/analytics/gold/gold_dm_pairwise_results.parquet`,
   `gold_mcs_results.parquet`,
@@ -577,7 +577,7 @@ Mudancas a este pre-registro **apos merge** desta PR exigem:
   `H2b@h=1: refutado; H2b@h=7: refutado`. Ver §15 para sintese narrativa.
 - Cross-link:
   - Relatorio:
-    [`docs/07_reports/phase-gates/B_confirmatory_2026-05-25.md`](../07_reports/phase-gates/B_confirmatory_2026-05-25.md)
+    [`docs/07_reports/phase-gates/phase-b/B_confirmatory_2026-05-25.md`](../../07_reports/phase-gates/phase-b/B_confirmatory_2026-05-25.md)
     (420 LOC; cobre parametros executados, tier_verdict, calibracao
     marginal, DM family-6, MCS within-family, gate degeneracao,
     robustez, limitacoes, conclusao + apendice DM-18 sensibilidade +
@@ -586,13 +586,13 @@ Mudancas a este pre-registro **apos merge** desta PR exigem:
     (silver cohort + gold filtrado + fact_oos_predictions filtrado +
     sidecars; `chmod a-w` aplicado em E6.3).
   - Checklist:
-    [`docs/05_checklists/PHASE_B_EXECUTION_CHECKLIST.md`](../05_checklists/PHASE_B_EXECUTION_CHECKLIST.md)
+    [`docs/05_checklists/phase-b/PHASE_B_EXECUTION_CHECKLIST.md`](../../05_checklists/phase-b/PHASE_B_EXECUTION_CHECKLIST.md)
     `Status: completo (2026-05-25)` apos merge PR-B.
   - PR-B: `docs(phase-b-exec): relatorio Phase B + emenda final + archive
     snapshot` (a abrir; commits empilhados em
     `feat/phase-b-execution-20260524`).
 - Modo de operacao: Sessao-B executou em modo **autonomo overnight**
-  (override do prompt primario `docs/ai/PHASE_B_SESSION_B_PROMPT.md`).
+  (override do prompt primario `docs/ai/phase-b/PHASE_B_SESSION_B_PROMPT.md`).
   7 decisoes metodologicas tomadas sem aprovacao Marcelo; registradas em
   3 destinos (PR body, checklist Notas E5/E6, anexo "Precedentes" no
   PHASE_B_SESSION_B_PROMPT.md). Marcelo revisa PR-B + mergeia + executa
@@ -744,7 +744,7 @@ academicamente (Diebold 2015 — twenty years later; ver
 - `src/use_cases/compute_phase_b_tier_metrics_use_case.py` orchestrator.
 - `src/main_compute_phase_b_tier_metrics.py` CLI.
 - `docs/04_evaluation/STATISTICAL_TESTS.md` documentacao canonica.
-- `docs/06_runbooks/RUN_PHASE_B_TIER_CLASSIFICATION.md` runbook.
+- `docs/06_runbooks/phase-b/RUN_PHASE_B_TIER_CLASSIFICATION.md` runbook.
 
 Sem impacto nas hipoteses cientificas H1, H2a, H2b nem nos gates Tier 1/Tier
 2. Apenas formaliza COMO os 6 pvalues unilaterais sao computados a partir dos
@@ -897,7 +897,7 @@ _(completo apos Emenda E6 Sessao-B 2026-05-25; ver §14 entrada datada)_
   `historical_quantiles_rolling` (DM p_adj_holm = 0,465 h=1; 0,685 h=7),
   consistente com STRATEGIC_DIRECTION §3.
 - **Relatorio:**
-  [`docs/07_reports/phase-gates/B_confirmatory_2026-05-25.md`](../07_reports/phase-gates/B_confirmatory_2026-05-25.md)
+  [`docs/07_reports/phase-gates/phase-b/B_confirmatory_2026-05-25.md`](../../07_reports/phase-gates/phase-b/B_confirmatory_2026-05-25.md)
   (420 LOC). Cross-link: PR-B `docs(phase-b-exec): relatorio Phase B +
   emenda final + archive snapshot`.
 
@@ -907,20 +907,20 @@ _(completo apos Emenda E6 Sessao-B 2026-05-25; ver §14 entrada datada)_
 
 | Tema                            | Documento canonico                                                                                     |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Direcao estrategica / hipoteses | [`docs/00_overview/STRATEGIC_DIRECTION.md`](../00_overview/STRATEGIC_DIRECTION.md) §2, §4, §5, §6, §7 |
-| Convencao multi-horizonte       | [`docs/03_modeling/MULTI_HORIZON.md`](../03_modeling/MULTI_HORIZON.md)                                |
-| Politica de sweep / coorte      | [`docs/03_modeling/SWEEPS_AND_SELECTION.md`](../03_modeling/SWEEPS_AND_SELECTION.md)                  |
-| Formulas / categoria A/B/C      | [`docs/04_evaluation/METRICS_DEFINITIONS.md`](../04_evaluation/METRICS_DEFINITIONS.md)                |
-| DM / MCS / Holm                 | [`docs/04_evaluation/STATISTICAL_TESTS.md`](../04_evaluation/STATISTICAL_TESTS.md)                    |
-| Contrato de baselines           | [`docs/04_evaluation/BASELINES.md`](../04_evaluation/BASELINES.md)                                    |
-| Bandas de calibracao / risco    | [`docs/04_evaluation/CALIBRATION_AND_RISK.md`](../04_evaluation/CALIBRATION_AND_RISK.md)              |
-| Convencao target_timestamp      | [`docs/01_architecture/decisions/ADR-0003-multi-horizon-prediction-persister.md`](../01_architecture/decisions/ADR-0003-multi-horizon-prediction-persister.md) |
-| Politica variante quantilica    | [`docs/07_reports/living-paper/20_method.md`](../07_reports/living-paper/20_method.md) §"Politica de variante quantilica" |
-| Audit gate da Fase A            | [`docs/07_reports/phase-gates/A_code_audit.md`](../07_reports/phase-gates/A_code_audit.md)            |
-| Audit closure mapping           | [`docs/07_reports/phase-gates/A_audit_closure_2026-05-17.md`](../07_reports/phase-gates/A_audit_closure_2026-05-17.md) |
-| Smoke F.1 v4 evidencia          | [`docs/07_reports/smoke_confirmatory_2026-05-18.md`](../07_reports/smoke_confirmatory_2026-05-18.md) §"F.1 v4 PASS pleno" |
-| Checklist Phase B / F.2 / F.3   | [`docs/05_checklists/PHASE_B_IMPLEMENTATION_CHECKLIST.md`](../05_checklists/PHASE_B_IMPLEMENTATION_CHECKLIST.md) §"Stage final" |
-| Analytics Store + archive       | [`docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md`](../01_architecture/ANALYTICS_STORE_ARCHITECTURE.md) |
+| Direcao estrategica / hipoteses | [`docs/00_overview/STRATEGIC_DIRECTION.md`](../../00_overview/STRATEGIC_DIRECTION.md) §2, §4, §5, §6, §7 |
+| Convencao multi-horizonte       | [`docs/03_modeling/MULTI_HORIZON.md`](../../03_modeling/MULTI_HORIZON.md)                                |
+| Politica de sweep / coorte      | [`docs/03_modeling/SWEEPS_AND_SELECTION.md`](../../03_modeling/SWEEPS_AND_SELECTION.md)                  |
+| Formulas / categoria A/B/C      | [`docs/04_evaluation/METRICS_DEFINITIONS.md`](../../04_evaluation/METRICS_DEFINITIONS.md)                |
+| DM / MCS / Holm                 | [`docs/04_evaluation/STATISTICAL_TESTS.md`](../../04_evaluation/STATISTICAL_TESTS.md)                    |
+| Contrato de baselines           | [`docs/04_evaluation/BASELINES.md`](../../04_evaluation/BASELINES.md)                                    |
+| Bandas de calibracao / risco    | [`docs/04_evaluation/CALIBRATION_AND_RISK.md`](../../04_evaluation/CALIBRATION_AND_RISK.md)              |
+| Convencao target_timestamp      | [`docs/01_architecture/decisions/ADR-0003-multi-horizon-prediction-persister.md`](../../01_architecture/decisions/ADR-0003-multi-horizon-prediction-persister.md) |
+| Politica variante quantilica    | [`docs/07_reports/living-paper/20_method.md`](../../07_reports/living-paper/20_method.md) §"Politica de variante quantilica" |
+| Audit gate da Fase A            | [`docs/07_reports/phase-gates/phase-a/A_code_audit.md`](../../07_reports/phase-gates/phase-a/A_code_audit.md)            |
+| Audit closure mapping           | [`docs/07_reports/phase-gates/phase-a/A_audit_closure_2026-05-17.md`](../../07_reports/phase-gates/phase-a/A_audit_closure_2026-05-17.md) |
+| Smoke F.1 v4 evidencia          | [`docs/07_reports/phase-gates/phase-a/smoke_confirmatory_2026-05-18.md`](../../07_reports/phase-gates/phase-a/smoke_confirmatory_2026-05-18.md) §"F.1 v4 PASS pleno" |
+| Checklist Phase B / F.2 / F.3   | [`docs/05_checklists/phase-b/PHASE_B_IMPLEMENTATION_CHECKLIST.md`](../../05_checklists/phase-b/PHASE_B_IMPLEMENTATION_CHECKLIST.md) §"Stage final" |
+| Analytics Store + archive       | [`docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md`](../../01_architecture/ANALYTICS_STORE_ARCHITECTURE.md) |
 
 ---
 

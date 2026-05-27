@@ -78,9 +78,9 @@ textual. R-23.4 adicionou golden regression em
 `tests/integration/test_f1_golden_smoke.py`.
 
 **Docs updated:**
-- `docs/07_reports/smoke_confirmatory_2026-05-18.md` — secao
+- `docs/07_reports/phase-gates/phase-a/smoke_confirmatory_2026-05-18.md` — secao
   "F.1 v4 PASS pleno (Stage R-23, 2026-05-22)".
-- `docs/07_reports/phase-gates/A_audit_closure_2026-05-17.md` — status
+- `docs/07_reports/phase-gates/phase-a/A_audit_closure_2026-05-17.md` — status
   final atualizado para o ciclo R-20..R-23.
 - `docs/01_architecture/decisions/ADR-0003-multi-horizon-prediction-persister.md`
   — nota "Validado end-to-end via R-23 smoke v4".
@@ -526,7 +526,7 @@ PR (R-E) e a segunda do ciclo de remediacao.
 
 ## [2026-05-21 00:55 UTC] Stage R-20 — completion (Opcao d aplicada; Gap 6 fechado em substancia)
 
-**Context:** Stage R-20 do plano de remediacao (`docs/ai/STAGE_20_23_REMEDIATION_PLAN.md`).
+**Context:** Stage R-20 do plano de remediacao (`docs/ai/phase-b/STAGE_20_23_REMEDIATION_PLAN.md`).
 Auditoria 2026-05-20 levantou RED-1 (Gap 6: off-by-one TFT vs baseline em
 y_true para mesmo target_timestamp_utc, 663/685 linhas test/h=1) e RED-2
 (`test_tft_baselines_y_true_alignment.py` era hollow — passava o mesmo
@@ -564,13 +564,13 @@ aberto).
   com `log(candle.close[1]/candle.close[0])`.
 
 **Docs atualizados R-20.1:**
-- [`docs/01_architecture/decisions/ADR-0003-multi-horizon-prediction-persister.md`](../01_architecture/decisions/ADR-0003-multi-horizon-prediction-persister.md):
+- [`docs/01_architecture/decisions/ADR-0003-multi-horizon-prediction-persister.md`](../../../01_architecture/decisions/ADR-0003-multi-horizon-prediction-persister.md):
   status amendado em 2026-05-20 (Opcao d). §Decision item 3 reescrito;
   novo subsection "Historico do item 3 (Opcao a → Opcao d)".
   §Consequences acrescenta nota sobre rebuild do dataset.
-- [`docs/03_modeling/MULTI_HORIZON.md`](../03_modeling/MULTI_HORIZON.md):
+- [`docs/03_modeling/MULTI_HORIZON.md`](../../../03_modeling/MULTI_HORIZON.md):
   §"Convencao canonica" reescrita para nova formula + nova indexacao.
-- [`docs/02_data/DATA_PIPELINE_WALKTHROUGH.md`](../02_data/DATA_PIPELINE_WALKTHROUGH.md):
+- [`docs/02_data/DATA_PIPELINE_WALKTHROUGH.md`](../../../02_data/DATA_PIPELINE_WALKTHROUGH.md):
   §3.5 target_return row (linha 585), §5.4 anchor convention (linha 1142),
   §A.58 (linha 1731) reescritos. Sem `[i+h-1]` literal restante.
 - Comentarios `Opcao (a)` literais em `train_tft_model_use_case.py:765`,

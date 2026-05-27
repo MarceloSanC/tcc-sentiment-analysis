@@ -162,7 +162,7 @@ Ver `docs/00_overview/STRATEGIC_DIRECTION.md` §5 (Fase A) para o roadmap comple
 
 Antes de escrever qualquer capitulo de Resultados:
 - [ ] `A_code_audit.md` concluido com M1-M7 GREEN ou YELLOW com acao concluida
-- [ ] Engenharia pré-Fase B concluída por `docs/05_checklists/PHASE_B_IMPLEMENTATION_CHECKLIST.md` (Stages 1-11 da Fase B).
+- [ ] Engenharia pré-Fase B concluída por `docs/05_checklists/phase-b/PHASE_B_IMPLEMENTATION_CHECKLIST.md` (Stages 1-11 da Fase B).
 - [ ] Auditoria de leakage concluida (`docs/07_reports/external-reviews/leakage_audit_<date>.md`)
 - [ ] Baselines persistidos na coorte (`fact_oos_predictions` com mesmos grao)
 - [ ] Pre-registro versionado commitado (`docs/08_governance/preregistration_round1_<date>.md`)

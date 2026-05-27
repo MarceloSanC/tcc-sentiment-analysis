@@ -48,7 +48,7 @@ ordering em gold builders (omitido no plano original), test coverage expandido
 3. **Checkpoint pre-merge** (revisao por outra sessao Claude OU Marcelo)
 
 **Authoring de review prompts:** quando chegar ao fim da fase 2 de cada
-Stage, invoca skill [`staged-implementation-protocol`](../../.claude/skills/staged-implementation-protocol/SKILL.md)
+Stage, invoca skill [`staged-implementation-protocol`](../../../.claude/skills/staged-implementation-protocol/SKILL.md)
 §"Phase D step 12" para gerar o review prompt da PR alvo. Skill encoda
 as 5 audit dimensions mandatorias + active gap detection.
 
@@ -215,18 +215,18 @@ exige raciocinio sobre trade-offs semantica vs custo; nao mecanico.
   R-E pega o suffix fix)
 - `src/domain/services/quality_checks/**` (territorio R-21)
 - `src/domain/services/gold_builders/**` (territorio R-22)
-- `docs/05_checklists/PHASE_B_IMPLEMENTATION_CHECKLIST.md` (territorio R-23)
+- `docs/05_checklists/phase-b/PHASE_B_IMPLEMENTATION_CHECKLIST.md` (territorio R-23)
 - `data/analytics_archive_pre_phase_b/**` (intocavel sempre)
 
 ### Required reading (contexto antes de R-20.0)
-- [`docs/02_data/DATA_PIPELINE_WALKTHROUGH.md`](../02_data/DATA_PIPELINE_WALKTHROUGH.md)
+- [`docs/02_data/DATA_PIPELINE_WALKTHROUGH.md`](../../02_data/DATA_PIPELINE_WALKTHROUGH.md)
   §3.5 — construcao de `target_return` em `build_tft_dataset_use_case.py:563`
   (Inputs/Outputs/Calculos/Quality gates). Le isto antes de avaliar
   Opcoes a/b/c/d.
-- [`docs/02_data/DATA_PIPELINE_WALKTHROUGH.md`](../02_data/DATA_PIPELINE_WALKTHROUGH.md)
+- [`docs/02_data/DATA_PIPELINE_WALKTHROUGH.md`](../../02_data/DATA_PIPELINE_WALKTHROUGH.md)
   §4.6 — contrato de `fact_oos_predictions`, convencao `decision_idx`,
   comportamento de `IncompletePredictionWindowError`.
-- [`docs/02_data/DATA_PIPELINE_WALKTHROUGH.md`](../02_data/DATA_PIPELINE_WALKTHROUGH.md)
+- [`docs/02_data/DATA_PIPELINE_WALKTHROUGH.md`](../../02_data/DATA_PIPELINE_WALKTHROUGH.md)
   §4.12 — full enumeration dos 3 baselines (specs, offsets, run_id).
   Util ao ajustar `run_baselines_use_case.py:259`.
 
@@ -340,7 +340,7 @@ Impacto por Opcao:
    (compensa o shift; valor numerico identico ao TFT decoder agora.)
 
 4. Atualizar
-   [`docs/01_architecture/decisions/ADR-0003-multi-horizon-prediction-persister.md`](../01_architecture/decisions/ADR-0003-multi-horizon-prediction-persister.md):
+   [`docs/01_architecture/decisions/ADR-0003-multi-horizon-prediction-persister.md`](../../01_architecture/decisions/ADR-0003-multi-horizon-prediction-persister.md):
    - §Decision item 3: "y_true = dataset.target_return[decision_idx + h]"
      (formula muda; interpretacao "next-day return after decision" preserva
      porque target_return passa a ser backward-indexed).
@@ -349,7 +349,7 @@ Impacto por Opcao:
      historico).
 
 5. Atualizar
-   [`docs/03_modeling/MULTI_HORIZON.md`](../03_modeling/MULTI_HORIZON.md)
+   [`docs/03_modeling/MULTI_HORIZON.md`](../../03_modeling/MULTI_HORIZON.md)
    §"Convencao canonica" para refletir nova formula + indexacao.
 
 6. Atualizar
@@ -502,7 +502,7 @@ du -sh data/analytics_archive_pre_phase_b/                             # 851M
 
 ## R-20.5 — Update log + push
 
-- Atualizar [`docs/07_reports/option_b_execution_log_2026-05-19.md`](../07_reports/option_b_execution_log_2026-05-19.md)
+- Atualizar [`docs/07_reports/phase-gates/phase-b/option_b_execution_log_2026-05-19.md`](../../07_reports/phase-gates/phase-b/option_b_execution_log_2026-05-19.md)
   com entry Stage R-20 (decisao tomada, opcao escolhida, evidencia
   empirica do fix).
 - Commit + push (commits novos; sem rebase).
@@ -611,11 +611,11 @@ R-21.5 (orchestrator).
 - `src/use_cases/refresh_analytics_store_use_case.py` (territorio R-22)
 - `src/domain/services/gold_builders/**` (territorio R-22)
 - `src/domain/services/multi_horizon_prediction_persister.py` (R-20)
-- `docs/05_checklists/PHASE_B_IMPLEMENTATION_CHECKLIST.md` (territorio R-23)
+- `docs/05_checklists/phase-b/PHASE_B_IMPLEMENTATION_CHECKLIST.md` (territorio R-23)
 - `data/analytics_archive_pre_phase_b/**` (intocavel sempre)
 
 ### Required reading (contexto antes de R-21.1)
-- [`docs/02_data/DATA_PIPELINE_WALKTHROUGH.md`](../02_data/DATA_PIPELINE_WALKTHROUGH.md)
+- [`docs/02_data/DATA_PIPELINE_WALKTHROUGH.md`](../../02_data/DATA_PIPELINE_WALKTHROUGH.md)
   §4 — full enumeration dos quality gates aplicados por tabela silver.
   Use para mapear cada check do monolito ao seu cluster (cardinality /
   alignment / calibration / contracts). Cada subsecao 4.X lista
@@ -748,7 +748,7 @@ restante da Clean Arch do projeto.
 
 ## R-21.6 — Doc canonico (per plano §21.7)
 
-Adicionar a [`docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md`](../01_architecture/ANALYTICS_STORE_ARCHITECTURE.md)
+Adicionar a [`docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md`](../../01_architecture/ANALYTICS_STORE_ARCHITECTURE.md)
 secao "Quality check extension point" com exemplo:
 
 ```python
@@ -843,7 +843,7 @@ Custo: ~10-15 unit tests, ~segundos no total.
 
 ## R-21.8 — Atualizar ADR + log + validacao
 
-- Atualizar [`docs/01_architecture/decisions/ADR-0004-quality-check-registry.md`](../01_architecture/decisions/ADR-0004-quality-check-registry.md)
+- Atualizar [`docs/01_architecture/decisions/ADR-0004-quality-check-registry.md`](../../01_architecture/decisions/ADR-0004-quality-check-registry.md)
   status de "Accepted" para "Implemented (Stage R-21, PR #45)".
 - Atualizar log com Stage R-21 completion.
 - pytest verde; ruff verde; archive intacto.
@@ -881,20 +881,20 @@ mas orchestrator + topology test precisam decisao.
 - `src/use_cases/train_tft_model_use_case.py` (territorio R-20)
 - `src/use_cases/run_baselines_use_case.py` (territorio R-20)
 - `src/domain/services/multi_horizon_prediction_persister.py` (R-20)
-- `docs/05_checklists/PHASE_B_IMPLEMENTATION_CHECKLIST.md` (territorio R-23)
+- `docs/05_checklists/phase-b/PHASE_B_IMPLEMENTATION_CHECKLIST.md` (territorio R-23)
 - `data/analytics_archive_pre_phase_b/**` (intocavel sempre)
 
 ### Required reading (contexto antes de R-22.1)
-- [`docs/02_data/DATA_PIPELINE_WALKTHROUGH.md`](../02_data/DATA_PIPELINE_WALKTHROUGH.md)
+- [`docs/02_data/DATA_PIPELINE_WALKTHROUGH.md`](../../02_data/DATA_PIPELINE_WALKTHROUGH.md)
   §6 — full enumeration dos 26 gold builders (`gold_runs_long`,
   `gold_ranking_by_config`, ... `gold_quality_statistics_report`) com
   file:line do monolito `refresh_analytics_store_use_case.py`. Use como
   mapa para migracao mecanica de cada builder.
-- [`docs/02_data/DATA_PIPELINE_WALKTHROUGH.md`](../02_data/DATA_PIPELINE_WALKTHROUGH.md)
+- [`docs/02_data/DATA_PIPELINE_WALKTHROUGH.md`](../../02_data/DATA_PIPELINE_WALKTHROUGH.md)
   §6.2.4-6.2.5 + §6.3.10 — calculos detalhados de DM pairwise + MCS
   (loss matrix, Holm adjustment). Critico para preservar byte-identical
   apos modularizacao do cluster `pairwise.py`.
-- [`docs/02_data/DATA_PIPELINE_WALKTHROUGH.md`](../02_data/DATA_PIPELINE_WALKTHROUGH.md)
+- [`docs/02_data/DATA_PIPELINE_WALKTHROUGH.md`](../../02_data/DATA_PIPELINE_WALKTHROUGH.md)
   §6.3.15 — calculo de `gold_quality_statistics_report` (Tier 3 com
   deps em quality_report + dm_results + mcs_results + win_rate_results).
   Use para validar correta propagacao via `BuildContext.gold_outputs`
@@ -1255,13 +1255,13 @@ test).
 - Todo `src/` (Stage e gate de validacao, nao de codigo).
 - `data/analytics_archive_pre_phase_b/**` (intocavel sempre).
 - Permitido modificar:
-  - `docs/05_checklists/PHASE_B_IMPLEMENTATION_CHECKLIST.md` (nota F.1 textual
+  - `docs/05_checklists/phase-b/PHASE_B_IMPLEMENTATION_CHECKLIST.md` (nota F.1 textual
     apenas; checkbox `[x]` permanece per memory)
-  - `docs/05_checklists/POST_CLOSURE_FIXES_CHECKLIST.md` (texto Gap 6)
-  - `docs/07_reports/smoke_confirmatory_2026-05-18.md` (secao nova post-R-23)
-  - `docs/07_reports/option_b_execution_log_2026-05-19.md` (entries R-23.*)
+  - `docs/05_checklists/phase-a/POST_CLOSURE_FIXES_CHECKLIST.md` (texto Gap 6)
+  - `docs/07_reports/phase-gates/phase-a/smoke_confirmatory_2026-05-18.md` (secao nova post-R-23)
+  - `docs/07_reports/phase-gates/phase-b/option_b_execution_log_2026-05-19.md` (entries R-23.*)
   - Possivel novo `tests/integration/test_f1_golden_smoke.py` (golden file)
-  - `docs/07_reports/phase-gates/A_audit_closure_2026-05-17.md` (status final)
+  - `docs/07_reports/phase-gates/phase-a/A_audit_closure_2026-05-17.md` (status final)
 
 **Pre-condicao:** Stages R-20, R-E, R-21, R-22 mergeadas. CI verde em main.
 
@@ -1279,11 +1279,11 @@ Toggle do checkbox `[x] → [~] → [x]` gera ruido git e viola imutabilidade.
 fluem via NOTA TEXTUAL anexada ao item, em commit unico ao fim de R-23.3.
 
 Nesta task R-23.0, apenas registrar em log
-[`docs/07_reports/option_b_execution_log_2026-05-19.md`](../07_reports/option_b_execution_log_2026-05-19.md)
+[`docs/07_reports/phase-gates/phase-b/option_b_execution_log_2026-05-19.md`](../../07_reports/phase-gates/phase-b/option_b_execution_log_2026-05-19.md)
 que F.1 marker permanece [x] mas sua nota sera atualizada em R-23.3
 apos re-smoke max_epochs>=5 confirmar 6/6.
 
-Em [`docs/05_checklists/POST_CLOSURE_FIXES_CHECKLIST.md`](../05_checklists/POST_CLOSURE_FIXES_CHECKLIST.md)
+Em [`docs/05_checklists/phase-a/POST_CLOSURE_FIXES_CHECKLIST.md`](../../05_checklists/phase-a/POST_CLOSURE_FIXES_CHECKLIST.md)
 (este NAO e checkbox toggling — e atualizacao de descricao textual em
 nota que ja era texto livre):
 - Texto "Gap 6 RESOLVIDO" → "Gap 6 RESOLVIDO (Opcao d aplicada em
@@ -1322,7 +1322,7 @@ novos checks adicionados em R-21).
 
 ## R-23.2 — Validacao 6 criterios F.1 com evidencia
 
-Per [`docs/05_checklists/PHASE_B_IMPLEMENTATION_CHECKLIST.md`](../05_checklists/PHASE_B_IMPLEMENTATION_CHECKLIST.md)
+Per [`docs/05_checklists/phase-b/PHASE_B_IMPLEMENTATION_CHECKLIST.md`](../../05_checklists/phase-b/PHASE_B_IMPLEMENTATION_CHECKLIST.md)
 §"Stage final F.1":
 
 | # | Criterio | Verificar como |
@@ -1335,13 +1335,13 @@ Per [`docs/05_checklists/PHASE_B_IMPLEMENTATION_CHECKLIST.md`](../05_checklists/
 | 6 | Refresh + quality 0 FAIL | exit 0 do main_refresh_analytics_store |
 
 **Todos 6 devem PASS** para marcar F.1 `[x]`. Documentar em
-[`docs/07_reports/smoke_confirmatory_2026-05-18.md`](../07_reports/smoke_confirmatory_2026-05-18.md)
+[`docs/07_reports/phase-gates/phase-a/smoke_confirmatory_2026-05-18.md`](../../07_reports/phase-gates/phase-a/smoke_confirmatory_2026-05-18.md)
 secao "F.1 v3 PASS pleno (post-Stage R-23, YYYY-MM-DD)" substituindo a
 secao Stage 20 atual (que foi inadequada).
 
 ## R-23.3 — Atualizar nota de satisfacao F.1 (checkbox permanece `[x]`)
 
-Em [`docs/05_checklists/PHASE_B_IMPLEMENTATION_CHECKLIST.md`](../05_checklists/PHASE_B_IMPLEMENTATION_CHECKLIST.md):
+Em [`docs/05_checklists/phase-b/PHASE_B_IMPLEMENTATION_CHECKLIST.md`](../../05_checklists/phase-b/PHASE_B_IMPLEMENTATION_CHECKLIST.md):
 
 **Checkbox `[x]` permanece** (per memory `feedback_checklist_vs_docs`).
 Atualizar APENAS o texto da nota de satisfacao do F.1 num COMMIT UNICO,
@@ -1371,7 +1371,7 @@ F.3 mantem `[~]` (dependencia em F.2 pre-registro, separado).
 
 # 4. Logging
 
-Append-only em [`docs/07_reports/option_b_execution_log_2026-05-19.md`](../07_reports/option_b_execution_log_2026-05-19.md).
+Append-only em [`docs/07_reports/phase-gates/phase-b/option_b_execution_log_2026-05-19.md`](../../07_reports/phase-gates/phase-b/option_b_execution_log_2026-05-19.md).
 
 Cada Stage de remediacao tem entries:
 - `Stage R-N.X — decision` (escolhas-chave; e.g., Opcao a/b/c em R-20.0)

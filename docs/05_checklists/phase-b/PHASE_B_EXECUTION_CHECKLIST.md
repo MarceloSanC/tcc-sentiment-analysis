@@ -12,15 +12,15 @@ canonical_for: [phase_b_execution_checklist, phase_b_confirmatory_runbook]
 
 # Phase B — Execution Checklist (Confirmatory Run)
 
-**Status:** pendente
+**Status:** completo (2026-05-26; fechamento documental preparado na PR-B)
 **Criado:** 2026-05-23
 **Pre-requisito:** [PHASE_B_IMPLEMENTATION_CHECKLIST.md F.3 [x]](PHASE_B_IMPLEMENTATION_CHECKLIST.md) (2026-05-23, PR #59 mergeada).
-**Pre-registro de referencia:** [preregistration_phase_b.md](../06_pre_registration/preregistration_phase_b.md) (PR #58 mergeada 2026-05-23; sera selado com commit hash em E1).
-**Bloqueante para:** Fase C (analise de contribuicao de features per STRATEGIC_DIRECTION §5 Fase C).
+**Pre-registro de referencia:** [preregistration_phase_b.md](../../06_pre_registration/phase-b/preregistration_phase_b.md) (PR #58 mergeada 2026-05-23; sera selado com commit hash em E1).
+**Bloqueante para:** Fase C (analise de contribuicao de features per STRATEGIC_DIRECTION §5 Fase C) — liberado para merge apos PR-B.
 **Tempo total estimado:** ~25-45h de wall-clock (dominado por E0 ~6-12h + E2 ~8-15h).
 
 Este checklist operacionaliza a execucao da Phase B confirmatoria declarada em
-[`preregistration_phase_b.md`](../06_pre_registration/preregistration_phase_b.md).
+[`preregistration_phase_b.md`](../../06_pre_registration/phase-b/preregistration_phase_b.md).
 Cada Stage E<N> abaixo eh um conjunto de tasks com Aceite explicito; o ciclo
 termina quando E6 reportar tier por horizonte e a emenda final em §15 do
 pre-registro for mergeada.
@@ -52,17 +52,17 @@ _(vazio na criacao; preenchido se uma decisao D1-D8 for revisada mid-execucao co
 - `[~]` = em revisao (PR aberto)
 - Cada task termina com **Aceite:** criterio que comprova que a task esta pronta.
 - Branch naming, commit format e PR template seguem
-  [`docs/08_governance/GOVERNANCE_AND_VERSIONING.md`](../08_governance/GOVERNANCE_AND_VERSIONING.md).
+  [`docs/08_governance/GOVERNANCE_AND_VERSIONING.md`](../../08_governance/GOVERNANCE_AND_VERSIONING.md).
 
 ## Cross-link Stage → pre-registro / runbook / skill
 
 | Stage | preregistration_phase_b.md § | Runbook | Skill aplicavel |
 |---|---|---|---|
-| E0 | §4.2 passos 2-3 (Optuna heritage exploratoria) | [RUN_SWEEPS.md](../06_runbooks/RUN_SWEEPS.md) | explicit-sweep-execution |
+| E0 | §4.2 passos 2-3 (Optuna heritage exploratoria) | [RUN_SWEEPS.md](../../06_runbooks/RUN_SWEEPS.md) | explicit-sweep-execution |
 | E1 | §4.2 passo 4 + §14 (emenda) + §15 (slot hash) | — | documentation-authoring + staged-implementation-protocol Phase B |
-| E2 | §4 (candidato) + §11 (sweep type) + §13 (artefatos) | [RUN_TRAINING.md](../06_runbooks/RUN_TRAINING.md) | explicit-sweep-execution |
-| E3 | §5 (baselines) + §11 (alinhamento via JSON unico) | [RUN_BASELINES.md](../06_runbooks/RUN_BASELINES.md) | explicit-sweep-execution |
-| E4 | §7 (protocolo estatistico) + §10 (ScopeSpec) + §13 (artefatos) | [RUN_REFRESH_ANALYTICS.md](../06_runbooks/RUN_REFRESH_ANALYTICS.md) | — |
+| E2 | §4 (candidato) + §11 (sweep type) + §13 (artefatos) | [RUN_TRAINING.md](../../06_runbooks/RUN_TRAINING.md) | explicit-sweep-execution |
+| E3 | §5 (baselines) + §11 (alinhamento via JSON unico) | [RUN_BASELINES.md](../../06_runbooks/RUN_BASELINES.md) | explicit-sweep-execution |
+| E4 | §7 (protocolo estatistico) + §10 (ScopeSpec) + §13 (artefatos) | [RUN_REFRESH_ANALYTICS.md](../../06_runbooks/RUN_REFRESH_ANALYTICS.md) | — |
 | E5 | §9 (Tier 1/Tier 2 gates) + §3 (H1/H2a/H2b) | — | model-performance-and-research-advisor |
 | E6 | §15 (execucao slot) + §14 (emenda) | — | documentation-authoring |
 
@@ -167,7 +167,7 @@ Recomendacao: usar data do dia em que E2 vai disparar.
 
 ### Tasks
 
-- [~] **E1.1** Criar `config/sweeps/explicit/phase_b_confirmatorio_<YYYYMMDD>.json`.
+- [x] **E1.1** Criar `config/sweeps/explicit/phase_b_confirmatorio_<YYYYMMDD>.json`.
       Base: template
       [`phase_a_smoke_20260518_v2.json`](../../config/sweeps/explicit/phase_a_smoke_20260518_v2.json)
       com substituicoes:
@@ -187,11 +187,11 @@ Recomendacao: usar data do dia em que E2 vai disparar.
       **Aceite:** JSON valido; `output_subdir` igual a `parent_sweep_id` esperado;
       `walk_forward.folds` tem exatamente 3 entradas; baselines tem exatamente 3 entradas.
 
-- [~] **E1.2** Computar `sha256sum config/sweeps/explicit/phase_b_confirmatorio_<YYYYMMDD>.json`.
+- [x] **E1.2** Computar `sha256sum config/sweeps/explicit/phase_b_confirmatorio_<YYYYMMDD>.json`.
       Registrar o hash em commit message E1.4 + slot §15 do pre-registro.
       **Aceite:** hash de 64 chars hex registrado; comando reproduzivel.
 
-- [~] **E1.3** Editar [`docs/06_pre_registration/preregistration_phase_b.md`](../06_pre_registration/preregistration_phase_b.md):
+- [x] **E1.3** Editar [`docs/06_pre_registration/phase-b/preregistration_phase_b.md`](../../06_pre_registration/phase-b/preregistration_phase_b.md):
       - §14 "Emendas": adicionar entrada datada
         ```
         ### 2026-MM-DD — Emenda E1: selo da config congelada
@@ -212,14 +212,14 @@ Recomendacao: usar data do dia em que E2 vai disparar.
         - Demais slots permanecem `<a preencher>` ate E6.
       **Aceite:** §14 tem nova entrada datada; §15 com 3 dos 6 slots preenchidos.
 
-- [~] **E1.4** Commit unico:
+- [x] **E1.4** Commit unico:
       `feat(phase-b-exec): selar config phase_b_confirmatorio_<YYYYMMDD> e
       emenda pre-registro E1`. Body do commit cita: sha256 da config, sweep_id
       do E0 heritage, top-1 trial_number/run_id.
       **Aceite:** commit no padrao do governance doc; passa pre-commit hooks
       (se houver); diff inclui apenas 1 JSON novo + edits no pre-registro.
 
-- [~] **E1.5** Push branch + abrir **PR-A**:
+- [x] **E1.5** Push branch + abrir **PR-A**:
       `feat(phase-b-exec): config sealing + pre-registro emenda E1`. Body cita
       `PHASE_B_EXECUTION_CHECKLIST.md` Stage E1, decisoes D1-D8 fechadas, sha256
       da config, sweep_id E0 heritage.
@@ -228,7 +228,8 @@ Recomendacao: usar data do dia em que E2 vai disparar.
 
 ### Notas de revisao:
 
-- 2026-05-24 00:?? UTC: Stage E1 executado pela Sessao-A (em revisao [~]).
+- 2026-05-24 00:?? UTC: Stage E1 executado pela Sessao-A; PR-A mergeada
+  antes de E2.
 - Branch: `feat/phase-b-execution-20260524` (criada a partir de main em E1.0
   apos pull --ff-only; commit base `f92bd57`).
 - Decisao D2: `<YYYYMMDD>` = `20260524` (escolhida por Marcelo via question
@@ -261,8 +262,7 @@ Recomendacao: usar data do dia em que E2 vai disparar.
     PHASE_B_IMPLEMENTATION_CHECKLIST.md, POST_CLOSURE_FIXES_CHECKLIST.md,
     ADRs).
 - Cohort esperado pos-E2+E3: 15 TFT runs + 45 baseline = 60 dim_run.
-- Outcome: PASS_PENDING_MERGE (em revisao [~] aguardando PR-A merge antes
-  de E2).
+- Outcome: PASS apos merge da PR-A antes de E2.
 
 ---
 
@@ -284,7 +284,7 @@ selada em E1.
       - (b) `.venv/bin/ruff check src/ tests/` → `All checks passed!`.
       - (c) Bit-byte reproduce: executar 1 run TFT com `--seed 20260517 --max-epochs 1 --parent-sweep-id e2_repro_check --max-encoder-length 60 --max-prediction-length 7` (config minima) e confirmar que `fact_oos_predictions` produz mesmos `y_hat_q50` da run R-23 (`run_id=3e685d04...`) para os primeiros 5 timestamps. Wipe `data/analytics/silver/*sweep_id=e2_repro_check*` apos check.
       - (d) `sha256sum data/processed/dataset_tft/AAPL/dataset_tft_AAPL.parquet` registrado e comparado contra valor esperado pos-R-20 (registrado em
-        [`option_b_execution_log_2026-05-19.md`](../07_reports/option_b_execution_log_2026-05-19.md) §Stage R-20.1).
+        [`option_b_execution_log_2026-05-19.md`](../../07_reports/phase-gates/phase-b/option_b_execution_log_2026-05-19.md) §Stage R-20.1).
       - (e) `gh pr view 54 58 59 --json statusCheckRollup,state` → todos MERGED + CI green.
       **Aceite:** 4 checks PASS; output registrado em `/tmp/e2_preflight_<YYYYMMDD>.txt`.
 
@@ -296,7 +296,7 @@ selada em E1.
       logged em `dim_run.created_at..ended_at` por run.
 
 - [x] **E2.2** Validar shape do silver:
-      `ls data/analytics/silver/dim_run/asset=AAPL/parent_sweep_id=phase_b_confirmatorio_<YYYYMMDD>/`
+      `ls data/analytics/silver/dim_run/asset=AAPL/sweep_id=phase_b_confirmatorio_<YYYYMMDD>/`
       → deve listar exatamente **15 partitions** (5 seeds × 3 folds).
       `data/analytics/silver/fact_oos_predictions/...` deve ter cobertura
       `(run_id, split, horizon)` para val + test, h=1 + h=7.
@@ -382,7 +382,7 @@ single-JSON).
       runs persistidos.
 
 - [x] **E3.2** Validar shape e alinhamento:
-      - `dim_run/asset=AAPL/parent_sweep_id=phase_b_confirmatorio_<YYYYMMDD>/`
+      - `dim_run/asset=AAPL/sweep_id=phase_b_confirmatorio_<YYYYMMDD>/`
         agora tem **15 TFT + 45 baselines = 60 partitions**.
       - `fact_oos_predictions/asset=AAPL/feature_set_name=baseline/...` populado.
       - **Spot-check de alinhamento**: para 1 run TFT + 1 run baseline com mesma
@@ -478,7 +478,7 @@ quality gate exit 0 com `failed_checks=[]`.
 
 ### Tasks
 
-- [~] **E4.1** Executar comando exato per F.2 §10:
+- [x] **E4.1** Executar comando exato per F.2 §10:
       ```
       .venv/bin/python -m src.main_refresh_analytics_store \
           --scope-mode cohort_decision \
@@ -492,7 +492,7 @@ quality gate exit 0 com `failed_checks=[]`.
       **Aceite:** exit code 0; ultima linha mostra `passed=True`,
       `failed_checks=[]`, `total_checks≥27`; ≥25 gold parquets materializados.
 
-- [~] **E4.2** Spot-check de tabelas gold criticas:
+- [x] **E4.2** Spot-check de tabelas gold criticas:
       - `gold_dm_pairwise_results.parquet` tem rows para 2 horizontes × 3
         baselines = 6 comparacoes pareadas com TFT.
       - `gold_mcs_results.parquet` inclui TFT + 3 baselines × 2 horizontes.
@@ -508,8 +508,8 @@ quality gate exit 0 com `failed_checks=[]`.
 
 - 2026-05-24 04:10 UTC: Stage E4 executado autonomamente pela Sessao-A.
 - Branch: `feat/phase-b-execution-20260524`.
-- Status final: `[~]` em revisao -- exit code 1 (NAO satisfez aceite
-  literal `failed_checks=[]`). 3 quality checks failed, todos
+- Status operacional original: REVIEW_WITH_YELLOW_DEBT -- exit code 1
+  (NAO satisfez aceite literal `failed_checks=[]`). 3 quality checks failed, todos
   classificados como tech debt YELLOW antecipado em F.2 §11 (cohort
   splitting de baselines) e/ou inter-seed warmup boundary variance
   (1-4 timestamps em test/val). Phase B cohort utilizavel para Sessao-B
@@ -658,18 +658,18 @@ nao pode depender de inspecao dos resultados).
 1/Tier 2 + gate degeneracao) + §14 Emenda E1.8 (protocolo operacional DM).
 
 **Sessao:** **Sessao-B** (Marcelo presente; skill
-[model-performance-and-research-advisor](../ai/skills/model-performance-and-research-advisor/SKILL.md)
+[model-performance-and-research-advisor](../../ai/skills/model-performance-and-research-advisor/SKILL.md)
 ativa).
 
 **Pre-condicao:**
 - E4.2 PASS (gold materializado, quality gate exit 0).
 - **PR-A4 mergeada** (pipeline pre-processador E5; gera os 5 sidecars que
   voce consome aqui). Detalhes em
-  [`docs/ai/PHASE_B_PR_A4_TIER_PIPELINE_PROMPT.md`](../ai/PHASE_B_PR_A4_TIER_PIPELINE_PROMPT.md).
+  [`docs/ai/phase-b/PHASE_B_PR_A4_TIER_PIPELINE_PROMPT.md`](../../ai/phase-b/PHASE_B_PR_A4_TIER_PIPELINE_PROMPT.md).
 - Sidecars existem em
   `data/analytics/reports/phase_b/cohort=phase_b_confirmatorio_<YYYYMMDD>/`
   (gerados pelo CLI `main_compute_phase_b_tier_metrics` apos PR-A4 merge;
-  ver [`RUN_PHASE_B_TIER_CLASSIFICATION.md`](../06_runbooks/RUN_PHASE_B_TIER_CLASSIFICATION.md)).
+  ver [`RUN_PHASE_B_TIER_CLASSIFICATION.md`](../../06_runbooks/phase-b/RUN_PHASE_B_TIER_CLASSIFICATION.md)).
 
 **Nota arquitetural:** O calculo mecanico de DM/Holm/calibracao/tier foi
 movido para o pipeline PR-A4 (Emenda E1.8) para satisfazer separacao
@@ -679,7 +679,7 @@ nao recomputa.
 
 ### Tasks
 
-- [~] **E5.1** Carregar 5 sidecars Phase B em
+- [x] **E5.1** Carregar 5 sidecars Phase B em
       `data/analytics/reports/phase_b/cohort=phase_b_confirmatorio_<YYYYMMDD>/`:
       - `phase_b_marginal_coverage.parquet` (60 rows: coverage_q10/q50/q90
         por run_id/split/horizon).
@@ -696,7 +696,7 @@ nao recomputa.
       **Aceite:** 5 sidecars carregados com shapes esperados; se qualquer
       shape divergir, PAUSE e reporte (provavel bug PR-A4).
 
-- [~] **E5.2** Confirmar **gate de degeneracao quantilica** (precondicao
+- [x] **E5.2** Confirmar **gate de degeneracao quantilica** (precondicao
       para qualquer tier per F.2 §9) ja foi validado pela Sessao-A em E2.3
       (60 grupos `p10_eq_p90_rate=0.0`) e pelo refresh em E4
       (`gold_quantile_degeneracy_report.gate_passed=True` em todos grupos
@@ -709,7 +709,7 @@ nao recomputa.
       **Aceite:** gate confirmado; se algum grupo TFT falhar, PAUSE e
       reporte (exclusao automatica de claims probabilisticos).
 
-- [~] **E5.3** Validar sanidade dos sidecars (smoke checks, NAO
+- [x] **E5.3** Validar sanidade dos sidecars (smoke checks, NAO
       interpretacao):
       - `dm_family_6`: 6 rows totais; `pvalue_one_sided ∈ [0, 1]`;
         `pvalue_adj_holm ≥ pvalue_one_sided` (Holm monotonic); colunas
@@ -721,7 +721,7 @@ nao recomputa.
       **Aceite:** todas as sanidades PASS. Se algum sidecar tem NaN
       inesperado, PAUSE e debug PR-A4 (nao "ajuste" durante E5).
 
-- [~] **E5.4** Ler `phase_b_tier_verdict.parquet` e produzir tabela
+- [x] **E5.4** Ler `phase_b_tier_verdict.parquet` e produzir tabela
       consolidada para revisao com Marcelo (formato sugerido):
       | hipotese | horizonte | tier | criterios_passed | numerical_inputs_summary |
       |---|---|---|---|---|
@@ -735,7 +735,7 @@ nao recomputa.
       **Aceite:** 6 rows consolidadas com todos os inputs numericos
       auditaveis (sem perda de informacao vs sidecar).
 
-- [~] **E5.5** **Apresentar a Marcelo** o tabela E5.4 + sidecar
+- [x] **E5.5** **Apresentar a Marcelo** o tabela E5.4 + sidecar
       `tier_verdict` raw para revisao + aprovacao. Em particular:
       - Tier classificado por hipotese segue mecanicamente F.2 §9.
       - Sensibilidade D (Holm-18) reportada como apendice (nao primario).
@@ -744,7 +744,7 @@ nao recomputa.
       **Aceite:** Marcelo aprova ou solicita reanalise; sem aprovacao,
       **NAO commitar** o relatorio em E6.
 
-- [~] **E5.6** Apos aprovacao de Marcelo em E5.5, registrar veredito final
+- [x] **E5.6** Apos aprovacao de Marcelo em E5.5, registrar veredito final
       em `/tmp/tier_verdict_<YYYYMMDD>.csv` com colunas
       `(horizon, hypothesis, tier, justificativa, criterios_inputs)`.
       **Aceite:** arquivo CSV produzido; veredito unicamente derivado dos
@@ -793,7 +793,7 @@ _(preenchido pela Sessao-A ou Marcelo apos merge PR-A4; template:)_
 #### E5 execucao (Sessao-B)
 
 - 2026-05-25 UTC: Sessao-B Claude Opus 4.7 executou E5.1-E5.6 em **modo
-  autonomo overnight** (override do prompt primario `docs/ai/PHASE_B_SESSION_B_PROMPT.md`).
+  autonomo overnight** (override do prompt primario `docs/ai/phase-b/PHASE_B_SESSION_B_PROMPT.md`).
   Marcelo dormia; aprovacao humana substituida por: (a) reality check
   pre-calculado embutido no prompt override (6/6 slots tier batem com
   sidecar), (b) regra mecanica F.2 §9 aplicada por PR-A4 sem reframing,
@@ -813,8 +813,10 @@ _(preenchido pela Sessao-A ou Marcelo apos merge PR-A4; template:)_
 - **E5.4 DM family-6 lido:** 4 pares TFT-vs-baseline significativos
   (`pvalue_adj_holm < 0.05`): historical_mean_rolling (h=1, h=7) +
   zero_return (h=1, h=7). 2 pares nao-significativos:
-  historical_quantiles_rolling (p_adj = 0.465 h=1, 0.685 h=7). HAC lag = h
-  em todos; HLN aplicado.
+  historical_quantiles_rolling (p_adj = 0.465 h=1, 0.685 h=7). HAC
+  `lag=max(h-1,1)` (`h=1 -> 1`, `h=7 -> 6`) em todos; HLN aplicado. Este lag
+  estatistico do DM e separado da convencao de horizonte/target usada para
+  alinhar TFT e baseline.
 - **E5.5 delta pinball:** TFT supera baselines pontuais em ~29-30%
   (zero_return) e ~30% (historical_mean_rolling); perde marginalmente para
   historical_quantiles_rolling (-0.6% h=1, -1.9% h=7).
@@ -845,7 +847,7 @@ _(preenchido pela Sessao-A ou Marcelo apos merge PR-A4; template:)_
    cohort (~330K rows, ~9MB total archive) para reprodutibilidade ex-post.
 
 Log integral em /tmp/session_b_decisions_log.md, replicado no PR-B body
-e em `docs/ai/PHASE_B_SESSION_B_PROMPT.md` anexo "Precedentes".
+e em `docs/ai/phase-b/PHASE_B_SESSION_B_PROMPT.md` anexo "Precedentes".
 
 ---
 
@@ -863,8 +865,8 @@ abrir PR-B.
 
 ### Tasks
 
-- [~] **E6.1** Criar
-      [`docs/07_reports/phase-gates/B_confirmatory_<YYYY-MM-DD>.md`](../07_reports/phase-gates/).
+- [x] **E6.1** Criar
+      [`docs/07_reports/phase-gates/phase-b/B_confirmatory_<YYYY-MM-DD>.md`](../../07_reports/phase-gates/phase-b/).
       Template minimo:
       - Status: PASS Tier 1 / PASS Tier 2 / REFUTADO (por horizonte).
       - Parametros executados: cita config sha256, parent_sweep_id, dataset
@@ -879,7 +881,7 @@ abrir PR-B.
       **Aceite:** relatorio ≥ 200 LOC; sections completas; cita todos os
       artefatos (silver/gold tables, commit hash, sha256).
 
-- [~] **E6.2** Editar `preregistration_phase_b.md` §15 "Execucao":
+- [x] **E6.2** Editar `preregistration_phase_b.md` §15 "Execucao":
       preencher slots restantes:
       - **Data de execucao confirmatoria:** `<YYYY-MM-DD>`
       - **Resultado tier (H1, H2a, H2b por horizonte):** `<tier-1 / tier-2 / refutado>`
@@ -893,25 +895,25 @@ abrir PR-B.
       ```
       **Aceite:** §15 todos os 6 slots preenchidos; §14 com nova entrada datada.
 
-- [~] **E6.3** Criar archive snapshot read-only (D5):
+- [x] **E6.3** Criar archive snapshot read-only (D5):
       - Antes de criar o archive, confirmar que `.gitignore` cobre
         `data/analytics_archive_*` (regra atual esperada: `data/**`):
         `git check-ignore -v data/analytics_archive_phase_b_<YYYYMMDD>/__probe__.parquet`.
         Se nao houver match, parar e corrigir `.gitignore` antes de qualquer
         `git add`, para nao versionar Parquets do snapshot.
       - `mkdir -p data/analytics_archive_phase_b_<YYYYMMDD>/`
-      - `cp -r data/analytics/silver/dim_run/asset=AAPL/parent_sweep_id=phase_b_confirmatorio_<YYYYMMDD>/ data/analytics_archive_phase_b_<YYYYMMDD>/silver_dim_run/`
+      - `cp -r data/analytics/silver/dim_run/asset=AAPL/sweep_id=phase_b_confirmatorio_<YYYYMMDD>/ data/analytics_archive_phase_b_<YYYYMMDD>/silver_dim_run/`
       - Idem para `fact_oos_predictions` (filtered por run_id da coorte) e
-        25 gold tables filteradas por parent_sweep_id.
+        gold tables filteradas por parent_sweep_id.
       - `chmod -R a-w data/analytics_archive_phase_b_<YYYYMMDD>/`
       - Adicionar nota em
-        [`docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md`](../01_architecture/ANALYTICS_STORE_ARCHITECTURE.md)
+        [`docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md`](../../01_architecture/ANALYTICS_STORE_ARCHITECTURE.md)
         registrando o archive (mesmo padrao de Stage 3 do
         PHASE_B_IMPLEMENTATION_CHECKLIST).
       **Aceite:** archive populado; `chmod` aplicado (escrita em arquivo do
       archive falha com Permission denied); doc canonica atualizada.
 
-- [~] **E6.4** Commits empilhados na branch:
+- [x] **E6.4** Commits empilhados na branch:
       1. `docs(phase-b-exec): adicionar relatorio B_confirmatory_<YYYY-MM-DD>`
       2. `docs(pre-reg): emenda E6 — preencher §15 execucao + entrada §14`
       3. `chore(archive): snapshot read-only Phase B + nota ANALYTICS_STORE_ARCHITECTURE`
@@ -919,16 +921,16 @@ abrir PR-B.
       commit isolado; nenhum arquivo sob `data/analytics_archive_phase_b_*`
       aparece em `git status --short`.
 
-- [~] **E6.5** Push branch + abrir **PR-B**:
+- [x] **E6.5** Push branch + abrir **PR-B**:
       `docs(phase-b-exec): relatorio Phase B confirmatorio + emenda final + archive snapshot`.
       Body cita: tier classificacao por hipotese, gold tables criticas, link
       para relatorio, link para archive.
       **Aceite:** PR contra main; CI green; Marcelo revisa e mergeia.
 
-- [ ] **E6.6** Apos merge PR-B: atualizar `PHASE_B_EXECUTION_CHECKLIST.md`
-      header `Status: pendente → completo (YYYY-MM-DD)` + marcar todos os
-      Stages E0-E6 como `[x]`. Atualizar
-      `STRATEGIC_DIRECTION.md` Fase B status se houver flag de progresso.
+- [x] **E6.6** Fechamento documental pré-merge PR-B: atualizar `PHASE_B_EXECUTION_CHECKLIST.md`
+      header `Status: pendente → completo (YYYY-MM-DD)`, marcar todos os
+      Stages E0-E6 como `[x]` e atualizar `STRATEGIC_DIRECTION.md` com status
+      da Phase B.
       **Aceite:** checkboxes E0-E6 = `[x]`; Status atualizado; commit
       `chore(checklist): close PHASE_B_EXECUTION_CHECKLIST.md`.
 
@@ -940,7 +942,7 @@ abrir PR-B.
   PR-B aberto autonomamente (sem aprovacao Marcelo intermediaria per
   override do prompt primario).
 - **E6.1 relatorio:**
-  [`docs/07_reports/phase-gates/B_confirmatory_2026-05-25.md`](../07_reports/phase-gates/B_confirmatory_2026-05-25.md)
+  [`docs/07_reports/phase-gates/phase-b/B_confirmatory_2026-05-25.md`](../../07_reports/phase-gates/phase-b/B_confirmatory_2026-05-25.md)
   — 420 LOC. Sections:
   parametros executados (config sha256, parent_sweep_id, dataset sha256,
   commit selo F.2 `067cb32`), tier_verdict consolidada, calibracao
@@ -961,12 +963,12 @@ abrir PR-B.
   `data/analytics_archive_phase_b_20260524/` (9.4M total).
   Conteudo: silver/dim_run cohort (60 rows) + silver/fact_oos_predictions
   filtrado por run_id (330.050 rows, 21 particoes hive) + gold filtrado
-  por parent_sweep_id (24/25 tables — uma tabela nao tem coluna
-  parent_sweep_id ou ficou vazia para cohort, nao bloqueador) + 5 sidecars
-  copia (68K). `chmod -R a-w` aplicado; touch test confirma escrita
+  por parent_sweep_id (24/25 tables — `gold_feature_contrib_local_summary.parquet`
+  ficou vazia para cohort/local explainability e nao e artefato confirmatorio
+  bloqueador) + 5 sidecars copia (68K). `chmod -R a-w` aplicado; touch test confirma escrita
   bloqueada ("Permission denied"). `git check-ignore` confirma cobertura
   por `.gitignore:data/**`. Nota adicionada em
-  [`docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md`](../01_architecture/ANALYTICS_STORE_ARCHITECTURE.md)
+  [`docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md`](../../01_architecture/ANALYTICS_STORE_ARCHITECTURE.md)
   §"Archive Phase B confirmatorio (2026-05-25)" (subsection do §Archive
   pre-Phase B existente).
 - **E6.4 commits empilhados (3):**
@@ -996,11 +998,11 @@ Mesmas decisoes listadas em Notas E5 acima. Impacto E6:
 | Checklist / Doc | Relacao |
 |---|---|
 | [`PHASE_B_IMPLEMENTATION_CHECKLIST.md`](PHASE_B_IMPLEMENTATION_CHECKLIST.md) | Antecessor — pre-experiment engineering. Imutavel apos F.3 [x]. |
-| [`preregistration_phase_b.md`](../06_pre_registration/preregistration_phase_b.md) | Fonte cientifica (F.2). Selada via emenda em E1; finalizada em E6. |
-| [`POST_AUDIT_EXECUTION_PLAN.md`](../08_governance/POST_AUDIT_EXECUTION_PLAN.md) | Mapa alto-nivel pos-A_code_audit; nao operacionaliza E0-E6 (este checklist preenche essa lacuna). |
-| [`smoke_confirmatory_2026-05-18.md`](../07_reports/smoke_confirmatory_2026-05-18.md) §F.1 v4 PASS pleno | Referencia operacional para reproducao em E2.0 (bit-byte check D7). |
-| [`STRATEGIC_DIRECTION.md`](../00_overview/STRATEGIC_DIRECTION.md) §5 Fase B | Direcao estrategica; criterio de sucesso. |
-| [`GOVERNANCE_AND_VERSIONING.md`](../08_governance/GOVERNANCE_AND_VERSIONING.md) | Padroes de branch/commit/PR. |
+| [`preregistration_phase_b.md`](../../06_pre_registration/phase-b/preregistration_phase_b.md) | Fonte cientifica (F.2). Selada via emenda em E1; finalizada em E6. |
+| [`POST_AUDIT_EXECUTION_PLAN.md`](../../08_governance/phase-a/POST_AUDIT_EXECUTION_PLAN.md) | Mapa alto-nivel pos-A_code_audit; nao operacionaliza E0-E6 (este checklist preenche essa lacuna). |
+| [`smoke_confirmatory_2026-05-18.md`](../../07_reports/phase-gates/phase-a/smoke_confirmatory_2026-05-18.md) §F.1 v4 PASS pleno | Referencia operacional para reproducao em E2.0 (bit-byte check D7). |
+| [`STRATEGIC_DIRECTION.md`](../../00_overview/STRATEGIC_DIRECTION.md) §5 Fase B | Direcao estrategica; criterio de sucesso. |
+| [`GOVERNANCE_AND_VERSIONING.md`](../../08_governance/GOVERNANCE_AND_VERSIONING.md) | Padroes de branch/commit/PR. |
 | `docs/ai/skills/explicit-sweep-execution/SKILL.md` | Protocolo sweep explicit (aplicado E0, E2, E3). |
 | `docs/ai/skills/model-performance-and-research-advisor/SKILL.md` | Protocolo de decisao analitica (aplicado E5). |
 | `.claude/skills/staged-implementation-protocol/SKILL.md` | Protocolo de delegacao para sessoes implementadoras (orienta autoria dos prompts Sessao-A e Sessao-B). |

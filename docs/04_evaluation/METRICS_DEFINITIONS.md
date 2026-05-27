@@ -89,7 +89,7 @@ A escolha entre as duas **nao e cosmetica**: o smoke M7 do projeto evidenciou
 diferencas materiais em `picp`, `mpiw`, `mean_pinball` e `coverage_error` em
 4/4 linhas auditadas; `crossing_before_count=402`, `crossing_after_count=0`;
 `gold_prediction_metrics_by_run_split_horizon` contem 4 linhas com `mpiw<0`
-historicamente. Ver `docs/07_reports/phase-gates/A_code_audit.md` §M5-Q1 para
+historicamente. Ver `docs/07_reports/phase-gates/phase-a/A_code_audit.md` §M5-Q1 para
 o achado original.
 
 ### Categorias por tabela

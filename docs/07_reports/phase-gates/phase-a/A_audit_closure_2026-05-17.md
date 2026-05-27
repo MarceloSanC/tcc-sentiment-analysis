@@ -12,7 +12,7 @@ canonical_for: [phase_a_closure_mapping, audit_to_stage_traceability]
 
 Mapeia cada acao "Acao (se YELLOW/RED)" dos modulos M1-M7 do
 [`A_code_audit.md`](A_code_audit.md) para o(s) Stage(s) do
-[`PHASE_B_IMPLEMENTATION_CHECKLIST.md`](../../05_checklists/PHASE_B_IMPLEMENTATION_CHECKLIST.md)
+[`PHASE_B_IMPLEMENTATION_CHECKLIST.md`](../../../05_checklists/phase-b/PHASE_B_IMPLEMENTATION_CHECKLIST.md)
 que a fechou (ou para F.1/F.2/Fase C quando aplicavel). Base para marcar
 **Gate de saida da Fase A** com confianca.
 
@@ -206,9 +206,9 @@ Acoes em [`A_code_audit.md:1177-1226`](A_code_audit.md#L1177):
    post-guardrail** → Stage 8 implementou flag
    `--primary-quantile-contract` com default `post_guardrail`;
    policy canonical em
-   [`METRICS_DEFINITIONS.md`](../../04_evaluation/METRICS_DEFINITIONS.md)
+   [`METRICS_DEFINITIONS.md`](../../../04_evaluation/METRICS_DEFINITIONS.md)
    §"Variante quantilica" e
-   [`20_method.md`](../living-paper/20_method.md) §"Politica de variante
+   [`20_method.md`](../../living-paper/20_method.md) §"Politica de variante
    quantilica" (Chernozhukov 2010, Gneiting & Raftery 2007, Jorion 2007,
    Acerbi & Tasche 2002). **F.2 pre-registro** fixa declaracao final.
 8. **Cross-link M5: falha `gold_metrics_by_config_n_oos_contract` 13800
@@ -429,13 +429,13 @@ cobertura dos reviews**, nao nos Stages mergeados. Gap 6 e o unico
 que aponta para bug latente em Stage 11 trainer; demais sao de
 cobertura cross-Stage (Stage 12 ↔ Stages 9/10) e bug pre-existente em
 CLI. Plano de fix em
-[`POST_CLOSURE_FIXES_CHECKLIST.md` Stage F.0](../../05_checklists/POST_CLOSURE_FIXES_CHECKLIST.md)
+[`POST_CLOSURE_FIXES_CHECKLIST.md` Stage F.0](../../../05_checklists/phase-a/POST_CLOSURE_FIXES_CHECKLIST.md)
 (migrado de PHASE_B_IMPLEMENTATION_CHECKLIST.md em 2026-05-19);
 Gap 6 promovido a follow-up bloqueante de F.1 PASS pleno (proximo
 Stage de codigo, possivelmente Stage 15 ou Stage F.0.10).
 
 Evidencia completa do smoke em
-[`docs/07_reports/smoke_confirmatory_2026-05-18.md`](../smoke_confirmatory_2026-05-18.md).
+[`docs/07_reports/phase-gates/phase-a/smoke_confirmatory_2026-05-18.md`](smoke_confirmatory_2026-05-18.md).
 Re-rodada do smoke pos-Stage F.0 (data: 2026-05-18 re-run) anexa
 secao final nesse mesmo relatorio.
 
@@ -453,7 +453,7 @@ O ciclo de remediacao pos-auditoria tambem fechou os REDs remanescentes:
   reduzido para 300 LOC.
 - Stage R-23 (este PR): F.1 v4 revalidado com `max_epochs=5` e 6/6 criterios
   PASS. Apos merge manual por Marcelo, a substancia F.1 fica fechada.
-  Reporte: [`smoke_confirmatory_2026-05-18.md`](../smoke_confirmatory_2026-05-18.md)
+  Reporte: [`smoke_confirmatory_2026-05-18.md`](smoke_confirmatory_2026-05-18.md)
   §"F.1 v4 PASS pleno (Stage R-23, 2026-05-22)".
 
 **F.2 pre-registro:** ainda pendente; documento separado em

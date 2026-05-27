@@ -16,7 +16,7 @@ canonical_for: [post_audit_plan, phase_b_preparation_plan, post_phase_a_executio
 Status: temporario e sujeito a revisao.
 
 Este documento mapeia, em alto nivel, o caminho esperado apos a conclusao do
-`docs/07_reports/phase-gates/A_code_audit.md`. Ele existe para evitar perda de
+`docs/07_reports/phase-gates/phase-a/A_code_audit.md`. Ele existe para evitar perda de
 contexto entre a auditoria pre-experimento e a rodada confirmatoria.
 
 Este documento **nao** e:
@@ -57,7 +57,7 @@ Consequencia:
 
 ### Etapa 0 - Fechar o gate da Fase A
 
-Fonte atual: `docs/07_reports/phase-gates/A_code_audit.md`
+Fonte atual: `docs/07_reports/phase-gates/phase-a/A_code_audit.md`
 
 Saida esperada:
 - M1-M7 com veredito `GREEN` ou `YELLOW` com acao concluida.

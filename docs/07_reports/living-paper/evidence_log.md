@@ -500,7 +500,7 @@ Hipoteses levantadas para explicar a causa raiz:
 
 **Interpretação:** o Analytics Store é legível e auditável, mas claims confirmatórios da Fase B exigem filtro de coorte explícito e não devem usar agregados gold globais sem `parent_sweep_id`.
 
-**Ação:** M6 marcado como `YELLOW` em `docs/07_reports/phase-gates/A_code_audit.md`; M5 deve decidir se as gold agregadas recebem `parent_sweep_id` ou se a Fase B usa artefatos scoped-only.
+**Ação:** M6 marcado como `YELLOW` em `docs/07_reports/phase-gates/phase-a/A_code_audit.md`; M5 deve decidir se as gold agregadas recebem `parent_sweep_id` ou se a Fase B usa artefatos scoped-only.
 
 ## 2026-05-14 — Stage 3: reset silver/gold pré-Phase B
 
@@ -514,7 +514,7 @@ Hipoteses levantadas para explicar a causa raiz:
 - `data/analytics_archive_pre_phase_b/silver/**`
 - `data/analytics_archive_pre_phase_b/gold/**`
 - `docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md` §"Archive pre-Phase B"
-- `docs/05_checklists/PHASE_B_IMPLEMENTATION_CHECKLIST.md` §Stage 3
+- `docs/05_checklists/phase-b/PHASE_B_IMPLEMENTATION_CHECKLIST.md` §Stage 3
 
 **Uso no texto (TCC/Artigo/Ambos):** Ambos. Capítulo 4 (Método — política de archive) e Capítulo 6 (Limitações — fronteira temporal dos claims).
 

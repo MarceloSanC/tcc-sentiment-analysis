@@ -55,7 +55,7 @@ near-random-walk; a Phase B confirma esse limite empírico declarado ex-ante.
 ## 2. Resultados — Tier classification (núcleo do gate de promoção)
 
 Tier verdict mecanicamente derivado dos critérios pré-declarados em
-[`preregistration_phase_b.md`](../../06_pre_registration/preregistration_phase_b.md) §9
+[`preregistration_phase_b.md`](../../../06_pre_registration/phase-b/preregistration_phase_b.md) §9
 sobre os sidecars produzidos pela PR-A4 (Emenda E1.8) em
 `data/analytics/reports/phase_b/cohort=phase_b_confirmatorio_20260524/`.
 Sessão-B **não recomputa** tier; consome sidecar `phase_b_tier_verdict.parquet`
@@ -92,7 +92,7 @@ Sessão-B **não recomputa** tier; consome sidecar `phase_b_tier_verdict.parquet
 A política de promoção é **ex-ante** e foi aplicada **mecanicamente** pelo
 pipeline de PR-A4. Sessão-B não introduziu nenhum reframing pós-observação;
 tier reportado preserva a honestidade do trabalho per
-[STRATEGIC_DIRECTION.md §4.4](../../00_overview/STRATEGIC_DIRECTION.md).
+[STRATEGIC_DIRECTION.md §4.4](../../../00_overview/STRATEGIC_DIRECTION.md).
 
 ---
 
@@ -144,7 +144,7 @@ vive em DM family-6 (§4.1).
 
 ### 4.1 DM pairwise family-6 (primary)
 
-Estratégia operacional declarada pela [Emenda E1.8](../../06_pre_registration/preregistration_phase_b.md#emenda-e18):
+Estratégia operacional declarada pela [Emenda E1.8](../../../06_pre_registration/phase-b/preregistration_phase_b.md#emenda-e18):
 
 - Unidade estatística: `target_timestamp` cross-fold com dedup
   `operationally_latest_fold`.
@@ -152,8 +152,10 @@ Estratégia operacional declarada pela [Emenda E1.8](../../06_pre_registration/p
   por fold; mantém uma observação por timestamp/fold; dedup deixa apenas a
   observação do fold operationally-latest quando há sobreposição).
 - Loss: `pinball_loss_post_guardrail` (Categoria A).
-- Variância: HAC (Newey-West) com lag = h (1 ou 7); Harvey-Leybourne-Newbold
-  (HLN) small-sample correction aplicada.
+- Variância: HAC (Newey-West) com lag `max(h - 1, 1)`: `h=1 -> 1`,
+  `h=7 -> 6`; Harvey-Leybourne-Newbold (HLN) small-sample correction
+  aplicada. Este lag é da série de diferenças de perda do DM, não a convenção
+  de alinhamento `decision_timestamp -> target_timestamp`.
 - Hipótese: one-sided `H_A: TFT < baseline` (TFT melhor).
 - Holm-Bonferroni sobre família de 6 testes (3 baselines × 2 horizontes).
 
@@ -204,7 +206,7 @@ confirma ausência de seed/fold outlier.
 
 ## 5. Gate de degeneração quantílica
 
-Per [`preregistration_phase_b.md`](../../06_pre_registration/preregistration_phase_b.md) §9
+Per [`preregistration_phase_b.md`](../../../06_pre_registration/phase-b/preregistration_phase_b.md) §9
 "Gate de degeneracao quantilica" e Stage 11 (`block_quantile_degeneracy_gate`).
 
 | split | horizon | prediction_mode | n_rows | p10_eq_p90_rate | gate_passed |
@@ -249,8 +251,8 @@ o ranking within-family é estável.
 
 ## 7. Limitações declaradas
 
-Per [F.2 §12](../../06_pre_registration/preregistration_phase_b.md#12-out-of-scope-phase-b-lista-oficial)
-e [`STRATEGIC_DIRECTION.md`](../../00_overview/STRATEGIC_DIRECTION.md) §3:
+Per [F.2 §12](../../../06_pre_registration/phase-b/preregistration_phase_b.md#12-out-of-scope-phase-b-lista-oficial)
+e [`STRATEGIC_DIRECTION.md`](../../../00_overview/STRATEGIC_DIRECTION.md) §3:
 
 1. **Single-asset (AAPL).** Sem claim de generalização para outros tickers,
    índices ou classes; reproducibility cross-asset = future work.
@@ -303,7 +305,7 @@ Entrega **evidência secundária Tier 2** para:
 **H2b é refutado** em ambos horizontes: TFT não supera
 `historical_quantiles_rolling` (DM p_adj_holm = 0,465 / 0,685; delta_rel
 ≈ −0,6% / −1,9%). Reportado per
-[STRATEGIC_DIRECTION §4.4](../../00_overview/STRATEGIC_DIRECTION.md):
+[STRATEGIC_DIRECTION §4.4](../../../00_overview/STRATEGIC_DIRECTION.md):
 **"TFT não supera baselines quantílicos rolling neste protocolo"**.
 Resultado **honesto e cientificamente válido** — confirma o limite
 empírico ex-ante de §3 (random-walk near-optimal em retornos de ativos
@@ -315,9 +317,12 @@ refutação documentada H2b) é a configuração mais defensável academicamente
 do espaço de resultados pré-declarado: nenhuma claim além do suportado,
 nenhum reframing pós-observação, política de promoção mecânica.
 
-Cohort intacto: 60 dim_run rows / 25 gold tables / 5 sidecars / archive
-pre-Phase B 851M preservado / archive Phase B 2026-05-25 read-only criado
-em E6.3. Fase C autorizada a iniciar.
+Cohort intacto: 60 dim_run rows / 24 gold tables cohort-filterable / 5
+sidecars / archive pre-Phase B 851M preservado / archive Phase B 2026-05-25
+read-only criado em E6.3. O inventario live contem 25 arquivos gold; o archive
+exclui `gold_feature_contrib_local_summary.parquet` porque a tabela de
+explicabilidade local esta vazia/out-of-scope para as hipoteses Phase B e nao
+fornece evidencia confirmatoria adicional. Fase C autorizada a iniciar.
 
 ---
 
@@ -325,16 +330,16 @@ em E6.3. Fase C autorizada a iniciar.
 
 | Tema | Documento |
 |---|---|
-| Pré-registro (F.2 + Emendas E1–E1.8) | [`docs/06_pre_registration/preregistration_phase_b.md`](../../06_pre_registration/preregistration_phase_b.md) |
-| Checklist execução (E0–E6) | [`docs/05_checklists/PHASE_B_EXECUTION_CHECKLIST.md`](../../05_checklists/PHASE_B_EXECUTION_CHECKLIST.md) |
-| Direção estratégica / hipóteses | [`docs/00_overview/STRATEGIC_DIRECTION.md`](../../00_overview/STRATEGIC_DIRECTION.md) §3, §4.4, §5 |
-| Statistical tests (DM/MCS/Holm + HLN + unidade walk-forward) | [`docs/04_evaluation/STATISTICAL_TESTS.md`](../../04_evaluation/STATISTICAL_TESTS.md) |
-| Calibration thresholds (bandas Tier 1/Tier 2) | [`docs/04_evaluation/CALIBRATION_AND_RISK.md`](../../04_evaluation/CALIBRATION_AND_RISK.md) |
-| Métricas A/B/C + variante quantílica | [`docs/04_evaluation/METRICS_DEFINITIONS.md`](../../04_evaluation/METRICS_DEFINITIONS.md) |
-| Runbook tier pipeline | [`docs/06_runbooks/RUN_PHASE_B_TIER_CLASSIFICATION.md`](../../06_runbooks/RUN_PHASE_B_TIER_CLASSIFICATION.md) |
-| Smoke F.1 v4 PASS pleno (precedente) | [`docs/07_reports/smoke_confirmatory_2026-05-18.md`](../smoke_confirmatory_2026-05-18.md) §"F.1 v4 PASS pleno" |
-| Living-paper §método (vocabulário) | [`docs/07_reports/living-paper/20_method.md`](../living-paper/20_method.md) §"Politica de variante quantilica" |
-| Archive Phase B (read-only) | `data/analytics_archive_phase_b_20260524/` (851M pre-Phase B em `data/analytics_archive_pre_phase_b/` intacto; ver [`docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md`](../../01_architecture/ANALYTICS_STORE_ARCHITECTURE.md)) |
+| Pré-registro (F.2 + Emendas E1–E1.8) | [`docs/06_pre_registration/phase-b/preregistration_phase_b.md`](../../../06_pre_registration/phase-b/preregistration_phase_b.md) |
+| Checklist execução (E0–E6) | [`docs/05_checklists/phase-b/PHASE_B_EXECUTION_CHECKLIST.md`](../../../05_checklists/phase-b/PHASE_B_EXECUTION_CHECKLIST.md) |
+| Direção estratégica / hipóteses | [`docs/00_overview/STRATEGIC_DIRECTION.md`](../../../00_overview/STRATEGIC_DIRECTION.md) §3, §4.4, §5 |
+| Statistical tests (DM/MCS/Holm + HLN + unidade walk-forward) | [`docs/04_evaluation/STATISTICAL_TESTS.md`](../../../04_evaluation/STATISTICAL_TESTS.md) |
+| Calibration thresholds (bandas Tier 1/Tier 2) | [`docs/04_evaluation/CALIBRATION_AND_RISK.md`](../../../04_evaluation/CALIBRATION_AND_RISK.md) |
+| Métricas A/B/C + variante quantílica | [`docs/04_evaluation/METRICS_DEFINITIONS.md`](../../../04_evaluation/METRICS_DEFINITIONS.md) |
+| Runbook tier pipeline | [`docs/06_runbooks/phase-b/RUN_PHASE_B_TIER_CLASSIFICATION.md`](../../../06_runbooks/phase-b/RUN_PHASE_B_TIER_CLASSIFICATION.md) |
+| Smoke F.1 v4 PASS pleno (precedente) | [`docs/07_reports/phase-gates/phase-a/smoke_confirmatory_2026-05-18.md`](../phase-a/smoke_confirmatory_2026-05-18.md) §"F.1 v4 PASS pleno" |
+| Living-paper §método (vocabulário) | [`docs/07_reports/living-paper/20_method.md`](../../living-paper/20_method.md) §"Politica de variante quantilica" |
+| Archive Phase B (read-only) | `data/analytics_archive_phase_b_20260524/` (851M pre-Phase B em `data/analytics_archive_pre_phase_b/` intacto; ver [`docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md`](../../../01_architecture/ANALYTICS_STORE_ARCHITECTURE.md)) |
 | Sidecars Phase B (5 parquets) | `data/analytics/reports/phase_b/cohort=phase_b_confirmatorio_20260524/` |
 
 ---
@@ -400,7 +405,7 @@ fold que reverta a classificação refutado de H2b.
 ## 12. Apêndice — Decisões autônomas (Sessão-B overnight)
 
 Modo de operação: **autônomo total** (override do prompt primário; ver
-[`docs/ai/PHASE_B_SESSION_B_PROMPT.md`](../../ai/PHASE_B_SESSION_B_PROMPT.md)
+[`docs/ai/phase-b/PHASE_B_SESSION_B_PROMPT.md`](../../../ai/phase-b/PHASE_B_SESSION_B_PROMPT.md)
 anexo "Precedentes — Decisões autônomas executadas na Sessão-B"). Sumário
 das 7 decisões metodológicas tomadas sem aprovação Marcelo durante esta
 sessão:

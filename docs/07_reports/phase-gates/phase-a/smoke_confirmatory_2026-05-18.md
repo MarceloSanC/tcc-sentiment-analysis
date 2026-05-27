@@ -38,7 +38,7 @@ apenas `output_subdir=phase_a_smoke_20260522_r23`, mantendo TFT e baselines
 no mesmo cohort R-23 sem alterar código de produção nem config versionada.
 
 Evidências:
-- `docs/07_reports/option_b_execution_log_2026-05-19.md` §R-23.1 e §R-23.2.
+- `docs/07_reports/phase-gates/phase-b/option_b_execution_log_2026-05-19.md` §R-23.1 e §R-23.2.
 - `tests/integration/test_f1_golden_smoke.py`.
 - `tests/integration/fixtures/f1_golden/expected.json`.
 
@@ -540,7 +540,7 @@ Para alignment PASS, **uma das duas opcoes**:
 
 Opcao (a) e o caminho correto. Foi promovida a follow-up bloqueante
 de F.1 PASS pleno em
-[`A_audit_closure_2026-05-17.md`](phase-gates/A_audit_closure_2026-05-17.md)
+[`A_audit_closure_2026-05-17.md`](A_audit_closure_2026-05-17.md)
 secao "Findings post-closure".
 
 ### Métricas comparativas (run inicial vs re-run)
@@ -589,7 +589,7 @@ Investigacoes de follow-up nao-bloqueantes (mantidas do run inicial):
 > (pré-remediação). A Opção (a) foi posteriormente substituída por
 > Opção (d) em Stage R-20 (PR [#50](https://github.com/MarceloSanC/financial-time-series-forecasting/pull/50),
 > mergeada 2026-05-21), conforme
-> [ADR-0003](../01_architecture/decisions/ADR-0003-multi-horizon-prediction-persister.md)
+> [ADR-0003](../../../01_architecture/decisions/ADR-0003-multi-horizon-prediction-persister.md)
 > §"Decision" atual (target_return backward-shifted em
 > `build_tft_dataset_use_case`; baseline `y_true_idx = i + h_int`). O smoke
 > v4 com Opção (d) está documentado em §"F.1 v4 PASS pleno (Stage R-23,
@@ -673,10 +673,10 @@ separado de Stage 23).
 
 ## Referências cruzadas
 
-- Aceite literal: [PHASE_B_IMPLEMENTATION_CHECKLIST.md](../05_checklists/PHASE_B_IMPLEMENTATION_CHECKLIST.md) F.1
-- Closure mapping: [A_audit_closure_2026-05-17.md](phase-gates/A_audit_closure_2026-05-17.md)
-- Gate Stage 11: [A_code_audit.md](phase-gates/A_code_audit.md) M2 ação 1
-- Política quantile contract: [METRICS_DEFINITIONS.md](../04_evaluation/METRICS_DEFINITIONS.md)
-- Stage 12 baselines: [BASELINES.md](../04_evaluation/BASELINES.md)
+- Aceite literal: [PHASE_B_IMPLEMENTATION_CHECKLIST.md](../../../05_checklists/phase-b/PHASE_B_IMPLEMENTATION_CHECKLIST.md) F.1
+- Closure mapping: [A_audit_closure_2026-05-17.md](A_audit_closure_2026-05-17.md)
+- Gate Stage 11: [A_code_audit.md](A_code_audit.md) M2 ação 1
+- Política quantile contract: [METRICS_DEFINITIONS.md](../../../04_evaluation/METRICS_DEFINITIONS.md)
+- Stage 12 baselines: [BASELINES.md](../../../04_evaluation/BASELINES.md)
 - Cenários de falha previstos: prompt F.1 emitido pelo usuário
   (Cenários A-D do prompt foram referenciados; **Cenário D realizou-se**).

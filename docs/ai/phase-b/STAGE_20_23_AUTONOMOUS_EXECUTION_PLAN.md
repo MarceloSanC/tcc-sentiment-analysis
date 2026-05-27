@@ -105,8 +105,8 @@ git log --oneline -20 main | grep -E "Stage F\.0|Stage F\.A|ADR-000[345]"
 test -f docs/01_architecture/decisions/ADR-0003-multi-horizon-prediction-persister.md
 test -f docs/01_architecture/decisions/ADR-0004-quality-check-registry.md
 test -f docs/01_architecture/decisions/ADR-0005-gold-builders-modularization.md
-test -f docs/07_reports/phase-gates/B_architectural_debt_2026-05-19.md
-test -f docs/07_reports/tft_y_true_investigation_2026-05-18.md
+test -f docs/07_reports/phase-gates/phase-b/B_architectural_debt_2026-05-19.md
+test -f docs/07_reports/phase-gates/phase-a/tft_y_true_investigation_2026-05-18.md
 # Todos devem existir
 
 # 2.4 Tag checkpoint (criar se nao existir)
@@ -134,7 +134,7 @@ grep -A 2 "Opcao (a)\|Opcao (b)\|Option (a)\|Option (b)" \
 # build_record) antes de comecar.
 
 # 2.8 Verificar log nao existe ainda
-test ! -f docs/07_reports/option_b_execution_log_2026-05-19.md && \
+test ! -f docs/07_reports/phase-gates/phase-b/option_b_execution_log_2026-05-19.md && \
   echo "Log file ainda nao existe — sera criado no primeiro commit do Stage 20"
 ```
 
@@ -413,7 +413,7 @@ e sinal de bloqueio nao-reconhecido. Procedimento:
 ### 7.1 Arquivo
 
 ```
-docs/07_reports/option_b_execution_log_2026-05-19.md
+docs/07_reports/phase-gates/phase-b/option_b_execution_log_2026-05-19.md
 ```
 
 Criar este arquivo no **primeiro commit do Stage 20.0** com frontmatter:
@@ -552,7 +552,7 @@ grep "Opcao (a)\|Option (a)" docs/01_architecture/decisions/ADR-0003-multi-horiz
 # Esperado: ver "Opcao (a)" como decisao explicita
 ```
 
-Criar `docs/07_reports/option_b_execution_log_2026-05-19.md` com
+Criar `docs/07_reports/phase-gates/phase-b/option_b_execution_log_2026-05-19.md` com
 frontmatter (§7.1) e primeira entry:
 
 ```markdown
@@ -1100,7 +1100,7 @@ def test_tft_baseline_y_true_aligned_by_decision_idx():
 ```markdown
 ## Convencao canonica de target_timestamp e y_true
 
-Fixada em [ADR-0003](../01_architecture/decisions/ADR-0003-multi-horizon-prediction-persister.md) Opcao (a):
+Fixada em [ADR-0003](../../01_architecture/decisions/ADR-0003-multi-horizon-prediction-persister.md) Opcao (a):
 
 - **Anchor:** `timestamp_utc = decision_day` (ultimo dia do encoder).
 - **target_timestamp:** `target_timestamp_utc = dataset_timestamps[decision_idx + h]`,
@@ -1171,7 +1171,7 @@ fix do Gap 6 que muda timestamp_utc/target_timestamp_utc intencionalmente).
    - `tft_baselines_timestamp_subset_alignment` PASS (esperava que falhasse pre-Stage 20; agora deve passar)
    - `oos_pairwise_target_alignment` PASS (Gap 6 fix embutido)
    - Demais checks: idem ou melhor que F.1 v2
-4. Atualizar `docs/07_reports/smoke_confirmatory_2026-05-18.md`
+4. Atualizar `docs/07_reports/phase-gates/phase-a/smoke_confirmatory_2026-05-18.md`
    secao nova "Post-Stage 20 (YYYY-MM-DD)":
    - Listar checks PASS/FAIL
    - Diferenca vs F.1 v2
@@ -1723,14 +1723,14 @@ Adicionar secao final "F.1 v3 PASS pleno (post-Stage 22, YYYY-MM-DD)":
 ### Task 23.4 — Marcar F.3 satisfeito
 
 **Arquivos:**
-- `docs/05_checklists/PHASE_B_IMPLEMENTATION_CHECKLIST.md`:
+- `docs/05_checklists/phase-b/PHASE_B_IMPLEMENTATION_CHECKLIST.md`:
   - F.1 task `- [ ]` → `- [x]` com nota "(satisfeito YYYY-MM-DD via smoke v3)"
   - F.3 task `- [~]` → `- [x]`
   - "Data de abertura da Fase B" preenchida
-- `docs/07_reports/phase-gates/A_code_audit.md` §"Gate de saida da Fase A":
+- `docs/07_reports/phase-gates/phase-a/A_code_audit.md` §"Gate de saida da Fase A":
   - Todos os checkboxes restantes `- [x]`
   - Data de abertura da Fase B preenchida
-- `docs/07_reports/phase-gates/A_audit_closure_2026-05-17.md`:
+- `docs/07_reports/phase-gates/phase-a/A_audit_closure_2026-05-17.md`:
   - Status `pendente` → `fechado` se aplicavel
   - Nota final: "Fase B aberta YYYY-MM-DD"
 
@@ -1795,7 +1795,7 @@ Checklist para Marcelo executar quando retornar:
 ```
 [ ] git log --oneline main | head -40   # ver historia da execucao
 [ ] git tag | grep -E "checkpoint-pre-option-b|stage-22-merged"
-[ ] Ler docs/07_reports/option_b_execution_log_2026-05-19.md inteiro
+[ ] Ler docs/07_reports/phase-gates/phase-b/option_b_execution_log_2026-05-19.md inteiro
 [ ] Revisar PRs mergeadas: Stage 20, 21, 22, 23
 [ ] pytest tests/ green
 [ ] Smoke F.1 v3 6/6 PASS? Revisar smoke_confirmatory_2026-05-18.md

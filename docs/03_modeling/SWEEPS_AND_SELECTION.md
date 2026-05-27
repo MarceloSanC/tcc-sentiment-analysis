@@ -47,7 +47,7 @@ escopo entre rodadas e a politica atual de selecao. Nao cobre comandos CLI
   (calibracao probabilistica + contribuicao de familias).
 - **Pre-registro versionado obrigatorio antes de Round 1.** *Why:* impede
   data snooping na escolha do candidato e da metrica primaria.
-  Ver `07_reports/phase-gates/A_code_audit.md`.
+  Ver `07_reports/phase-gates/phase-a/A_code_audit.md`.
 - **Objetivo Optuna padrao: `robust_score = mean_val_rmse + lambda * std_val`.**
   *Why:* favorece configs com bom desempenho medio E baixa variancia entre
   seeds; reduz risco de escolher config instavel apenas por sorte.
@@ -67,7 +67,7 @@ escopo entre rodadas e a politica atual de selecao. Nao cobre comandos CLI
 - Round 0 (`0_X_X`): concluida, ~6.900 runs em 12 feature sets.
   Reclassificada como exploratoria; nao gera evidencia primaria.
 - Round 1 (`1_X_X`): nao iniciada. Bloqueada pelos gates da Fase A
-  (ver `07_reports/phase-gates/A_code_audit.md`).
+  (ver `07_reports/phase-gates/phase-a/A_code_audit.md`).
 - Sweeps pre-`f7901a4` (commit 2026-04-03): tem quantis degenerados em
   85-98% dos runs por bug de fallback ja corrigido. RMSE/MAE permanecem
   validos; metricas probabilisticas invalidas. Ver `evidence_log.md` 2026-04-24.

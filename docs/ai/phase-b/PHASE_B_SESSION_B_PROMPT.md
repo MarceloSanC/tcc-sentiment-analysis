@@ -2,7 +2,7 @@
 
 Você é uma sessão Claude entrando em modo **analista científico supervisionado**
 para os Stages E5–E6 do
-[`PHASE_B_EXECUTION_CHECKLIST.md`](../05_checklists/PHASE_B_EXECUTION_CHECKLIST.md).
+[`PHASE_B_EXECUTION_CHECKLIST.md`](../../05_checklists/phase-b/PHASE_B_EXECUTION_CHECKLIST.md).
 
 Sua missão é **classificar o resultado da Phase B confirmatória** contra os
 Tier 1 / Tier 2 gates pré-declarados em F.2 §9 (sem cherry-picking),
@@ -11,7 +11,7 @@ emenda final** do pré-registro (§15 completo), **criar o archive snapshot
 read-only** dos artefatos confirmatórios, e **abrir PR-B**.
 
 **Você NÃO executa treinos, baselines ou refresh** — isso já foi feito pela
-Sessão-A (prompt separado em `docs/ai/PHASE_B_SESSION_A_PROMPT.md`).
+Sessão-A (prompt separado em `docs/ai/phase-b/PHASE_B_SESSION_A_PROMPT.md`).
 
 Modo: **SUPERVISIONADO**. Marcelo precisa estar presente para revisar o tier
 classificado **antes** de você commitar o relatório. Toda decisão metodológica
@@ -39,19 +39,19 @@ Estado em main esperado:
   intacto (851M).
 
 Decisões D1–D8 fechadas (não redecidir; consulte tabela em
-[`PHASE_B_EXECUTION_CHECKLIST.md`](../05_checklists/PHASE_B_EXECUTION_CHECKLIST.md)):
+[`PHASE_B_EXECUTION_CHECKLIST.md`](../../05_checklists/phase-b/PHASE_B_EXECUTION_CHECKLIST.md)):
 - **D5:** snapshot read-only obrigatório em E6.3.
 - **D4:** PR-B é o segundo (e último) PR deste ciclo; empilhado na mesma
   branch `feat/phase-b-execution-<YYYYMMDD>` da Sessão-A.
 
 ## Required reading (na ordem; NÃO PULE)
 
-1. [`PHASE_B_EXECUTION_CHECKLIST.md`](../05_checklists/PHASE_B_EXECUTION_CHECKLIST.md)
+1. [`PHASE_B_EXECUTION_CHECKLIST.md`](../../05_checklists/phase-b/PHASE_B_EXECUTION_CHECKLIST.md)
    Stages E5–E6 — **fonte primária**. Tasks E5.1–E5.6 + E6.1–E6.6 com Aceite.
    Leia também Notas de revisão E0–E4 deixadas pela Sessão-A (contexto) e
    "PR-A4 (pré-E5)" em E5 Notas (pipeline de pré-processamento que gera
    seus inputs).
-2. [`preregistration_phase_b.md`](../06_pre_registration/preregistration_phase_b.md)
+2. [`preregistration_phase_b.md`](../../06_pre_registration/phase-b/preregistration_phase_b.md)
    §3 (H1/H2a/H2b), §6 (contrato post-guardrail), §7 (DM/MCS/Holm), §9
    (**Tier 1 / Tier 2 gates** — o coração do E5), §14 (Emendas E1.6, E1.7,
    E1.8 que formalizam decisões operacionais), §15 (slots a preencher em
@@ -59,26 +59,26 @@ Decisões D1–D8 fechadas (não redecidir; consulte tabela em
    operacional DM (unidade timestamp + dedup operationally-latest + seed
    mean + HAC + HLN + one-sided + Holm-6) que a PR-A4 implementa nos
    sidecars que você consome.
-3. [`docs/04_evaluation/STATISTICAL_TESTS.md`](../04_evaluation/STATISTICAL_TESTS.md)
+3. [`docs/04_evaluation/STATISTICAL_TESTS.md`](../../04_evaluation/STATISTICAL_TESTS.md)
    — DM/MCS/Holm + regras de alinhamento OOS.
-4. [`docs/04_evaluation/CALIBRATION_AND_RISK.md`](../04_evaluation/CALIBRATION_AND_RISK.md)
+4. [`docs/04_evaluation/CALIBRATION_AND_RISK.md`](../../04_evaluation/CALIBRATION_AND_RISK.md)
    §"Calibration Acceptance Thresholds" — bandas Tier 1/2 canônicas.
-5. [`docs/04_evaluation/METRICS_DEFINITIONS.md`](../04_evaluation/METRICS_DEFINITIONS.md)
+5. [`docs/04_evaluation/METRICS_DEFINITIONS.md`](../../04_evaluation/METRICS_DEFINITIONS.md)
    §"Variante quantilica" (categorização A/B/C) — confirmar leitura
    `*_post_guardrail` em todas as métricas Cat A.
-6. [`docs/00_overview/STRATEGIC_DIRECTION.md`](../00_overview/STRATEGIC_DIRECTION.md)
+6. [`docs/00_overview/STRATEGIC_DIRECTION.md`](../../00_overview/STRATEGIC_DIRECTION.md)
    §3 (calibração de expectativas) + §4.4 (resultados válidos com hipóteses
    refutadas) — informa tom do relatório se Tier não passar.
-7. [`docs/07_reports/living-paper/20_method.md`](../07_reports/living-paper/20_method.md)
+7. [`docs/07_reports/living-paper/20_method.md`](../../07_reports/living-paper/20_method.md)
    §"Política de variante quantilica" — vocabulário e referências
    acadêmicas para o relatório.
-8. [`docs/ai/skills/model-performance-and-research-advisor/SKILL.md`](skills/model-performance-and-research-advisor/SKILL.md)
+8. [`docs/ai/skills/model-performance-and-research-advisor/SKILL.md`](../skills/model-performance-and-research-advisor/SKILL.md)
    — **skill primária desta sessão**. Aplica o protocolo de decisão em E5.
-9. [`docs/06_runbooks/RUN_PHASE_B_TIER_CLASSIFICATION.md`](../06_runbooks/RUN_PHASE_B_TIER_CLASSIFICATION.md)
+9. [`docs/06_runbooks/phase-b/RUN_PHASE_B_TIER_CLASSIFICATION.md`](../../06_runbooks/phase-b/RUN_PHASE_B_TIER_CLASSIFICATION.md)
    — runbook canônico do CLI `main_compute_phase_b_tier_metrics` que gera
    seus sidecars (caso precise re-rodar; o output canônico já está em
    `data/analytics/reports/phase_b/`).
-10. [`docs/04_evaluation/STATISTICAL_TESTS.md`](../04_evaluation/STATISTICAL_TESTS.md)
+10. [`docs/04_evaluation/STATISTICAL_TESTS.md`](../../04_evaluation/STATISTICAL_TESTS.md)
     §"Unidade estatística DM em walk-forward com folds sobrepostos"
     (adicionada pela PR-A4) — justifica a estratégia A refinada e por que
     sensibilidade D fica como apêndice.
@@ -150,22 +150,22 @@ re-rodar via `python -m src.main_compute_phase_b_tier_metrics --asset AAPL
 - `data/analytics_archive_pre_phase_b/`.
 - `config/sweeps/explicit/phase_b_confirmatorio_<YYYYMMDD>.json` (selado em
   E1; mudar invalida hash em §15).
-- `docs/05_checklists/PHASE_B_IMPLEMENTATION_CHECKLIST.md` (imutável).
+- `docs/05_checklists/phase-b/PHASE_B_IMPLEMENTATION_CHECKLIST.md` (imutável).
 - ADRs em `docs/01_architecture/decisions/`.
 
 **Permitido modificar:**
-- `docs/05_checklists/PHASE_B_EXECUTION_CHECKLIST.md` — apenas marcar
+- `docs/05_checklists/phase-b/PHASE_B_EXECUTION_CHECKLIST.md` — apenas marcar
   E5–E6 como `[~]`/`[x]` e preencher Notas de revisão.
-- `docs/06_pre_registration/preregistration_phase_b.md` — apenas §14
+- `docs/06_pre_registration/phase-b/preregistration_phase_b.md` — apenas §14
   (emenda E6) e §15 (slots restantes).
 - `docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md` — adicionar nota
   sobre archive `analytics_archive_phase_b_<date>/` (E6.3).
-- Criar `docs/07_reports/phase-gates/B_confirmatory_<YYYY-MM-DD>.md` (E6.1).
+- Criar `docs/07_reports/phase-gates/phase-b/B_confirmatory_<YYYY-MM-DD>.md` (E6.1).
 - Criar `data/analytics_archive_phase_b_<YYYYMMDD>/` (E6.3).
 
 ## Skills a invocar (proativo)
 
-- [`model-performance-and-research-advisor`](skills/model-performance-and-research-advisor/SKILL.md):
+- [`model-performance-and-research-advisor`](../skills/model-performance-and-research-advisor/SKILL.md):
   **skill primária E5**. Aplique protocolo:
   - Step 1 Lock cohort: cohort = `parent_sweep_id=phase_b_confirmatorio_<YYYYMMDD>`
     apenas; rejeite mistura.
@@ -180,9 +180,9 @@ re-rodar via `python -m src.main_compute_phase_b_tier_metrics --asset AAPL
     no relatório.
   - Step 8 Decision: tier classificado **mecanicamente** dos critérios
     pré-declarados F.2 §9. Sem reframing.
-- [`documentation-authoring`](skills/documentation-authoring/SKILL.md): E6.1
+- [`documentation-authoring`](../skills/documentation-authoring/SKILL.md): E6.1
   estilo de redação científica do relatório; cross-link sem duplicação.
-- [`staged-implementation-protocol`](../../.claude/skills/staged-implementation-protocol/SKILL.md)
+- [`staged-implementation-protocol`](../../../.claude/skills/staged-implementation-protocol/SKILL.md)
   Phase B step 8: Notas de revisão por Stage. Phase D (review prompt) não
   se aplica nesta sessão (PR-B é mergeado por Marcelo após revisão dele,
   não por sessão Claude separada).
@@ -193,7 +193,7 @@ Sessão-B entrega:
 1. **E5.6 tier classificado** (Tier 1 / Tier 2 / Refutado por horizonte e
    por hipótese), aprovado por Marcelo, registrado em
    `/tmp/tier_verdict_<YYYYMMDD>.csv`.
-2. **E6.1 relatório** `docs/07_reports/phase-gates/B_confirmatory_<YYYY-MM-DD>.md`
+2. **E6.1 relatório** `docs/07_reports/phase-gates/phase-b/B_confirmatory_<YYYY-MM-DD>.md`
    ≥200 LOC, contendo: parâmetros executados (config sha256, parent_sweep_id,
    dataset sha256, commit selo pre-registro), resultados E5 (tabelas tier
    eligibility + tier verdict; agregados TFT vs baselines; calibração; DM/MCS/
@@ -220,7 +220,7 @@ Sessão-B entrega:
 cd /home/marcelo/Code/financial-time-series-forecasting
 git checkout main && git pull --ff-only
 # Identificar parent_sweep_id efetivo da Sessao-A:
-grep "parent_sweep_id efetivo" docs/06_pre_registration/preregistration_phase_b.md
+grep "parent_sweep_id efetivo" docs/06_pre_registration/phase-b/preregistration_phase_b.md
 # Anote o <YYYYMMDD>. Checkout da branch da Sessao-A:
 git checkout feat/phase-b-execution-<YYYYMMDD>
 git merge --ff-only main  # sincroniza com main
@@ -228,7 +228,7 @@ git merge --ff-only main  # sincroniza com main
 
 Confirme:
 - `du -sh data/analytics_archive_pre_phase_b/` → `851M` (intacto).
-- `ls data/analytics/silver/dim_run/asset=AAPL/parent_sweep_id=phase_b_confirmatorio_<YYYYMMDD>/ | wc -l` → `60`.
+- `ls data/analytics/silver/dim_run/asset=AAPL/sweep_id=phase_b_confirmatorio_<YYYYMMDD>/ | wc -l` → `60`.
 - `ls data/analytics/gold/*.parquet | wc -l` → `≥25`.
 - pytest + ruff: PASS.
 
@@ -444,12 +444,12 @@ STRATEGIC_DIRECTION §3 e §4.4.)
 
 | Tema | Documento |
 |---|---|
-| Pre-registro | docs/06_pre_registration/preregistration_phase_b.md |
-| Checklist execução | docs/05_checklists/PHASE_B_EXECUTION_CHECKLIST.md |
+| Pre-registro | docs/06_pre_registration/phase-b/preregistration_phase_b.md |
+| Checklist execução | docs/05_checklists/phase-b/PHASE_B_EXECUTION_CHECKLIST.md |
 | Direção estratégica | docs/00_overview/STRATEGIC_DIRECTION.md §5 Fase B |
 | Statistical tests | docs/04_evaluation/STATISTICAL_TESTS.md |
 | Calibration thresholds | docs/04_evaluation/CALIBRATION_AND_RISK.md |
-| Smoke F.1 PASS pleno | docs/07_reports/smoke_confirmatory_2026-05-18.md §"F.1 v4 PASS pleno" |
+| Smoke F.1 PASS pleno | docs/07_reports/phase-gates/phase-a/smoke_confirmatory_2026-05-18.md §"F.1 v4 PASS pleno" |
 | Archive Phase B | data/analytics_archive_phase_b_<YYYYMMDD>/ (read-only) |
 
 ## 10. Referências acadêmicas
@@ -468,7 +468,7 @@ Edite `preregistration_phase_b.md`:
 - **Data de execucao confirmatoria:** `<YYYY-MM-DD>` (data real de E2.1 start).
 - **Resultado tier (H1, H2a, H2b por horizonte):** `H1@h=1: <tier>; H1@h=7:
   <tier>; H2a@h=1: <tier>; H2a@h=7: <tier>; H2b@h=1: <tier>; H2b@h=7: <tier>`.
-- **Relatorio:** `docs/07_reports/phase-gates/B_confirmatory_<YYYY-MM-DD>.md`.
+- **Relatorio:** `docs/07_reports/phase-gates/phase-b/B_confirmatory_<YYYY-MM-DD>.md`.
 
 §14 "Emendas": anexe entrada datada:
 ```
@@ -494,7 +494,7 @@ git check-ignore -v "$ARCHIVE/__probe__.parquet" || {
 mkdir -p "$ARCHIVE/silver" "$ARCHIVE/gold"
 
 # Silver: snapshot apenas da cohort
-cp -r "data/analytics/silver/dim_run/asset=AAPL/parent_sweep_id=$SWEEP" \
+cp -r "data/analytics/silver/dim_run/asset=AAPL/sweep_id=$SWEEP" \
       "$ARCHIVE/silver/dim_run_$SWEEP"
 
 # fact_oos_predictions filtrado por run_id da cohort (precisa de script Python)
@@ -559,8 +559,11 @@ Adicione nota em `docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md`:
 ### Archive Phase B confirmatorio (<YYYY-MM-DD>)
 
 `data/analytics_archive_phase_b_<YYYYMMDD>/` (read-only) — snapshot dos
-artefatos confirmatórios da Phase B (60 silver dim_run rows + 25 gold tables
-filtradas por `parent_sweep_id=phase_b_confirmatorio_<YYYYMMDD>`). Dados
+artefatos confirmatórios da Phase B (60 silver dim_run rows + 25 arquivos gold
+no inventario live; archive com 24 gold tables filtraveis por
+`parent_sweep_id=phase_b_confirmatorio_<YYYYMMDD>` + 5 sidecars Phase B).
+`gold_feature_contrib_local_summary.parquet` fica fora do archive quando vazia
+por ser explicabilidade local out-of-scope para as hipoteses Phase B. Dados
 referenciados pelo relatório `B_confirmatory_<YYYY-MM-DD>.md` e pelo
 pré-registro §15. Não modificar; em caso de necessidade de re-derivar
 métricas, reproducir via `config/sweeps/explicit/phase_b_confirmatorio_<YYYYMMDD>.json`
@@ -571,7 +574,7 @@ métricas, reproducir via `config/sweeps/explicit/phase_b_confirmatorio_<YYYYMMD
 
 ```bash
 # Commit 1 — relatorio
-git add docs/07_reports/phase-gates/B_confirmatory_<YYYY-MM-DD>.md
+git add docs/07_reports/phase-gates/phase-b/B_confirmatory_<YYYY-MM-DD>.md
 git commit -m "$(cat <<'EOF'
 docs(phase-b-exec): adicionar relatorio B_confirmatory_<YYYY-MM-DD>
 
@@ -587,7 +590,7 @@ EOF
 )"
 
 # Commit 2 — emenda
-git add docs/06_pre_registration/preregistration_phase_b.md
+git add docs/06_pre_registration/phase-b/preregistration_phase_b.md
 git commit -m "$(cat <<'EOF'
 docs(pre-reg): emenda E6 — preencher §15 execucao + entrada §14
 
@@ -657,7 +660,7 @@ git checkout main && git pull --ff-only
 git log --oneline -10  # confirmar merge PR-A da Sessao-A
 
 # Identificar parent_sweep_id e checkout da branch da Sessao-A
-SWEEP=$(grep "parent_sweep_id efetivo" docs/06_pre_registration/preregistration_phase_b.md | head -1 | awk -F'`' '{print $2}')
+SWEEP=$(grep "parent_sweep_id efetivo" docs/06_pre_registration/phase-b/preregistration_phase_b.md | head -1 | awk -F'`' '{print $2}')
 echo "Cohort: $SWEEP"
 DATE=$(echo "$SWEEP" | sed 's/phase_b_confirmatorio_//')
 echo "Date: $DATE"
@@ -667,7 +670,7 @@ git merge --ff-only main
 
 # Pre-flight
 du -sh data/analytics_archive_pre_phase_b/   # 851M
-ls "data/analytics/silver/dim_run/asset=AAPL/parent_sweep_id=$SWEEP/" | wc -l   # 60
+ls "data/analytics/silver/dim_run/asset=AAPL/sweep_id=$SWEEP/" | wc -l   # 60
 ls data/analytics/gold/*.parquet | wc -l   # >=25
 .venv/bin/pytest tests/ -q \
   --ignore=tests/integration/test_quality_registry_bit_identical_archive.py \

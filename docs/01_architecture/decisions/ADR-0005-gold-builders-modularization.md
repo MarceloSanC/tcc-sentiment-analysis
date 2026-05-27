@@ -214,8 +214,8 @@ internally by the `GoldBuilder` subclasses only.
 
 ## Cross-link
 
-- Diagnostico: [`docs/07_reports/phase-gates/B_architectural_debt_2026-05-19.md`](../../07_reports/phase-gates/B_architectural_debt_2026-05-19.md) §"M5-refresh"
-- Implementacao log: [`docs/07_reports/option_b_execution_log_2026-05-19.md`](../../07_reports/option_b_execution_log_2026-05-19.md) §R-22
-- Plano de remediacao: [`docs/ai/STAGE_20_23_REMEDIATION_PLAN.md`](../../ai/STAGE_20_23_REMEDIATION_PLAN.md) §Stage R-22
+- Diagnostico: [`docs/07_reports/phase-gates/phase-b/B_architectural_debt_2026-05-19.md`](../../07_reports/phase-gates/phase-b/B_architectural_debt_2026-05-19.md) §"M5-refresh"
+- Implementacao log: [`docs/07_reports/phase-gates/phase-b/option_b_execution_log_2026-05-19.md`](../../07_reports/phase-gates/phase-b/option_b_execution_log_2026-05-19.md) §R-22
+- Plano de remediacao: [`docs/ai/phase-b/STAGE_20_23_REMEDIATION_PLAN.md`](../../ai/phase-b/STAGE_20_23_REMEDIATION_PLAN.md) §Stage R-22
 - Relacionado: ADR-0001 (Analytics Store como source of truth — este ADR refina internals do builder side); ADR-0004 (QualityCheckRegistry, mesmo padrao aplicado ao validate)
 - Habilita future: PHASE_B §Stages 15-18 (Caminho C write-time per-run) se forem ativados.

@@ -220,7 +220,7 @@ errado, nao "preciso".
 Patologia recorrente em regressores quantilicos treinados independentemente
 e o quantile crossing, situacao em que `p10 > p50` ou `p50 > p90` em parte
 das linhas. No analytics store deste projeto, a auditoria pre-Phase B
-documentada em `docs/07_reports/phase-gates/A_code_audit.md` §M5-Q1
+documentada em `docs/07_reports/phase-gates/phase-a/A_code_audit.md` §M5-Q1
 registrou 402 crossings em amostra de 4 linhas e ate quatro linhas com MPIW
 negativo. Chernozhukov, Fernandez-Val e Galichon (2010) demonstram, em
 artigo no `Econometrica`, que o rearranjo monotonico da funcao quantil

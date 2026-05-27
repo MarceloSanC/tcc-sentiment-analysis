@@ -150,7 +150,7 @@ Documentacao operacional command-first. Nao explica teoria; mostra como rodar.
   com secao de purge.
 - [`06_runbooks/RUN_REFRESH_ANALYTICS.md`](06_runbooks/RUN_REFRESH_ANALYTICS.md) : refresh do analytics store com
   `--fail-on-quality` e flags de escopo.
-- [`06_runbooks/RUN_PHASE_B_TIER_CLASSIFICATION.md`](06_runbooks/RUN_PHASE_B_TIER_CLASSIFICATION.md) :
+- [`06_runbooks/phase-b/RUN_PHASE_B_TIER_CLASSIFICATION.md`](06_runbooks/phase-b/RUN_PHASE_B_TIER_CLASSIFICATION.md) :
   pos-processador E5 da Phase B para sidecars DM/Holm/tier.
 - [`06_runbooks/RUN_TESTS.md`](06_runbooks/RUN_TESTS.md) : execucao de testes unitarios e de integracao.
 - [`06_runbooks/TROUBLESHOOTING.md`](06_runbooks/TROUBLESHOOTING.md) : solucao de problemas comuns no setup
@@ -162,7 +162,7 @@ Documentacao operacional command-first. Nao explica teoria; mostra como rodar.
 Pre-registros operacionais versionados, selados antes de rodadas
 confirmatorias. Cada pre-registro vira `canonical_for` da rodada que cobre.
 
-- [`06_pre_registration/preregistration_phase_b.md`](06_pre_registration/preregistration_phase_b.md) : pre-registro F.2
+- [`06_pre_registration/phase-b/preregistration_phase_b.md`](06_pre_registration/phase-b/preregistration_phase_b.md) : pre-registro F.2
   da Fase B confirmatoria (TFT all-features, AAPL); fixa hipoteses,
   candidato, contrato quantilico, baselines, coorte, protocolo
   estatistico e bandas tier 1/tier 2.
@@ -206,8 +206,12 @@ como rastro empirico, phase-gates como auditorias datadas.
   para sessoes de escrita do TCC e artigo.
 
 #### `07_reports/phase-gates/` — auditorias datadas de ciclo de vida
-- [`07_reports/phase-gates/A_code_audit.md`](07_reports/phase-gates/A_code_audit.md) : auditoria pre-Fase B com
+- [`07_reports/phase-gates/phase-a/A_code_audit.md`](07_reports/phase-gates/phase-a/A_code_audit.md) : auditoria pre-Fase B com
   veredictos por modulo (M1-M7).
+- [`07_reports/phase-gates/phase-a/A_audit_closure_2026-05-17.md`](07_reports/phase-gates/phase-a/A_audit_closure_2026-05-17.md) :
+  fechamento do gate da Fase A.
+- [`07_reports/phase-gates/phase-b/B_confirmatory_2026-05-25.md`](07_reports/phase-gates/phase-b/B_confirmatory_2026-05-25.md) :
+  relatorio confirmatorio final da Phase B.
 
 ### `08_governance/` — Processo, Versao e Pre-registro
 Controle de processo: branch/commit/PR, versionamento, reprodutibilidade,
@@ -218,7 +222,7 @@ pre-registros cientificos.
   `schema_version`, `model_version`, `sweep_id`) e politica de reprodutibilidade.
 - [`08_governance/EXPERIMENT_TRACKING_POLICY.md`](08_governance/EXPERIMENT_TRACKING_POLICY.md) : politica de IDs e
   rastreabilidade de experimentos (run_id, execution_id, fingerprints).
-- [`08_governance/POST_AUDIT_EXECUTION_PLAN.md`](08_governance/POST_AUDIT_EXECUTION_PLAN.md) : plano temporario
+- [`08_governance/phase-a/POST_AUDIT_EXECUTION_PLAN.md`](08_governance/phase-a/POST_AUDIT_EXECUTION_PLAN.md) : plano temporario
   das etapas apos o A_code_audit ate o fechamento do escopo experimental.
 - [`08_governance/ROADMAP_AND_TODO.md`](08_governance/ROADMAP_AND_TODO.md) : padrao oficial para uso de TODOs e
   registro de melhorias tecnicas planejadas.
