@@ -61,14 +61,14 @@ no Required reading + texto da Emenda E1.8 nesta especificação.
 
 1. **Emenda E1.8 draft** (seção "Emenda E1.8 (texto-base)" desta especificação)
    — protocolo estatístico operacionalizado que esta PR formaliza.
-2. [`docs/06_pre_registration/preregistration_phase_b.md`](../06_pre_registration/preregistration_phase_b.md)
+2. [`docs/06_pre_registration/phase-b/preregistration_phase_b.md`](../../06_pre_registration/phase-b/preregistration_phase_b.md)
    §3 (H1/H2a/H2b), §6 (post-guardrail), §7 (família Holm 6), §9 (Tier 1/2
    gates), §14 (emendas anteriores E1, E1.6, E1.7).
-3. [`docs/04_evaluation/STATISTICAL_TESTS.md`](../04_evaluation/STATISTICAL_TESTS.md)
+3. [`docs/04_evaluation/STATISTICAL_TESTS.md`](../../04_evaluation/STATISTICAL_TESTS.md)
    — DM, HAC, Holm canonical references.
-4. [`docs/04_evaluation/CALIBRATION_AND_RISK.md`](../04_evaluation/CALIBRATION_AND_RISK.md)
+4. [`docs/04_evaluation/CALIBRATION_AND_RISK.md`](../../04_evaluation/CALIBRATION_AND_RISK.md)
    §"Calibration Acceptance Thresholds" — bandas Tier 1/Tier 2.
-5. [`docs/04_evaluation/METRICS_DEFINITIONS.md`](../04_evaluation/METRICS_DEFINITIONS.md)
+5. [`docs/04_evaluation/METRICS_DEFINITIONS.md`](../../04_evaluation/METRICS_DEFINITIONS.md)
    §"Variante quantilica" — categoria A/B/C, leitura `*_post_guardrail`.
 6. [`src/use_cases/run_baselines_use_case.py`](../../src/use_cases/run_baselines_use_case.py)
    — padrão clean arch a espelhar (use case + persister + interface).
@@ -82,7 +82,7 @@ no Required reading + texto da Emenda E1.8 nesta especificação.
 10. [`config/sweeps/explicit/phase_b_confirmatorio_20260524.json`](../../config/sweeps/explicit/phase_b_confirmatorio_20260524.json)
     — folds canônicos (wf_1/wf_2/wf_3) + periods.
 11. Notas de revisão E0-E4 em
-    [`docs/05_checklists/PHASE_B_EXECUTION_CHECKLIST.md`](../05_checklists/PHASE_B_EXECUTION_CHECKLIST.md)
+    [`docs/05_checklists/phase-b/PHASE_B_EXECUTION_CHECKLIST.md`](../../05_checklists/phase-b/PHASE_B_EXECUTION_CHECKLIST.md)
     — contexto do que foi executado pela Sessão-A.
 
 ## Comandos proibidos (sempre)
@@ -108,7 +108,7 @@ no Required reading + texto da Emenda E1.8 nesta especificação.
 - `data/analytics/silver/` e `data/analytics/gold/` (apenas leitura).
 - `data/analytics_archive_pre_phase_b/` (read-only).
 - `config/sweeps/explicit/phase_b_confirmatorio_20260524.json` (selada).
-- `docs/05_checklists/PHASE_B_IMPLEMENTATION_CHECKLIST.md` (imutável).
+- `docs/05_checklists/phase-b/PHASE_B_IMPLEMENTATION_CHECKLIST.md` (imutável).
 - ADRs em `docs/01_architecture/decisions/`.
 
 **Permitido criar:**
@@ -124,31 +124,31 @@ no Required reading + texto da Emenda E1.8 nesta especificação.
 - `src/main_compute_phase_b_tier_metrics.py` (CLI).
 - `tests/unit/domain/services/test_*.py` (cobertura nova).
 - `tests/integration/test_compute_phase_b_tier_metrics_use_case.py`.
-- `docs/06_runbooks/RUN_PHASE_B_TIER_CLASSIFICATION.md`.
+- `docs/06_runbooks/phase-b/RUN_PHASE_B_TIER_CLASSIFICATION.md`.
 - Sidecar output dir: `data/analytics/reports/phase_b/cohort=<id>/` (apenas
   no momento da execução real, não durante implementação dos tests).
 
 **Permitido modificar:**
-- `docs/06_pre_registration/preregistration_phase_b.md` (§14 anexar Emenda
+- `docs/06_pre_registration/phase-b/preregistration_phase_b.md` (§14 anexar Emenda
   E1.8 + §7 nota cross-link à E1.8).
 - `docs/04_evaluation/STATISTICAL_TESTS.md` (adicionar seção "Unidade
   estatística DM em walk-forward com folds sobrepostos").
-- `docs/05_checklists/PHASE_B_EXECUTION_CHECKLIST.md` (Stage E5 reescrito
+- `docs/05_checklists/phase-b/PHASE_B_EXECUTION_CHECKLIST.md` (Stage E5 reescrito
   para usar o novo CLI — atualização já consta nesta PR mas pode precisar
   ajuste fino após implementação).
-- `docs/ai/PHASE_B_SESSION_B_PROMPT.md` (instruções de uso do CLI — já
+- `docs/ai/phase-b/PHASE_B_SESSION_B_PROMPT.md` (instruções de uso do CLI — já
   ajustado nesta PR mas pode precisar refinamento).
 
 ## Skills a invocar (proativo)
 
-- [`module-implementation-clean-arch`](../../.claude/skills/module-implementation-clean-arch/SKILL.md)
+- [`module-implementation-clean-arch`](../skills/module-implementation-clean-arch/SKILL.md)
   — padrão arquitetural por camada (domain puro / use case / adapter /
   interface segregada / CLI thin).
-- [`orchestrator-design`](../../.claude/skills/orchestrator-design/SKILL.md)
+- [`orchestrator-design`](../skills/orchestrator-design/SKILL.md)
   — use case como thin orchestrator sobre domain services.
-- [`project-scope-principles`](../../.claude/skills/project-scope-principles/SKILL.md)
+- [`project-scope-principles`](../skills/project-scope-principles/SKILL.md)
   — escopo reduzido; resistir a feature creep arquitetural.
-- [`staged-implementation-protocol`](../../.claude/skills/staged-implementation-protocol/SKILL.md)
+- [`staged-implementation-protocol`](../../../.claude/skills/staged-implementation-protocol/SKILL.md)
   — commits sequenciais com aceite explícito por etapa.
 
 ## Decisões metodológicas fixadas (do not redecide)
@@ -355,7 +355,7 @@ class PhaseBTierSidecarWriter(Protocol):
 
 ### Documentação
 
-**`docs/06_runbooks/RUN_PHASE_B_TIER_CLASSIFICATION.md`** (novo runbook curto)
+**`docs/06_runbooks/phase-b/RUN_PHASE_B_TIER_CLASSIFICATION.md`** (novo runbook curto)
 - Padrão dos outros runbooks: header YAML + comando canônico + outputs
   esperados + cross-links.
 
@@ -365,7 +365,7 @@ class PhaseBTierSidecarWriter(Protocol):
   HAC lag, HLN, teste unilateral, Holm-6.
 - Cross-link a Emenda E1.8 no pré-registro.
 
-**`docs/06_pre_registration/preregistration_phase_b.md`** (modificar)
+**`docs/06_pre_registration/phase-b/preregistration_phase_b.md`** (modificar)
 - §14 anexar texto da Emenda E1.8 (ver seção seguinte desta especificação).
 - §7 adicionar nota curta: "Operacionalização do protocolo declarada na
   Emenda E1.8 (§14), por mediação do pós-processador
@@ -373,7 +373,7 @@ class PhaseBTierSidecarWriter(Protocol):
 
 ## Emenda E1.8 (texto-base)
 
-A ser anexada em `docs/06_pre_registration/preregistration_phase_b.md` §14
+A ser anexada em `docs/06_pre_registration/phase-b/preregistration_phase_b.md` §14
 (no topo da lista de emendas, antes da E1.7). Texto-base — refinar se
 necessário durante implementação, mas preservar substância:
 
@@ -506,7 +506,7 @@ STATISTICAL_TESTS.md).
 - `src/use_cases/compute_phase_b_tier_metrics_use_case.py` orchestrator.
 - `src/main_compute_phase_b_tier_metrics.py` CLI.
 - `docs/04_evaluation/STATISTICAL_TESTS.md` documentacao canonica.
-- `docs/06_runbooks/RUN_PHASE_B_TIER_CLASSIFICATION.md` runbook.
+- `docs/06_runbooks/phase-b/RUN_PHASE_B_TIER_CLASSIFICATION.md` runbook.
 
 Sem impacto nas hipoteses cientificas H1, H2a, H2b nem nos gates Tier 1/Tier 2.
 Apenas formaliza COMO os 6 pvalues unilaterais sao computados a partir dos
@@ -549,13 +549,13 @@ dados, deixando a interpretacao para Sessao-B em E5.
 ### Commit 4: CLI entrypoint + runbook
 - Arquivos:
   - `src/main_compute_phase_b_tier_metrics.py`
-  - `docs/06_runbooks/RUN_PHASE_B_TIER_CLASSIFICATION.md`
+  - `docs/06_runbooks/phase-b/RUN_PHASE_B_TIER_CLASSIFICATION.md`
 - Aceite: `python -m src.main_compute_phase_b_tier_metrics --help` →
   ajuda corretamente; ruff clean.
 
 ### Commit 5: Emenda E1.8 + STATISTICAL_TESTS.md
 - Arquivos:
-  - `docs/06_pre_registration/preregistration_phase_b.md` (§14 + §7)
+  - `docs/06_pre_registration/phase-b/preregistration_phase_b.md` (§14 + §7)
   - `docs/04_evaluation/STATISTICAL_TESTS.md` (nova seção)
 - Aceite: emenda E1.8 anexada com data preenchida; §7 com nota cross-link;
   STATISTICAL_TESTS.md com nova seção sobre unidade DM em walk-forward.

@@ -30,7 +30,7 @@ Validado end-to-end via R-23 smoke v4 (2026-05-22).
 Ambos materializam `target_ts = decision_ts + pd.Timedelta(days=h-1)` (calendar days num dataset trading-day — bug secundario E4 do investigation report).
 
 Consequencia documentada em
-[`docs/07_reports/tft_y_true_investigation_2026-05-18.md`](../../07_reports/tft_y_true_investigation_2026-05-18.md):
+[`docs/07_reports/phase-gates/phase-a/tft_y_true_investigation_2026-05-18.md`](../../07_reports/phase-gates/phase-a/tft_y_true_investigation_2026-05-18.md):
 TFT e baseline reportam `y_true` referentes a dias diferentes do dataset
 para o mesmo `target_timestamp_utc`. **0 de 685** linhas com `target_ts`
 coincidente em h=1 tem `y_true` igual. Bug raiz do Gap 6.
@@ -136,7 +136,7 @@ e preservada porque a formula passa a indexar backward.
 
 ## Cross-link
 
-- Diagnostico: [`docs/07_reports/phase-gates/B_architectural_debt_2026-05-19.md`](../../07_reports/phase-gates/B_architectural_debt_2026-05-19.md) §"M-train_tft persistencia"
-- Investigacao raiz: [`docs/07_reports/tft_y_true_investigation_2026-05-18.md`](../../07_reports/tft_y_true_investigation_2026-05-18.md)
+- Diagnostico: [`docs/07_reports/phase-gates/phase-b/B_architectural_debt_2026-05-19.md`](../../07_reports/phase-gates/phase-b/B_architectural_debt_2026-05-19.md) §"M-train_tft persistencia"
+- Investigacao raiz: [`docs/07_reports/phase-gates/phase-a/tft_y_true_investigation_2026-05-18.md`](../../07_reports/phase-gates/phase-a/tft_y_true_investigation_2026-05-18.md)
 - Implementacao: PHASE_B_IMPLEMENTATION_CHECKLIST.md §Stage 20
 - Doc canonico atualizado pos-merge: [`docs/03_modeling/MULTI_HORIZON.md`](../../03_modeling/MULTI_HORIZON.md) §"Convencao target_timestamp" (nova secao)

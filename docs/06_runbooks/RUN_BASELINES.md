@@ -112,5 +112,5 @@ Ambos entrypoints:
 - [`SWEEPS_AND_SELECTION.md`](../03_modeling/SWEEPS_AND_SELECTION.md) — schema da secao `baselines` no JSON.
 - [`RUN_SWEEPS.md`](RUN_SWEEPS.md) — execucao de sweeps TFT (Optuna, OFAT, explicit).
 - [`RUN_REFRESH_ANALYTICS.md`](RUN_REFRESH_ANALYTICS.md) — refresh + quality gate.
-- [`PHASE_B_IMPLEMENTATION_CHECKLIST.md`](../05_checklists/PHASE_B_IMPLEMENTATION_CHECKLIST.md) Stage 12 — historico.
-- [`POST_CLOSURE_FIXES_CHECKLIST.md`](../05_checklists/POST_CLOSURE_FIXES_CHECKLIST.md) Stage F.0 (F.0.1, F.0.2) — fixes pre-smoke pos-closure.
+- [`PHASE_B_IMPLEMENTATION_CHECKLIST.md`](../05_checklists/phase-b/PHASE_B_IMPLEMENTATION_CHECKLIST.md) Stage 12 — historico.
+- [`POST_CLOSURE_FIXES_CHECKLIST.md`](../05_checklists/phase-a/POST_CLOSURE_FIXES_CHECKLIST.md) Stage F.0 (F.0.1, F.0.2) — fixes pre-smoke pos-closure.

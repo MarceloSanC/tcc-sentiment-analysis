@@ -16,13 +16,16 @@ canonical_for: [phase_b_architectural_debt_audit, god_object_findings, post_f0_r
 
 # Phase B — Architectural Debt Assessment (post-F.0)
 
-**Status:** pendente (3 modulos YELLOW; nenhum RED)
+**Status:** remediado/superseded em 2026-05-23. Os 3 modulos YELLOW foram
+enderecados por PHASE_B §Stages 20-22; o fix do Gap 6 foi fechado na
+remediacao R-20/R-23. Este arquivo permanece como diagnostico historico da
+divida arquitetural post-F.0, nao como bloqueio ativo da Phase B.
 **Criado:** 2026-05-19
-**Pre-requisito:** [`A_audit_closure_2026-05-17.md`](A_audit_closure_2026-05-17.md) §"Findings post-closure".
+**Pre-requisito:** [`A_audit_closure_2026-05-17.md`](../phase-a/A_audit_closure_2026-05-17.md) §"Findings post-closure".
 **Bloqueante para:** fix do Gap 6 (TFT y_true convention) — ver
-[`POST_CLOSURE_FIXES_CHECKLIST.md`](../../05_checklists/POST_CLOSURE_FIXES_CHECKLIST.md) §"Ondas futuras".
+[`POST_CLOSURE_FIXES_CHECKLIST.md`](../../../05_checklists/phase-a/POST_CLOSURE_FIXES_CHECKLIST.md) §"Ondas futuras".
 
-Este documento e paralelo a [`A_code_audit.md`](A_code_audit.md) com escopo
+Este documento e paralelo a [`A_code_audit.md`](../phase-a/A_code_audit.md) com escopo
 diferente:
 
 - `A_code_audit.md` (Phase A) cobriu **codigo herdado pre-Phase B** com
@@ -44,7 +47,7 @@ Stage individual.
 Para cada modulo identificado, preencher:
 - **Veredicto:** GREEN / YELLOW / RED
 - **Achados:** evidencia objetiva (LOC, metodos, heatmap de commits, casos clinicos)
-- **Acao:** Stage proposto em [`PHASE_B_IMPLEMENTATION_CHECKLIST.md`](../../05_checklists/PHASE_B_IMPLEMENTATION_CHECKLIST.md)
+- **Acao:** Stage proposto em [`PHASE_B_IMPLEMENTATION_CHECKLIST.md`](../../../05_checklists/phase-b/PHASE_B_IMPLEMENTATION_CHECKLIST.md)
 
 Veredictos:
 - `GREEN` — sem debito arquitetural relevante.
@@ -174,14 +177,14 @@ modulos. `refresh_analytics_store` reduz a orquestrador (~400 LOC).
   multi-horizonte de `fact_oos_predictions`** (linhas 770-810).
 - Linha 778: `split_tail = split_df.tail(n)` — recupera **decoder_end_day**
   como `timestamp_utc`. Bug raiz do Gap 6 (descrito em
-  [`tft_y_true_investigation_2026-05-18.md`](../tft_y_true_investigation_2026-05-18.md)).
+  [`tft_y_true_investigation_2026-05-18.md`](../phase-a/tft_y_true_investigation_2026-05-18.md)).
 - Convencao `target_timestamp` distribuida em 5 arquivos sem dono unico:
   - [`train_tft_model_use_case.py:778`](../../../src/use_cases/train_tft_model_use_case.py#L778) (TFT persistence)
   - [`run_baselines_use_case.py:240`](../../../src/use_cases/run_baselines_use_case.py#L240) (baseline persistence)
   - [`validate_analytics_quality_use_case.py`](../../../src/use_cases/validate_analytics_quality_use_case.py) (F.0.3 alignment gate)
   - [`refresh_analytics_store_use_case.py`](../../../src/use_cases/refresh_analytics_store_use_case.py) (builders pareados)
   - [`build_tft_dataset_use_case.py:563`](../../../src/use_cases/build_tft_dataset_use_case.py#L563) (target_return convention)
-- [`docs/03_modeling/MULTI_HORIZON.md:28-29`](../../03_modeling/MULTI_HORIZON.md#L28-L29)
+- [`docs/03_modeling/MULTI_HORIZON.md:28-29`](../../../03_modeling/MULTI_HORIZON.md#L28-L29)
   define `target_timestamp` sem fixar anchor. Ambiguidade permitiu
   divergencia TFT↔baseline a coexistir ate o smoke F.1 expor.
 
@@ -217,18 +220,19 @@ Esses 3 modulos YELLOW **nao invalidam** o closure mapping dos Stages
 fechados. Sao debito **estrutural produzido pela serie de fixes
 corretos**, observavel apenas no E2E.
 
-Plano de remediacao:
+Plano de remediacao historico:
 
 1. **PHASE_B §Stage 20** (ADR-0003) — `MultiHorizonPredictionPersister`.
 2. **PHASE_B §Stage 21** (ADR-0004) — `QualityCheckRegistry`.
 3. **PHASE_B §Stage 22** (ADR-0005) — `GoldBuilders` modulares.
-4. **Apos Stage 20**: fix do Gap 6 (decisao TBD entre Opcoes (a)/(b) do
-   investigation report); blast-radius reduzido de 5 arquivos para 1.
-5. **Apos Stage 22**: re-rodada F.1 v3 (smoke regression byte-identical
-   garantido pelos Aceites de cada Stage).
+4. **Apos Stage 20**: fix do Gap 6 (contrato canonico consolidado na
+   Opcao (d), registrado em ADR-0003 e validado em R-20/R-23); blast-radius
+   reduzido por `MultiHorizonPredictionPersister`.
+5. **Apos Stage 22**: re-rodada F.1 v4 PASS pleno (Stage R-23), com smoke
+   regression byte-identical garantido pelos Aceites de cada Stage.
 
 Promocao registrada em
-[`POST_CLOSURE_FIXES_CHECKLIST.md`](../../05_checklists/POST_CLOSURE_FIXES_CHECKLIST.md)
+[`POST_CLOSURE_FIXES_CHECKLIST.md`](../../../05_checklists/phase-a/POST_CLOSURE_FIXES_CHECKLIST.md)
 §"Stage F.A" (origem: F.0 iteration); execucao em
-[`PHASE_B_IMPLEMENTATION_CHECKLIST.md`](../../05_checklists/PHASE_B_IMPLEMENTATION_CHECKLIST.md)
+[`PHASE_B_IMPLEMENTATION_CHECKLIST.md`](../../../05_checklists/phase-b/PHASE_B_IMPLEMENTATION_CHECKLIST.md)
 §Stages 20-22 (porte: pre-experiment engineering).

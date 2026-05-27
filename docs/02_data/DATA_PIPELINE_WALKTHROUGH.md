@@ -1788,5 +1788,5 @@ Toda a §6.1 e gap A.59 materializada.
 - Source of truth (codigo): listada em cada celula
 - Source of truth (decisao): `01_architecture/decisions/ADR-*.md`
 - Source of truth (operacao): `06_runbooks/`
-- Tracking de incidentes/dividas: `docs/ai/STAGE_20_23_REMEDIATION_PLAN.md` (escopo de remediation atual)
+- Tracking de incidentes/dividas: `docs/ai/phase-b/STAGE_20_23_REMEDIATION_PLAN.md` (escopo de remediation atual)
 - Map original (skeleton + decisoes): conversa de 2026-05-20 com o usuario (este doc e o entregavel)

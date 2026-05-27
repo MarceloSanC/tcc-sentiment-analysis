@@ -1,6 +1,6 @@
 ---
 title: Phase B Implementation Checklist (Pre-Experiment Engineering)
-scope: Passo a passo tecnico de implementacao das alteracoes de codigo exigidas pelo gate de Phase A (docs/07_reports/phase-gates/A_code_audit.md). Cada Stage = 1 PR; cada task dentro do Stage = 1 commit. Caminho C eh estado-alvo; Caminho B eh intermediario aceitavel. Para definicoes canonicas, ver 01_architecture/ANALYTICS_STORE_ARCHITECTURE.md e o proprio A_code_audit.md. Fixes descobertos APOS o closure (via smoke F.1) sao rastreados em POST_CLOSURE_FIXES_CHECKLIST.md.
+scope: Passo a passo tecnico de implementacao das alteracoes de codigo exigidas pelo gate de Phase A (docs/07_reports/phase-gates/phase-a/A_code_audit.md). Cada Stage = 1 PR; cada task dentro do Stage = 1 commit. Caminho C eh estado-alvo; Caminho B eh intermediario aceitavel. Para definicoes canonicas, ver 01_architecture/ANALYTICS_STORE_ARCHITECTURE.md e o proprio A_code_audit.md. Fixes descobertos APOS o closure (via smoke F.1) sao rastreados em POST_CLOSURE_FIXES_CHECKLIST.md.
 update_when:
   - status (checkbox) de uma task for atualizado
   - novo achado da auditoria for promovido para implementacao
@@ -12,9 +12,10 @@ canonical_for: [phase_b_implementation_checklist, phase_b_pre_experiment_enginee
 
 # Phase B — Implementation Checklist
 
-**Status:** pendente
+**Status:** completo para o escopo obrigatório da Phase B (2026-05-23);
+Stages opcionais 15-19 permanecem backlog pós-Phase B.
 **Criado:** 2026-05-10
-**Pre-requisito:** [A_code_audit.md](../07_reports/phase-gates/A_code_audit.md) com todos os modulos P0 em GREEN ou YELLOW com acao concluida.
+**Pre-requisito:** [A_code_audit.md](../../07_reports/phase-gates/phase-a/A_code_audit.md) com todos os modulos P0 em GREEN ou YELLOW com acao concluida.
 **Bloqueante para:** abertura formal da Fase B (treino confirmatorio).
 
 Este checklist traduz as Acoes do `A_code_audit.md` em PRs e commits. Cada Stage
@@ -25,7 +26,7 @@ isoladamente.
 `A_code_audit.md`. Stages 1-19 + Stage final F.1/F.2/F.3. Fixes
 descobertos **apos** o closure parcial da Fase A (via smoke F.1 ou
 suas re-rodadas) sao rastreados em
-[`POST_CLOSURE_FIXES_CHECKLIST.md`](POST_CLOSURE_FIXES_CHECKLIST.md)
+[`POST_CLOSURE_FIXES_CHECKLIST.md`](../phase-a/POST_CLOSURE_FIXES_CHECKLIST.md)
 para preservar este arquivo como snapshot do escopo original.
 
 ## Convencao
@@ -83,7 +84,7 @@ qual caminho sera entregue ate a abertura da Phase B.
 ## Convencao de branch, commit e PR
 
 Esta checklist segue o fluxo canonico definido em
-[`docs/08_governance/GOVERNANCE_AND_VERSIONING.md`](../08_governance/GOVERNANCE_AND_VERSIONING.md):
+[`docs/08_governance/GOVERNANCE_AND_VERSIONING.md`](../../08_governance/GOVERNANCE_AND_VERSIONING.md):
 - branch naming `<tipo>/<area>-<objetivo>`
 - commit format `<tipo>(<escopo>): <resumo no imperativo>`
 - PR template com Summary/Changes/Validation/Notes
@@ -503,9 +504,9 @@ coorte declarada em vez de ler o silver inteiro.
 **conforme categorizacao A/B/C** por tabela gold; pre-registro fixa
 variante primaria para H1/H2a/H2b (default `post_guardrail`). A
 categorizacao canonica vive em
-[`docs/04_evaluation/METRICS_DEFINITIONS.md`](../04_evaluation/METRICS_DEFINITIONS.md)
+[`docs/04_evaluation/METRICS_DEFINITIONS.md`](../../04_evaluation/METRICS_DEFINITIONS.md)
 §"Variante quantilica" e justificativa academica em
-[`docs/07_reports/living-paper/20_method.md`](../07_reports/living-paper/20_method.md)
+[`docs/07_reports/living-paper/20_method.md`](../../07_reports/living-paper/20_method.md)
 §"Politica de variante quantilica".
 
 **Cross-link:** A_code_audit.md §M5-Q1; external review 2026-04-09
@@ -1486,9 +1487,9 @@ documentar caminho oficial.
 
 Stages 20-22 abordam debito estrutural produzido pela execucao dos
 Stages 1-14 + F.0, identificado em
-[`B_architectural_debt_2026-05-19.md`](../07_reports/phase-gates/B_architectural_debt_2026-05-19.md).
+[`B_architectural_debt_2026-05-19.md`](../../07_reports/phase-gates/phase-b/B_architectural_debt_2026-05-19.md).
 Registro de descoberta vive em
-[`POST_CLOSURE_FIXES_CHECKLIST.md`](POST_CLOSURE_FIXES_CHECKLIST.md) §"Stage F.A"
+[`POST_CLOSURE_FIXES_CHECKLIST.md`](../phase-a/POST_CLOSURE_FIXES_CHECKLIST.md) §"Stage F.A"
 (origem: smoke F.1 iteration); execucao vive aqui (porte: Stage 15+ → promotion
 rule do POST_CLOSURE). Os 3 Stages sao **pre-requisito do fix do Gap 6**
 (TFT y_true convention) — extrair os god objects antes torna o fix uma
@@ -1506,9 +1507,9 @@ para um domain service que materializa **explicitamente a convencao
 target_timestamp / y_true / h-ahead**. Pre-requisito do fix do Gap 6.
 
 **Cross-link:**
-[`ADR-0003-multi-horizon-prediction-persister.md`](../01_architecture/decisions/ADR-0003-multi-horizon-prediction-persister.md);
-[`B_architectural_debt_2026-05-19.md`](../07_reports/phase-gates/B_architectural_debt_2026-05-19.md) §"M-train_tft persistencia";
-[`tft_y_true_investigation_2026-05-18.md`](../07_reports/tft_y_true_investigation_2026-05-18.md).
+[`ADR-0003-multi-horizon-prediction-persister.md`](../../01_architecture/decisions/ADR-0003-multi-horizon-prediction-persister.md);
+[`B_architectural_debt_2026-05-19.md`](../../07_reports/phase-gates/phase-b/B_architectural_debt_2026-05-19.md) §"M-train_tft persistencia";
+[`tft_y_true_investigation_2026-05-18.md`](../../07_reports/phase-gates/phase-a/tft_y_true_investigation_2026-05-18.md).
 
 ### Notas de revisao:
 
@@ -1524,7 +1525,7 @@ target_timestamp / y_true / h-ahead**. Pre-requisito do fix do Gap 6.
   em vez de manter o anchor `target_timestamp = decision_day` do
   Persister (Opção (a)), aplicou-se `target_return` backward-shifted em
   `build_tft_dataset_use_case`; `y_true_idx = i + h_int` em baselines;
-  [ADR-0003](../01_architecture/decisions/ADR-0003-multi-horizon-prediction-persister.md)
+  [ADR-0003](../../01_architecture/decisions/ADR-0003-multi-horizon-prediction-persister.md)
   amendada para registrar Opção (d) como contrato canônico. RED-1 e RED-2
   resolvidos. Tasks 20.0-20.6 fechadas por satisfação funcional do Aceite
   literal (branch desta hygiene PR: `chore/stage-20-23-closure-hygiene`,
@@ -1535,14 +1536,14 @@ target_timestamp / y_true / h-ahead**. Pre-requisito do fix do Gap 6.
   - 20.4 Teste cross-pipeline não-hollow em
     [`tests/integration/test_tft_baselines_y_true_alignment.py`](../../tests/integration/test_tft_baselines_y_true_alignment.py)
     (R-20.2).
-  - 20.5 [`MULTI_HORIZON.md`](../03_modeling/MULTI_HORIZON.md) atualizado
+  - 20.5 [`MULTI_HORIZON.md`](../../03_modeling/MULTI_HORIZON.md) atualizado
     para refletir Opção (d) (R-20).
   - 20.6 Smoke regression em
-    [`smoke_confirmatory_2026-05-18.md`](../07_reports/smoke_confirmatory_2026-05-18.md)
+    [`smoke_confirmatory_2026-05-18.md`](../../07_reports/phase-gates/phase-a/smoke_confirmatory_2026-05-18.md)
     §"Post-Stage 20" (registro histórico Opção (a)) + §"F.1 v4 PASS pleno
     (Stage R-23, 2026-05-22)" (validação atual Opção (d)).
   Evidência primária:
-  [`option_b_execution_log_2026-05-19.md`](../07_reports/option_b_execution_log_2026-05-19.md)
+  [`option_b_execution_log_2026-05-19.md`](../../07_reports/phase-gates/phase-b/option_b_execution_log_2026-05-19.md)
   §R-20.
 
 ### Tasks
@@ -1593,7 +1594,7 @@ target_timestamp / y_true / h-ahead**. Pre-requisito do fix do Gap 6.
       `tft_baselines_timestamp_subset_alignment` (F.0.3) e nos demais
       gates nao-Gap-6.
       **Aceite:** relatorio anexo em
-      `docs/07_reports/smoke_confirmatory_2026-05-18.md` secao
+      `docs/07_reports/phase-gates/phase-a/smoke_confirmatory_2026-05-18.md` secao
       "Post-Stage 20".
 
 ---
@@ -1606,8 +1607,8 @@ para um registry de classes `QualityCheck` independentes, com
 `applies_when(scope)` explicito e teste isolado por check.
 
 **Cross-link:**
-[`ADR-0004-quality-check-registry.md`](../01_architecture/decisions/ADR-0004-quality-check-registry.md);
-[`B_architectural_debt_2026-05-19.md`](../07_reports/phase-gates/B_architectural_debt_2026-05-19.md) §"M-validate_quality".
+[`ADR-0004-quality-check-registry.md`](../../01_architecture/decisions/ADR-0004-quality-check-registry.md);
+[`B_architectural_debt_2026-05-19.md`](../../07_reports/phase-gates/phase-b/B_architectural_debt_2026-05-19.md) §"M-validate_quality".
 
 ### Notas de revisao:
 
@@ -1631,10 +1632,10 @@ para um registry de classes `QualityCheck` independentes, com
     (PR #45 skeleton + R-21 finalização).
   - 21.2-21.5 27 checks migrados em clusters cardinality/alignment/calibration/contracts (R-21).
   - 21.6 `execute()` agora itera `registry.applicable(scope)` (R-21).
-  - 21.7 [`ANALYTICS_STORE_ARCHITECTURE.md`](../01_architecture/ANALYTICS_STORE_ARCHITECTURE.md)
+  - 21.7 [`ANALYTICS_STORE_ARCHITECTURE.md`](../../01_architecture/ANALYTICS_STORE_ARCHITECTURE.md)
     documenta o registry como ponto de extensão oficial (R-21).
   Evidência primária:
-  [`option_b_execution_log_2026-05-19.md`](../07_reports/option_b_execution_log_2026-05-19.md)
+  [`option_b_execution_log_2026-05-19.md`](../../07_reports/phase-gates/phase-b/option_b_execution_log_2026-05-19.md)
   §R-21.
 
 ### Tasks
@@ -1683,7 +1684,7 @@ para um registry de classes `QualityCheck` independentes, com
       checks com mesmos verdicts.
 
 - [x] **21.7** Atualizar
-      [`docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md`](../01_architecture/ANALYTICS_STORE_ARCHITECTURE.md)
+      [`docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md`](../../01_architecture/ANALYTICS_STORE_ARCHITECTURE.md)
       documentando o registry como ponto de extensao oficial.
       **Aceite:** doc canonico explica como adicionar novo check sem
       tocar `execute()`.
@@ -1698,8 +1699,8 @@ para pacote `src/domain/services/gold_builders/` organizado por
 categoria semantica.
 
 **Cross-link:**
-[`ADR-0005-gold-builders-modularization.md`](../01_architecture/decisions/ADR-0005-gold-builders-modularization.md);
-[`B_architectural_debt_2026-05-19.md`](../07_reports/phase-gates/B_architectural_debt_2026-05-19.md) §"M5-refresh".
+[`ADR-0005-gold-builders-modularization.md`](../../01_architecture/decisions/ADR-0005-gold-builders-modularization.md);
+[`B_architectural_debt_2026-05-19.md`](../../07_reports/phase-gates/phase-b/B_architectural_debt_2026-05-19.md) §"M5-refresh".
 
 ### Notas de revisao:
 
@@ -1734,7 +1735,7 @@ categoria semantica.
     [`tests/integration/test_gold_builders_byte_identical_archive.py`](../../tests/integration/test_gold_builders_byte_identical_archive.py)
     (R-22).
   Evidência primária:
-  [`option_b_execution_log_2026-05-19.md`](../07_reports/option_b_execution_log_2026-05-19.md)
+  [`option_b_execution_log_2026-05-19.md`](../../07_reports/phase-gates/phase-b/option_b_execution_log_2026-05-19.md)
   §R-22 (+ §R-22.fix para follow-ups de CI/lint).
 
 ### Tasks
@@ -1785,7 +1786,7 @@ categoria semantica.
       produz todos os 10 gold tables com o mesmo conteudo bit-for-bit
       antes vs depois.
       **Aceite:** script de diff anexo em
-      `docs/07_reports/smoke_confirmatory_2026-05-18.md` secao
+      `docs/07_reports/phase-gates/phase-a/smoke_confirmatory_2026-05-18.md` secao
       "Post-Stage 22"; diff vazio em todas as 10 tabelas.
 
 ---
@@ -1794,7 +1795,7 @@ categoria semantica.
 
 Stage F.0 (fixes pre-smoke descobertos via F.1 2026-05-18) foi migrado
 em 2026-05-19 para
-[`POST_CLOSURE_FIXES_CHECKLIST.md`](POST_CLOSURE_FIXES_CHECKLIST.md) §"Stage F.0",
+[`POST_CLOSURE_FIXES_CHECKLIST.md`](../phase-a/POST_CLOSURE_FIXES_CHECKLIST.md) §"Stage F.0",
 preservando este arquivo como snapshot do pre-experiment engineering
 planejado upfront. Conteudo identico (F.0.0 ... F.0.9); rastreabilidade
 git via branch `feat/stage-f0-pre-smoke-fixes`.
@@ -1806,9 +1807,9 @@ git via branch `feat/stage-f0-pre-smoke-fixes`.
 ### Notas de revisao:
 
 - 2026-05-17: fechamento parcial da Fase A registrado em
-  [`A_audit_closure_2026-05-17.md`](../07_reports/phase-gates/A_audit_closure_2026-05-17.md)
+  [`A_audit_closure_2026-05-17.md`](../../07_reports/phase-gates/phase-a/A_audit_closure_2026-05-17.md)
   e marcacao parcial do gate em
-  [`A_code_audit.md`](../07_reports/phase-gates/A_code_audit.md)
+  [`A_code_audit.md`](../../07_reports/phase-gates/phase-a/A_code_audit.md)
   §"Gate de saida da Fase A":
   - P0 transversais (6 itens) → `[x]` todos fechados.
   - Modulos M4, M5 → `[x]` (todas as acoes cobertas por Stages
@@ -1821,10 +1822,10 @@ git via branch `feat/stage-f0-pre-smoke-fixes`.
   (veredicto APPROVE_WITH_CAVEATS; 5/5 spot-checks de mapping
   passaram; 4 caveats incorporados no closure final).
 - 2026-05-18: F.1 smoke veredicto FAIL; gaps documentados em
-  [`smoke_confirmatory_2026-05-18.md`](../07_reports/smoke_confirmatory_2026-05-18.md);
+  [`smoke_confirmatory_2026-05-18.md`](../../07_reports/phase-gates/phase-a/smoke_confirmatory_2026-05-18.md);
   Stage F.0 criado para desbloquear; F.1 re-rodara apos F.0 merged.
 - 2026-05-19: Stage F.0 (e futuras ondas post-closure) migrado para
-  [`POST_CLOSURE_FIXES_CHECKLIST.md`](POST_CLOSURE_FIXES_CHECKLIST.md).
+  [`POST_CLOSURE_FIXES_CHECKLIST.md`](../phase-a/POST_CLOSURE_FIXES_CHECKLIST.md).
 
 ### Tasks
 
@@ -1838,14 +1839,16 @@ git via branch `feat/stage-f0-pre-smoke-fixes`.
       - Marker `[x]` inicial em commit `69fabc3` foi prematuro (smoke v2
         max_epochs=1 não atendia aceite); revalidação em Stage R-23 (PR a
         abrir) confirmou substância.
-      - Evidência: `docs/07_reports/option_b_execution_log_2026-05-19.md`
+      - Evidência: `docs/07_reports/phase-gates/phase-b/option_b_execution_log_2026-05-19.md`
         §R-23.2 + `tests/integration/test_f1_golden_smoke.py`.
 
-- [ ] **F.2** Pre-registro com contrato quantilico primario fundamentado
+- [x] **F.2** Pre-registro com contrato quantilico primario fundamentado
       (raw vs post-guardrail) e politica de baselines (mesmo
       `parent_sweep_id` dos candidatos ou `cohort_id` logico).
       **Aceite:** documento de pre-registro mergeado em
-      `docs/06_pre_registration/` (ou local equivalente).
+      `docs/06_pre_registration/phase-b/` (ou local equivalente).
+      **Satisfeito (2026-05-23):** pre-registro Phase B mergeado em PR #58
+      e posteriormente finalizado com Emenda E6 na PR-B.
 
 - [x] **F.3** Marcar `A_code_audit.md` "Gate de saida da Fase A" como
       satisfeito.

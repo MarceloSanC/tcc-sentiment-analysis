@@ -84,7 +84,7 @@ Os sidecars sao por `parent_sweep_id` e existem para a Sessao-B interpretar E5. 
 
 ## Cross-links
 
-- Pre-registro Phase B: `docs/06_pre_registration/preregistration_phase_b.md` §7, §9 e §14 Emenda E1.8.
+- Pre-registro Phase B: `docs/06_pre_registration/phase-b/preregistration_phase_b.md` §7, §9 e §14 Emenda E1.8.
 - Protocolo estatistico: `docs/04_evaluation/STATISTICAL_TESTS.md`.
-- Checklist operacional: `docs/05_checklists/PHASE_B_EXECUTION_CHECKLIST.md` Stage E5.
+- Checklist operacional: `docs/05_checklists/phase-b/PHASE_B_EXECUTION_CHECKLIST.md` Stage E5.
 - Implementacao: `src/use_cases/compute_phase_b_tier_metrics_use_case.py`.

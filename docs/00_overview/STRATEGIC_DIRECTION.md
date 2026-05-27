@@ -223,7 +223,11 @@ Cada fase tem escopo, criterio de aceite e artefato versionado.
 
 ### Fase A - Sanidade (bloqueante, ~2 semanas)
 
-**Artefato de gate:** `docs/07_reports/phase-gates/A_code_audit.md`
+**Status:** concluida em 2026-05-23. Gate de saida satisfeito em
+`docs/07_reports/phase-gates/phase-a/A_code_audit.md`; detalhes em
+`docs/07_reports/phase-gates/phase-a/A_audit_closure_2026-05-17.md`.
+
+**Artefato de gate:** `docs/07_reports/phase-gates/phase-a/A_code_audit.md`
 Preencher veredictos por modulo antes de abrir qualquer treino confirmatorio.
 O artefato detalha o gate operacional em modulos M1-M7, incluindo auditoria do
 estado do Analytics Store e capacidade operacional da Fase B.
@@ -236,7 +240,7 @@ estado do Analytics Store e capacidade operacional da Fase B.
 - Identificar nos sweeps `0_2_3` os top-k configs com MPIW > 0 (nao-degenerados) como
   ponto de partida de hiperparametros para a Fase B.
 - **Artefato:** registro da taxa de degeneracao no primeiro run confirmatorio,
-  em `docs/07_reports/phase-gates/A_code_audit.md` (M2-Q4).
+  em `docs/07_reports/phase-gates/phase-a/A_code_audit.md` (M2-Q4).
 
 **A.1 Auditoria de leakage** (3 dias)
 - Inspecionar `time_varying_known_reals` no TFT: features derivadas de
@@ -278,11 +282,16 @@ estado do Analytics Store e capacidade operacional da Fase B.
 
 **A.5 Planejamento pos-auditoria**
 - O plano temporario para as etapas apos o `A_code_audit` esta em
-  `docs/08_governance/POST_AUDIT_EXECUTION_PLAN.md`.
+  `docs/08_governance/phase-a/POST_AUDIT_EXECUTION_PLAN.md`.
 - Esse plano nao substitui o pre-registro da Fase B; ele apenas mapeia a ordem
   esperada ate o fechamento do escopo experimental.
 
 ### Fase B - Experimento principal confirmatorio (~3 semanas)
+
+**Status:** concluida substantivamente em 2026-05-25 e preparada para merge
+na PR-B em 2026-05-26. Relatorio final em
+`docs/07_reports/phase-gates/phase-b/B_confirmatory_2026-05-25.md`;
+pre-registro final em `docs/06_pre_registration/phase-b/preregistration_phase_b.md`.
 
 Um unico experimento entra no paper como evidencia confirmatoria. Rodadas `0_X_X`
 sao recaracterizadas no texto como "analise exploratoria de hiperparametros",
@@ -432,7 +441,7 @@ Refutar honestamente e academicamente preferivel a forcar um claim frageis.
   como evidencia exploratoria e reservar claims confirmatorios para Fase B.
 - `docs/07_reports/living-paper/40_limitations_and_conclusion.md` - deve
   consolidar limitacoes antes da escrita final das conclusoes.
-- `docs/08_governance/POST_AUDIT_EXECUTION_PLAN.md` - deve manter, de forma
+- `docs/08_governance/phase-a/POST_AUDIT_EXECUTION_PLAN.md` - deve manter, de forma
   temporaria e revisavel, a sequencia planejada apos a conclusao do A_code_audit.
 - `docs/05_checklists/CHECKLISTS.md` e `docs/INDEX.md` - referencias ao
   checklist removido foram atualizadas para apontar para este arquivo.
@@ -445,7 +454,7 @@ Refutar honestamente e academicamente preferivel a forcar um claim frageis.
   preditiva e explicabilidade.
 - `docs/05_checklists/PREDICTIONS_AND_METRICS_CHECKLIST.md` - catalogo de metricas.
 - `docs/05_checklists/ANALYTICS_STORE_CHECKLIST.md` - contrato de dados.
-- `docs/07_reports/phase-gates/A_code_audit.md` - gate operacional da Fase A.
+- `docs/07_reports/phase-gates/phase-a/A_code_audit.md` - gate operacional da Fase A.
 - `docs/07_reports/external-reviews/claude_scope_governance_review_2026-04-09.md`
   - review externo cujas recomendacoes P0 permanecem em vigor.
 - `docs/ai/AGENT_CORE.md` - regras globais de governanca de escopo.

@@ -81,8 +81,8 @@ run_id) -- cross-link a docs canonicos em 04_evaluation/ e 00_overview/.
 | 4.2 Dados e pipelines | `docs/01_architecture/DATA_FLOW.md`, `docs/02_data/DATA_SOURCES.md` | `docs/06_runbooks/RUN_DATASET.md` | pronto | v1 existe; revisar leakage |
 | 4.3 Engenharia de features | `docs/02_data/FEATURE_SETS.md`, `docs/05_checklists/FEATURES_SET_CHECKLIST.md` | `src/infrastructure/schemas/feature_registry.py` | pronto | v2 sincronizado: poda minima baseada em principio (corr>0,95; missing>30%; derivadas redundantes; disponibilidade temporal) declarada conforme STRATEGIC_DIRECTION §4.2; lista final congelada no pre-registro |
 | 4.4 Configuracao do TFT | `docs/03_modeling/TRAINING_PIPELINE.md` | `src/adapters/pytorch_forecasting_tft_trainer.py` | pronto | v1 existe; revisar quantis |
-| 4.5 Protocolo experimental | `docs/00_overview/STRATEGIC_DIRECTION.md` secao 5, `docs/03_modeling/MULTI_HORIZON.md`, `docs/03_modeling/SWEEPS_AND_SELECTION.md` | `docs/07_reports/phase-gates/A_code_audit.md` | parcial | v2 sincronizado (pre-registro, parent_sweep_id, fronteira 2026-05-10); aguardar baselines persistidos para fechar |
-| 4.6 Baselines | `docs/04_evaluation/BASELINES.md` | `docs/04_evaluation/STATISTICAL_TESTS.md` | parcial (runner pendente; ver `docs/07_reports/phase-gates/A_code_audit.md` §M7-Q2) | v1 inserida no `.tex`; runner pendente (M7-Q2) |
+| 4.5 Protocolo experimental | `docs/00_overview/STRATEGIC_DIRECTION.md` secao 5, `docs/03_modeling/MULTI_HORIZON.md`, `docs/03_modeling/SWEEPS_AND_SELECTION.md` | `docs/07_reports/phase-gates/phase-a/A_code_audit.md` | parcial | v2 sincronizado (pre-registro, parent_sweep_id, fronteira 2026-05-10); aguardar baselines persistidos para fechar |
+| 4.6 Baselines | `docs/04_evaluation/BASELINES.md` | `docs/04_evaluation/STATISTICAL_TESTS.md` | parcial (runner pendente; ver `docs/07_reports/phase-gates/phase-a/A_code_audit.md` §M7-Q2) | v1 inserida no `.tex`; runner pendente (M7-Q2) |
 | 4.7 Metricas e calibracao | `docs/04_evaluation/METRICS_DEFINITIONS.md`, `docs/04_evaluation/CALIBRATION_AND_RISK.md` | `docs/04_evaluation/STATISTICAL_TESTS.md` | pronto | v2 sincronizado com Stage 8 (raw vs post-guardrail; Cat A/B/C cross-link a METRICS_DEFINITIONS.md) |
 | 4.8 Explicabilidade e contribuicao | `docs/04_evaluation/EXPLAINABILITY.md` | `docs/00_overview/STRATEGIC_DIRECTION.md` secao 4.3 | parcial | v1 inserida no `.tex` (VSN/permutacao/ablacao; hierarquia metodologica) |
 | 4.9 Analytics Store e governanca | `docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md`, `docs/02_data/DATA_CONTRACTS.md` | `docs/01_architecture/decisions/ADR-0001-analytics-store.md`, `docs/05_checklists/ANALYTICS_STORE_CHECKLIST.md` | pronto | v2 sincronizado (ScopeSpec, cohort-aware groupby, parent_sweep_id) |
@@ -125,13 +125,13 @@ limitacoes antes de Capitulo 6 ser considerado pronto.
 | Apendice A - Protocolo operacional e contratos de qualidade | `docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md`, `docs/04_evaluation/METRICS_DEFINITIONS.md`, `docs/04_evaluation/CALIBRATION_AND_RISK.md`, `docs/04_evaluation/STATISTICAL_TESTS.md`, `docs/07_reports/living-paper/30_results_and_analysis.md` §"Criterios quantitativos de aceite" | pronto: v1 inserida no `.tex` (run_id/fingerprints, camadas silver/gold, variante quantilica raw/post-guardrail, gates A/B/C/D, protocolo estatistico, pre-registro) |
 | Apendice B - Glossario tecnico de termos recorrentes | `docs/00_overview/GLOSSARY.md`, `docs/04_evaluation/METRICS_DEFINITIONS.md` | pronto: v1 inserida no `.tex` (calibracao, governanca, modelo/pipeline, testes estatisticos) |
 | Apendice C - Comandos de reproducao | `docs/06_runbooks/RUN_PIPELINE_QUICKSTART.md` e demais runbooks | pronto: v1 inserida no `.tex` (referencias a runbooks de dataset, treino, inferencia, refresh analytics) |
-| Auditoria pre-experimento da Fase A | `docs/07_reports/phase-gates/A_code_audit.md` | parcial: pode ser referenciada do Apendice A apos fechamento |
+| Auditoria pre-experimento da Fase A | `docs/07_reports/phase-gates/phase-a/A_code_audit.md` | parcial: pode ser referenciada do Apendice A apos fechamento |
 | Pre-registro Fase B | `docs/08_governance/preregistration_round1_<date>.md` | pendente: pode entrar como apendice adicional apos commit |
 
 ## Gaps P0 Antes Da Escrita Final
 
 - ~~Expandir `docs/07_reports/living-paper/10_problem_and_related_work.md`.~~ (2026-05-17, branch `docs/tcc-expand-cap3-and-literature`)
-- Preencher `docs/07_reports/phase-gates/A_code_audit.md`.
+- Preencher `docs/07_reports/phase-gates/phase-a/A_code_audit.md`.
 - Criar pre-registro versionado da Fase B.
 - Implementar e persistir baselines comparaveis.
 - Rodar Fase B para resultados confirmatorios.

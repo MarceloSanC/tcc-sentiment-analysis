@@ -2,7 +2,7 @@
 
 Você é uma sessão Claude entrando em modo **executor operacional autônomo**
 para os Stages E0–E4 do
-[`PHASE_B_EXECUTION_CHECKLIST.md`](../05_checklists/PHASE_B_EXECUTION_CHECKLIST.md).
+[`PHASE_B_EXECUTION_CHECKLIST.md`](../../05_checklists/phase-b/PHASE_B_EXECUTION_CHECKLIST.md).
 
 Sua missão é **executar** E0 (Optuna heritage), E1 (selar config + emenda
 pré-registro + abrir PR-A), E2 (treino TFT confirmatório), E3 (baselines) e
@@ -18,7 +18,7 @@ Estado em main esperado:
 - `PHASE_B_EXECUTION_CHECKLIST.md` mergeado em main (PR-60, commit `e55ab21`).
 - F.1 ✓ MERGED (R-23 PR #54).
 - F.2 ✓ MERGED (PR #58); pré-registro em
-  [`docs/06_pre_registration/preregistration_phase_b.md`](../06_pre_registration/preregistration_phase_b.md).
+  [`docs/06_pre_registration/phase-b/preregistration_phase_b.md`](../../06_pre_registration/phase-b/preregistration_phase_b.md).
 - F.3 ✓ MERGED (PR #59); Gate de saída da Fase A fechado; data de abertura
   Phase B = 2026-05-23.
 - Phase B formalmente autorizada a executar.
@@ -40,15 +40,15 @@ Decisões D1–D8 fechadas (não redecidir):
 
 ## Required reading (na ordem; NÃO PULE)
 
-1. [`PHASE_B_EXECUTION_CHECKLIST.md`](../05_checklists/PHASE_B_EXECUTION_CHECKLIST.md)
+1. [`PHASE_B_EXECUTION_CHECKLIST.md`](../../05_checklists/phase-b/PHASE_B_EXECUTION_CHECKLIST.md)
    — **fonte primária**. Stages E0–E4 com tasks numeradas e Aceite.
-2. [`preregistration_phase_b.md`](../06_pre_registration/preregistration_phase_b.md)
+2. [`preregistration_phase_b.md`](../../06_pre_registration/phase-b/preregistration_phase_b.md)
    §2, §4, §5, §10, §11, §13 — protocolo científico que E0–E4 operacionalizam.
-3. [`docs/06_runbooks/RUN_TRAINING.md`](../06_runbooks/RUN_TRAINING.md),
-   [`RUN_BASELINES.md`](../06_runbooks/RUN_BASELINES.md),
-   [`RUN_REFRESH_ANALYTICS.md`](../06_runbooks/RUN_REFRESH_ANALYTICS.md) —
+3. [`docs/06_runbooks/RUN_TRAINING.md`](../../06_runbooks/RUN_TRAINING.md),
+   [`RUN_BASELINES.md`](../../06_runbooks/RUN_BASELINES.md),
+   [`RUN_REFRESH_ANALYTICS.md`](../../06_runbooks/RUN_REFRESH_ANALYTICS.md) —
    comandos canônicos.
-4. [`docs/03_modeling/SWEEPS_AND_SELECTION.md`](../03_modeling/SWEEPS_AND_SELECTION.md)
+4. [`docs/03_modeling/SWEEPS_AND_SELECTION.md`](../../03_modeling/SWEEPS_AND_SELECTION.md)
    §"Schema da secao baselines" — formato do JSON unificado.
 5. [`config/sweeps/explicit/phase_a_smoke_20260518_v2.json`](../../config/sweeps/explicit/phase_a_smoke_20260518_v2.json)
    — template para E1.1 (substituir conforme E1.1 task).
@@ -56,9 +56,9 @@ Decisões D1–D8 fechadas (não redecidir):
    — template para E0.1.
 7. [`data/analytics/selection/frozen_candidates_optuna_0_1_5__optuna_0_1_6.csv`](../../data/analytics/selection/frozen_candidates_optuna_0_1_5__optuna_0_1_6.csv)
    — top-3 frozen Round 0 referenciados em F.2 §4.2 passo 1.
-8. [`smoke_confirmatory_2026-05-18.md`](../07_reports/smoke_confirmatory_2026-05-18.md)
+8. [`smoke_confirmatory_2026-05-18.md`](../../07_reports/phase-gates/phase-a/smoke_confirmatory_2026-05-18.md)
    §"F.1 v4 PASS pleno" — parâmetros R-23 referência para bit-byte check em E2.0.b.
-9. [`docs/ai/skills/explicit-sweep-execution/SKILL.md`](skills/explicit-sweep-execution/SKILL.md)
+9. [`docs/ai/skills/explicit-sweep-execution/SKILL.md`](../skills/explicit-sweep-execution/SKILL.md)
    — protocolo canônico de sweep explicit aplicado em E0, E2, E3.
 
 ## Autoridade e pause points
@@ -97,15 +97,15 @@ diferente da final em main.
 - `data/analytics_archive_pre_phase_b/` (read-only).
 - `data/processed/dataset_tft/AAPL/dataset_tft_AAPL.parquet` (Phase B usa
   como está pós-R-20).
-- `docs/05_checklists/PHASE_B_IMPLEMENTATION_CHECKLIST.md` (imutável).
-- `docs/05_checklists/POST_CLOSURE_FIXES_CHECKLIST.md` (imutável).
+- `docs/05_checklists/phase-b/PHASE_B_IMPLEMENTATION_CHECKLIST.md` (imutável).
+- `docs/05_checklists/phase-a/POST_CLOSURE_FIXES_CHECKLIST.md` (imutável).
 - Todos os ADRs em `docs/01_architecture/decisions/` (canônicos pós-merge).
 
 **Permitido modificar:**
-- `docs/05_checklists/PHASE_B_EXECUTION_CHECKLIST.md` — apenas
+- `docs/05_checklists/phase-b/PHASE_B_EXECUTION_CHECKLIST.md` — apenas
   marcar tasks E0–E4 como `[~]` ou `[x]` e preencher "Notas de revisão" da
   Stage correspondente.
-- `docs/06_pre_registration/preregistration_phase_b.md` — apenas §14
+- `docs/06_pre_registration/phase-b/preregistration_phase_b.md` — apenas §14
   (anexar emenda E1) e §15 (preencher 3 slots em E1.3; restantes só em E6
   pela Sessão-B).
 - Criar `config/sweeps/optuna/phase_b_hpo_<YYYYMMDD>.json` (novo).
@@ -113,13 +113,13 @@ diferente da final em main.
 
 ## Skills a invocar (proativo)
 
-- [`explicit-sweep-execution`](skills/explicit-sweep-execution/SKILL.md):
+- [`explicit-sweep-execution`](../skills/explicit-sweep-execution/SKILL.md):
   protocolo canônico para E0, E2, E3 (cohort isolation por prefixo;
   validation pós-run; resume policy se interromper).
-- [`staged-implementation-protocol`](../../.claude/skills/staged-implementation-protocol/SKILL.md)
+- [`staged-implementation-protocol`](../../../.claude/skills/staged-implementation-protocol/SKILL.md)
   Phase B step 8: estrutura de Notas de revisão por Stage (registrar data,
   branch, validation commands com results, decisões mid-execução, follow-ups).
-- [`documentation-authoring`](skills/documentation-authoring/SKILL.md): para
+- [`documentation-authoring`](../skills/documentation-authoring/SKILL.md): para
   E1.3 (emenda pré-registro) e E6 não se aplica nesta sessão.
 
 ## Sucesso definido
@@ -147,7 +147,7 @@ Sessão-A entrega:
 #### E0 — Optuna heritage (~6–12h)
 
 Pre-flight:
-- Leia [PHASE_B_EXECUTION_CHECKLIST.md Stage E0](../05_checklists/PHASE_B_EXECUTION_CHECKLIST.md).
+- Leia [PHASE_B_EXECUTION_CHECKLIST.md Stage E0](../../05_checklists/phase-b/PHASE_B_EXECUTION_CHECKLIST.md).
 - Verifique top-3 Round 0:
   `head -1 data/analytics/selection/frozen_candidates_optuna_0_1_5__optuna_0_1_6.csv && grep ",1," data/analytics/selection/frozen_candidates_optuna_0_1_5__optuna_0_1_6.csv | head -3`.
 
@@ -294,7 +294,7 @@ Registre o hash (64 chars hex).
 **E1.4** — Commit único:
 ```bash
 git add config/sweeps/explicit/phase_b_confirmatorio_<YYYYMMDD>.json \
-        docs/06_pre_registration/preregistration_phase_b.md
+        docs/06_pre_registration/phase-b/preregistration_phase_b.md
 git commit -m "$(cat <<'EOF'
 feat(phase-b-exec): selar config phase_b_confirmatorio_<YYYYMMDD> e emenda pre-registro E1
 
@@ -533,7 +533,7 @@ Reporte a Marcelo:
 > - Notas de revisão E0–E4 preenchidas em `PHASE_B_EXECUTION_CHECKLIST.md`.
 >
 > Pronto para Sessão-B (analítica E5–E6). Prompt em
-> `docs/ai/PHASE_B_SESSION_B_PROMPT.md`."
+> `docs/ai/phase-b/PHASE_B_SESSION_B_PROMPT.md`."
 
 ## Init commands
 
@@ -545,8 +545,8 @@ git log --oneline -5
 
 # Confirmar pré-requisitos
 gh pr view 60 --json state,mergedAt  # PR-60 checklist deve ser MERGED
-test -f docs/05_checklists/PHASE_B_EXECUTION_CHECKLIST.md && echo "Checklist OK"
-test -f docs/06_pre_registration/preregistration_phase_b.md && echo "Pre-reg OK"
+test -f docs/05_checklists/phase-b/PHASE_B_EXECUTION_CHECKLIST.md && echo "Checklist OK"
+test -f docs/06_pre_registration/phase-b/preregistration_phase_b.md && echo "Pre-reg OK"
 
 # Verificar estado
 .venv/bin/pytest tests/ -q \

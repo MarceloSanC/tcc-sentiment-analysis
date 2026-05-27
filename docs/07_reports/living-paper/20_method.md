@@ -53,7 +53,7 @@ O TFT em modo quantilico emite, por linha OOS, um trio `(q10, q50, q90)` cuja
 monotonicidade `q10 <= q50 <= q90` **não é garantida pelo treinamento** —
 quantile crossing é patologia conhecida de regressores quantilicos treinados
 independentemente. No dataset histórico do projeto (smoke M7, ver
-`docs/07_reports/phase-gates/A_code_audit.md` §M5-Q1), `gold_prediction_metrics_by_run_split_horizon`
+`docs/07_reports/phase-gates/phase-a/A_code_audit.md` §M5-Q1), `gold_prediction_metrics_by_run_split_horizon`
 contém linhas com `mpiw < 0` (intervalo "negativo", matematicamente
 impossível como intervalo de predição) e `crossing_before_count = 402` num
 amostra de 4 linhas auditadas. O efeito sobre métricas probabilísticas é
@@ -166,7 +166,7 @@ antes da agregação. O **gate estrito** de degeneração (`% rows com p10==p90
 `PHASE_B_IMPLEMENTATION_CHECKLIST.md`), não de inclusão.
 
 **Motivação empírica:** auditoria pré-Phase B
-(`docs/07_reports/phase-gates/A_code_audit.md` §M5-Q5) registrou **91,25%
+(`docs/07_reports/phase-gates/phase-a/A_code_audit.md` §M5-Q5) registrou **91,25%
 de degenerescência quantilica** em runs históricos com `parent_sweep_id=NULL`.
 Métricas probabilísticas agregadas sobre intervalos de largura zero são
 matematicamente sem interpretação. Esse achado justifica (a) o reset do

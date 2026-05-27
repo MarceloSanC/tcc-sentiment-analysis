@@ -55,7 +55,7 @@ da Fase B/C:
   `docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md` §"Archive pre-Phase B").
   O histórico anterior, com 91,25% de degenerescência quantilica em runs
   `parent_sweep_id=NULL` (auditado em
-  `docs/07_reports/phase-gates/A_code_audit.md` §M5-Q5 e em
+  `docs/07_reports/phase-gates/phase-a/A_code_audit.md` §M5-Q5 e em
   `docs/07_reports/living-paper/evidence_log.md` 2026-05-01), foi arquivado
   como diagnóstico e não alimenta resultados do Capítulo 5.
 

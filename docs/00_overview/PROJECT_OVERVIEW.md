@@ -147,8 +147,8 @@ O projeto esta na transicao de Round 0 (exploratoria de hiperparametros) para
 Fase A do roadmap (sanidade pre-experimento principal).
 
 Ver detalhes em: `docs/00_overview/STRATEGIC_DIRECTION.md` §5.
-Gate tecnico de entrada da Fase B: `docs/07_reports/phase-gates/A_code_audit.md`.
-Plano temporario pos-auditoria: `docs/08_governance/POST_AUDIT_EXECUTION_PLAN.md`.
+Gate tecnico de entrada da Fase B: `docs/07_reports/phase-gates/phase-a/A_code_audit.md`.
+Plano temporario pos-auditoria: `docs/08_governance/phase-a/POST_AUDIT_EXECUTION_PLAN.md`.
 
 Ordem de leitura recomendada:
 1. `docs/00_overview/STRATEGIC_DIRECTION.md` — objetivo, pivo, roadmap

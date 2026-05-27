@@ -20,8 +20,8 @@ e cleanup do bridge transitorio em PR #56 (2026-05-22). Gap 6 fechado via
 `build_tft_dataset_use_case`; baseline `y_true_idx = i + h_int`), nao
 mais Opcao (a). F.1 PASS pleno 6/6 em R-23 v4 (`max_epochs=5`,
 sweep `phase_a_smoke_20260522_r23`).
-**Criado:** 2026-05-19 (apos separacao de [`PHASE_B_IMPLEMENTATION_CHECKLIST.md`](PHASE_B_IMPLEMENTATION_CHECKLIST.md)).
-**Pre-requisito:** [`A_audit_closure_2026-05-17.md`](../07_reports/phase-gates/A_audit_closure_2026-05-17.md) com amendment "Findings post-closure".
+**Criado:** 2026-05-19 (apos separacao de [`PHASE_B_IMPLEMENTATION_CHECKLIST.md`](../phase-b/PHASE_B_IMPLEMENTATION_CHECKLIST.md)).
+**Pre-requisito:** [`A_audit_closure_2026-05-17.md`](../../07_reports/phase-gates/phase-a/A_audit_closure_2026-05-17.md) com amendment "Findings post-closure".
 **Bloqueante para:** F.1 smoke PASS pleno → abertura da Fase B (ver `Stage final` em PHASE_B).
 
 Este checklist rastreia fixes descobertos **apos** o closure parcial da
@@ -39,7 +39,7 @@ Foi separado de PHASE_B para:
 
 ## Convencao
 
-- Mesma de [`PHASE_B_IMPLEMENTATION_CHECKLIST.md`](PHASE_B_IMPLEMENTATION_CHECKLIST.md) §Convencao:
+- Mesma de [`PHASE_B_IMPLEMENTATION_CHECKLIST.md`](../phase-b/PHASE_B_IMPLEMENTATION_CHECKLIST.md) §Convencao:
   `[ ]` pendente, `[x]` mergeado, `[~]` em revisao; Stage = 1 PR;
   task numerada = 1 commit; **Aceite:** ao fim de cada task.
 - **Stage = onda de descoberta.** A primeira onda (5 gaps originais do
@@ -48,9 +48,9 @@ Foi separado de PHASE_B para:
 - **Sub-IDs de tasks preservados.** F.0.0 … F.0.9 sao mantidos
   literalmente porque ja estao referenciados em git commits
   (`feat/stage-f0-pre-smoke-fixes`), em
-  [`A_audit_closure_2026-05-17.md`](../07_reports/phase-gates/A_audit_closure_2026-05-17.md),
-  em [`smoke_confirmatory_2026-05-18.md`](../07_reports/smoke_confirmatory_2026-05-18.md)
-  e em [`SWEEPS_AND_SELECTION.md`](../03_modeling/SWEEPS_AND_SELECTION.md).
+  [`A_audit_closure_2026-05-17.md`](../../07_reports/phase-gates/phase-a/A_audit_closure_2026-05-17.md),
+  em [`smoke_confirmatory_2026-05-18.md`](../../07_reports/phase-gates/phase-a/smoke_confirmatory_2026-05-18.md)
+  e em [`SWEEPS_AND_SELECTION.md`](../../03_modeling/SWEEPS_AND_SELECTION.md).
   Renomear quebraria rastreabilidade.
 - **Promocao para PHASE_B.** Se um fix evoluir para alteracao
   arquitetural profunda (ex: Gap 6 que pode demandar trabalho do porte
@@ -59,10 +59,10 @@ Foi separado de PHASE_B para:
 
 ## Cross-link com PHASE_B e gates
 
-- [`PHASE_B_IMPLEMENTATION_CHECKLIST.md`](PHASE_B_IMPLEMENTATION_CHECKLIST.md) — escopo original (Stages 1-19 + Stage final F.1/F.2/F.3 pre-experiment engineering).
-- [`A_audit_closure_2026-05-17.md`](../07_reports/phase-gates/A_audit_closure_2026-05-17.md) §"Findings post-closure" — relatorio de closure que disparou Stage F.0 (amendment 2026-05-18).
-- [`smoke_confirmatory_2026-05-18.md`](../07_reports/smoke_confirmatory_2026-05-18.md) — relatorio do smoke F.1 (run inicial FAIL + re-run pos-Stage F.0).
-- [`tft_y_true_investigation_2026-05-18.md`](../07_reports/tft_y_true_investigation_2026-05-18.md) — investigacao do Gap 6 (TFT y_true convention) descoberto durante re-run de F.0.5; candidato a nova onda (Stage proprio neste arquivo ou Stage promovido em PHASE_B).
+- [`PHASE_B_IMPLEMENTATION_CHECKLIST.md`](../phase-b/PHASE_B_IMPLEMENTATION_CHECKLIST.md) — escopo original (Stages 1-19 + Stage final F.1/F.2/F.3 pre-experiment engineering).
+- [`A_audit_closure_2026-05-17.md`](../../07_reports/phase-gates/phase-a/A_audit_closure_2026-05-17.md) §"Findings post-closure" — relatorio de closure que disparou Stage F.0 (amendment 2026-05-18).
+- [`smoke_confirmatory_2026-05-18.md`](../../07_reports/phase-gates/phase-a/smoke_confirmatory_2026-05-18.md) — relatorio do smoke F.1 (run inicial FAIL + re-run pos-Stage F.0).
+- [`tft_y_true_investigation_2026-05-18.md`](../../07_reports/phase-gates/phase-a/tft_y_true_investigation_2026-05-18.md) — investigacao do Gap 6 (TFT y_true convention) descoberto durante re-run de F.0.5; candidato a nova onda (Stage proprio neste arquivo ou Stage promovido em PHASE_B).
 
 ---
 
@@ -90,8 +90,8 @@ compartilhada, nao por acoplamento de processo. Sibling architecture:
 ### Notas de revisao:
 
 - 2026-05-18: Stage F.0 implementado pos-F.1 smoke FAIL. Evidencia:
-  - [`docs/07_reports/smoke_confirmatory_2026-05-18.md`](../07_reports/smoke_confirmatory_2026-05-18.md) (relatorio inicial + re-rodada).
-  - [`docs/07_reports/phase-gates/A_audit_closure_2026-05-17.md`](../07_reports/phase-gates/A_audit_closure_2026-05-17.md) §"Findings post-closure" (amendment 2026-05-18).
+  - [`docs/07_reports/phase-gates/phase-a/smoke_confirmatory_2026-05-18.md`](../../07_reports/phase-gates/phase-a/smoke_confirmatory_2026-05-18.md) (relatorio inicial + re-rodada).
+  - [`docs/07_reports/phase-gates/phase-a/A_audit_closure_2026-05-17.md`](../../07_reports/phase-gates/phase-a/A_audit_closure_2026-05-17.md) §"Findings post-closure" (amendment 2026-05-18).
   - 5 gaps documentados; F.0.0-F.0.9 abordam cada um.
 - 2026-05-19: Stage F.0 migrado de `PHASE_B_IMPLEMENTATION_CHECKLIST.md`
   para este arquivo para separar fixes post-closure do escopo pre-experiment
@@ -102,7 +102,7 @@ compartilhada, nao por acoplamento de processo. Sibling architecture:
 
 - [x] **F.0.0** Schema da secao `baselines` em sweep JSON config.
       **Aceite:** schema documentado em
-      [`SWEEPS_AND_SELECTION.md`](../03_modeling/SWEEPS_AND_SELECTION.md)
+      [`SWEEPS_AND_SELECTION.md`](../../03_modeling/SWEEPS_AND_SELECTION.md)
       §"Schema da secao baselines"; ao menos 1 config real em
       `config/sweeps/explicit/*.json` com seção `baselines` como exemplo;
       novo config `phase_a_smoke_20260518_v2.json` para re-rodada do smoke.
@@ -110,7 +110,7 @@ compartilhada, nao por acoplamento de processo. Sibling architecture:
 - [x] **F.0.1** Standalone CLI `src/main_run_baselines.py` (debug).
       **Aceite:** `python -m src.main_run_baselines --help` retorna exit 0;
       `RunBaselinesUseCase` reinvocavel sem JSON; runbook em
-      [`RUN_BASELINES.md`](../06_runbooks/RUN_BASELINES.md). NAO substitui
+      [`RUN_BASELINES.md`](../../06_runbooks/RUN_BASELINES.md). NAO substitui
       caminho canonico (F.0.2).
 
 - [x] **F.0.2** Sibling test pipeline canonico.
@@ -136,8 +136,8 @@ compartilhada, nao por acoplamento de processo. Sibling architecture:
 
 - [x] **F.0.5** Re-rodar F.1 smoke com fixes F.0.0-F.0.4 + F.0.6-F.0.7.
       **Aceite:** todos 6 criterios PASS conforme aceite literal de
-      [F.1](PHASE_B_IMPLEMENTATION_CHECKLIST.md#stage-final--smoke-confirmatorio--pre-registro-bc);
-      relatorio atualizado em `docs/07_reports/smoke_confirmatory_2026-05-18.md`
+      [F.1](../phase-b/PHASE_B_IMPLEMENTATION_CHECKLIST.md#stage-final--smoke-confirmatorio--pre-registro-bc);
+      relatorio atualizado em `docs/07_reports/phase-gates/phase-a/smoke_confirmatory_2026-05-18.md`
       secao "Re-run pos-Stage F.0".
 
 - [x] **F.0.6** Quality check `gold_confidence_calibrated_by_horizon`:
@@ -154,7 +154,7 @@ compartilhada, nao por acoplamento de processo. Sibling architecture:
 
 - [x] **F.0.8** Amendment ao closure doc.
       **Aceite:** seção "Findings post-closure" em
-      [`A_audit_closure_2026-05-17.md`](../07_reports/phase-gates/A_audit_closure_2026-05-17.md)
+      [`A_audit_closure_2026-05-17.md`](../../07_reports/phase-gates/phase-a/A_audit_closure_2026-05-17.md)
       lista os 5 gaps; cross-link bidirecional com Stage F.0.
 
 - [x] **F.0.9** Adicionar Stage F.0 ao checklist post-closure.
@@ -176,11 +176,11 @@ PHASE_B §Stages 20-22** per §Convencao "Promocao para PHASE_B" deste
 checklist.
 
 **Cross-link:**
-[`B_architectural_debt_2026-05-19.md`](../07_reports/phase-gates/B_architectural_debt_2026-05-19.md) (diagnostico canonico, M5-refresh + M-train_tft + M-validate_quality YELLOW);
-[`ADR-0003-multi-horizon-prediction-persister.md`](../01_architecture/decisions/ADR-0003-multi-horizon-prediction-persister.md);
-[`ADR-0004-quality-check-registry.md`](../01_architecture/decisions/ADR-0004-quality-check-registry.md);
-[`ADR-0005-gold-builders-modularization.md`](../01_architecture/decisions/ADR-0005-gold-builders-modularization.md);
-[`PHASE_B_IMPLEMENTATION_CHECKLIST.md`](PHASE_B_IMPLEMENTATION_CHECKLIST.md) §Stages 20, 21, 22.
+[`B_architectural_debt_2026-05-19.md`](../../07_reports/phase-gates/phase-b/B_architectural_debt_2026-05-19.md) (diagnostico canonico, M5-refresh + M-train_tft + M-validate_quality YELLOW);
+[`ADR-0003-multi-horizon-prediction-persister.md`](../../01_architecture/decisions/ADR-0003-multi-horizon-prediction-persister.md);
+[`ADR-0004-quality-check-registry.md`](../../01_architecture/decisions/ADR-0004-quality-check-registry.md);
+[`ADR-0005-gold-builders-modularization.md`](../../01_architecture/decisions/ADR-0005-gold-builders-modularization.md);
+[`PHASE_B_IMPLEMENTATION_CHECKLIST.md`](../phase-b/PHASE_B_IMPLEMENTATION_CHECKLIST.md) §Stages 20, 21, 22.
 
 ### Notas de revisao:
 
@@ -211,6 +211,6 @@ Candidato corrente:
 - **Gap 6 — TFT y_true convention bug.** **Gap 6 RESOLVIDO** (Opção d aplicada em Stage R-20 mergeado 2026-05-21;
   target_return backward-shift + baseline y_true_idx ajustado; off-by-one
   corrigido empiricamente; revalidado em Stage R-23 smoke v4).
-  Cross-link: [`tft_y_true_investigation_2026-05-18.md`](../07_reports/tft_y_true_investigation_2026-05-18.md);
-  [ADR-0003](../01_architecture/decisions/ADR-0003-multi-horizon-prediction-persister.md);
-  [`smoke_confirmatory_2026-05-18.md`](../07_reports/smoke_confirmatory_2026-05-18.md) §"Post-Stage 20".
+  Cross-link: [`tft_y_true_investigation_2026-05-18.md`](../../07_reports/phase-gates/phase-a/tft_y_true_investigation_2026-05-18.md);
+  [ADR-0003](../../01_architecture/decisions/ADR-0003-multi-horizon-prediction-persister.md);
+  [`smoke_confirmatory_2026-05-18.md`](../../07_reports/phase-gates/phase-a/smoke_confirmatory_2026-05-18.md) §"Post-Stage 20".

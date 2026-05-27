@@ -118,8 +118,8 @@ novo check = criar 1 classe + 1 arquivo de teste, sem tocar nos outros 19.
 
 ## Cross-link
 
-- Diagnostico: [`docs/07_reports/phase-gates/B_architectural_debt_2026-05-19.md`](../../07_reports/phase-gates/B_architectural_debt_2026-05-19.md) §"M-validate_quality"
+- Diagnostico: [`docs/07_reports/phase-gates/phase-b/B_architectural_debt_2026-05-19.md`](../../07_reports/phase-gates/phase-b/B_architectural_debt_2026-05-19.md) §"M-validate_quality"
 - Implementacao: PHASE_B_IMPLEMENTATION_CHECKLIST.md §Stage 21 + Stage R-21 (remediation plan)
 - Caso clinico: commits `584373e` (F.0.3 inicial) + `ab79996` (re-fix do mesmo F.0.3)
-- Stage R-21 implementacao final: [`docs/ai/STAGE_20_23_REMEDIATION_PLAN.md`](../../ai/STAGE_20_23_REMEDIATION_PLAN.md) §"Stage R-21"
+- Stage R-21 implementacao final: [`docs/ai/phase-b/STAGE_20_23_REMEDIATION_PLAN.md`](../../ai/phase-b/STAGE_20_23_REMEDIATION_PLAN.md) §"Stage R-21"
 - Extension point (como adicionar check novo): [`docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md`](../ANALYTICS_STORE_ARCHITECTURE.md) §"Quality check extension point"

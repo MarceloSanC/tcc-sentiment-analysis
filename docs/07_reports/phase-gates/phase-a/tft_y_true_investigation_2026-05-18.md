@@ -43,7 +43,7 @@ todas as linhas, todos os horizontes**, não apenas as 6 da fronteira.
 |---|---|---|
 | H1 (PF retorna y mal-construída) | ❌ | y do dataloader varia corretamente entre passos do decoder; `actuals[s, k]` ≠ `actuals[s, 0]` para k ≠ 0 (h=1=−0.010, h=7=+0.013 no mesmo sample). |
 | H2 (extração `y_true_m[i][h_idx]` errada) | ❌ | `actuals_sel.tolist()` preserva shape `[N, 2]` (h=1, h=7); `y_true_m[i][h_idx]` extrai consistentemente o passo correto. |
-| H3 (convenção do projeto difere) | ⚠ Parcial | [MULTI_HORIZON.md](docs/03_modeling/MULTI_HORIZON.md) define `target_timestamp` como "timestamp do período alvo previsto" e diz que é "calculado por horizonte", **mas não fixa a âncora** (decision_day, decoder_start, decoder_end). A ambiguidade do doc deixou o bug passar. |
+| H3 (convenção do projeto difere) | ⚠ Parcial | [MULTI_HORIZON.md](../../../03_modeling/MULTI_HORIZON.md) define `target_timestamp` como "timestamp do período alvo previsto" e diz que é "calculado por horizonte", **mas não fixa a âncora** (decision_day, decoder_start, decoder_end). A ambiguidade do doc deixou o bug passar. |
 | H4 (Stage X introduziu) | ✅ Parcial | Persistência de TFT está em `f555e0e1` (2026-04-01, antes de Stage 9–14). Baseline runner é `a8c8944` (Stage 12) tentou alinhar com TFT e errou a interpretação. Nem TFT nem baseline mudaram convenção de y_true em Stage F.0 — bug é pré-existente. |
 | H5 (PF upgrade) | ❌ | Comportamento do `to_dataloader` é consistente com semântica documentada do pacote em 1.6.1. |
 | H6 (TFT certo, baseline errado) | ⚠ | TFT é **internamente consistente** quanto a y_true (decoder out alinha com decoder time steps), mas usa `timestamp_utc = decoder_end_day` que **não corresponde** a "decision_ts" no sentido natural. Baseline interpreta `timestamp_utc = decision_day` — também internamente consistente — porém divergente do TFT. Nem TFT nem baseline está claramente "certo"; ambos diferem em convenção e ambos têm bugs adicionais (ver Apêndice B). |
@@ -207,7 +207,7 @@ emitidos**, não os y_true sob esses timestamps.
 ### Para fact_oos_quality_report e gates
 
 O gate de monotonicidade de `target_timestamp` por (run, split, horizon) em
-[MULTI_HORIZON.md §"Validacoes obrigatorias"](docs/03_modeling/MULTI_HORIZON.md)
+[MULTI_HORIZON.md §"Validacoes obrigatorias"](../../../03_modeling/MULTI_HORIZON.md)
 continua válido — `target_ts = ts + (h-1) cal days` é monotonic-increasing
 por construção. Mas o gate não detecta o desalinhamento decoder_end vs
 decision_day porque cada pipeline isoladamente é monotônico.
@@ -242,7 +242,7 @@ Em PF a tradução é direta: o `time_idx` é índice em trading-day-space; bast
 consultar `dataset_df.iloc[decision_idx + h, "timestamp"]`.
 
 **Fix 3 (convenção de h=k): decidir e documentar em
-[MULTI_HORIZON.md](docs/03_modeling/MULTI_HORIZON.md)**
+[MULTI_HORIZON.md](../../../03_modeling/MULTI_HORIZON.md)**
 
 Opções:
 - **(a) h=1 = next-day return after decision** (literatura financeira clássica).
@@ -254,7 +254,7 @@ Opções:
 
 Recomendação: (a). É a convenção alinhada com baseline runner e com horizontes
 operacionais documentados em
-[STRATEGIC_DIRECTION.md §5 (Fase B)](docs/00_overview/STRATEGIC_DIRECTION.md).
+[STRATEGIC_DIRECTION.md §5 (Fase B)](../../../00_overview/STRATEGIC_DIRECTION.md).
 
 ## Blast radius do fix
 
@@ -287,14 +287,14 @@ multi-horizonte (TFT e baselines)".
 
 Sub-tasks:
 1. Decidir e documentar convenção canônica em
-   [MULTI_HORIZON.md](docs/03_modeling/MULTI_HORIZON.md) (Fix 3) — PR doc-only,
+   [MULTI_HORIZON.md](../../../03_modeling/MULTI_HORIZON.md) (Fix 3) — PR doc-only,
    precede código.
 2. Implementar Fix 1 (TFT decision_idx mapping) + Fix 2 (target_ts trading-day)
    + Fix 3 (convenção h) em PR código separado.
 3. Teste de regressão pareando decision_idx entre TFT e baseline.
 4. Bump `schema_version` em `fact_oos_predictions` (atual + 1).
 5. Refresh analytics store completo + re-rodada do smoke F.1 confirmatório.
-6. Atualizar `docs/07_reports/phase-gates/A_audit_closure_2026-05-17.md` para
+6. Atualizar `docs/07_reports/phase-gates/phase-a/A_audit_closure_2026-05-17.md` para
    referenciar este bug como achado pós-closure (já existe seção "Gap 6";
    estender para corrigir o escopo).
 7. Adicionar no `evidence_log` (data 2026-05-18) a invalidação de resultados
