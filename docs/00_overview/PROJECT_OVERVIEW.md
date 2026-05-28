@@ -70,8 +70,8 @@ Veja `docs/00_overview/STRATEGIC_DIRECTION.md` §4.4 para claims aceitos vs proi
 | Baselines | Baseline primario pre-declarado + baselines complementares conforme `04_evaluation/BASELINES.md` | A implementar (Fase A) |
 | Pre-registro | Documento versionado antes da rodada confirmatoria | A criar (Fase A) |
 | Auditoria de leakage | Verificacao de `time_varying_known_reals`, scalers, HPO vs OOS | A executar (Fase A) |
-| Analise probabilistica | Calibracao marginal por quantil, PICP intervalar, MPIW, reliability diagram, DM/MCS, Holm-Bonferroni | A executar (Fase B) |
-| Analise de contribuicao | VSN, permutation importance, ablation explicativa por familia | A executar (Fase C) |
+| Analise probabilistica | Calibracao marginal por quantil, PICP intervalar, MPIW, reliability diagram, DM/HLN/Holm-6 | Phase B confirmatoria concluida 2026-05-25 (cohort `phase_b_confirmatorio_20260524`; AAPL; h=1 e h=7); relatorio em `docs/07_reports/phase-gates/phase-b/B_confirmatory_2026-05-25.md` |
+| Analise de contribuicao | VSN, permutation importance, ablation explicativa por familia | A executar (Phase C); inclui hardening C.0 do gold legacy (`docs/07_reports/phase-gates/phase-c/C0_statistical_methods_hardening.md`) |
 | Plano pos-auditoria | Mapa temporario das etapas apos A_code_audit ate fechamento do escopo experimental | Criado |
 | TCC / Artigo | Documento academico com resultados, limitacoes e conclusoes defensaveis | Em escrita |
 
@@ -143,11 +143,16 @@ docs/
 
 ## Proximos passos
 
-O projeto esta na transicao de Round 0 (exploratoria de hiperparametros) para
-Fase A do roadmap (sanidade pre-experimento principal).
+Phase A concluida em 2026-05-23
+(`docs/07_reports/phase-gates/phase-a/A_audit_closure_2026-05-17.md`).
+Phase B confirmatoria fechada em 2026-05-25
+(`docs/07_reports/phase-gates/phase-b/B_confirmatory_2026-05-25.md`). Os
+proximos passos estao no escopo da Phase C: H3 (contribuicao de familias de
+features via VSN + permutation + ablation) e C.0 (hardening metodologico do
+gold legacy — DM/MCS/Holm/top-50/VaR-ES, ver
+`docs/07_reports/phase-gates/phase-c/C0_statistical_methods_hardening.md`).
 
 Ver detalhes em: `docs/00_overview/STRATEGIC_DIRECTION.md` §5.
-Gate tecnico de entrada da Fase B: `docs/07_reports/phase-gates/phase-a/A_code_audit.md`.
 Plano temporario pos-auditoria: `docs/08_governance/phase-a/POST_AUDIT_EXECUTION_PLAN.md`.
 
 Ordem de leitura recomendada:
