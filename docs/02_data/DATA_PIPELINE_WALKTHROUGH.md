@@ -13,6 +13,22 @@ canonical_for: [data_walkthrough, pipeline_io_inventory, pipeline_calculations_i
 
 ## 0. Como ler este doc
 
+> **Status pos-Phase B (2026-05-25).** A Phase B confirmatoria fechou em
+> 2026-05-25 sobre a cohort `phase_b_confirmatorio_20260524`
+> ([`B_confirmatory_2026-05-25.md`](../07_reports/phase-gates/phase-b/B_confirmatory_2026-05-25.md)).
+> A decisao confirmatoria H1/H2a/H2b da Phase B **nao** consome o gold
+> legacy descrito em §6; ela usa sidecars proprios em
+> `data/analytics/reports/phase_b/cohort=phase_b_confirmatorio_20260524/`,
+> produzidos pelo CLI `src.main_compute_phase_b_tier_metrics` per Emenda
+> E1.8 do pre-registro. As gold tables `gold_dm_pairwise_results`,
+> `gold_mcs_results`, `gold_win_rate_pairwise_results` e
+> `gold_model_decision_final` permanecem disponiveis para diagnostico
+> exploratorio dentro de uma cohort, mas seu uso como evidencia
+> confirmatoria depende do hardening declarado em
+> [`C0_statistical_methods_hardening.md`](../07_reports/phase-gates/phase-c/C0_statistical_methods_hardening.md)
+> (Phase C). Sao classificadas como **legacy / pending C.0 hardening**
+> neste documento.
+
 Este documento e um walk-through **exaustivo** do pipeline de dados, organizado em duas dimensoes:
 - **Eixo vertical (stages)**: `raw` -> `processed` -> `silver (analytics)` -> `gold (analytics)`.
 - **Eixo horizontal (scopes)**: `candles`, `technical_indicators`, `news`, `sentiment`, `fundamentals`, `dataset_tft`, `inference`, `baselines`, `analytics`.
@@ -1471,11 +1487,25 @@ Para nao explodir o doc, cada tabela e resumida; o codigo do builder e fonte da 
 - **Grain**: 1 linha por `(asset, parent_sweep_id, split_signature, split, horizon, left_config, right_config)`
 - **Filtro**: somente `split="test"`, `status="ok"`, top-50 configs
 - **Cols**: `n, mean_loss_diff_left_minus_right, dm_stat, pvalue_two_sided, pvalue_adj_holm, significant_adj_0_05, aligned_timestamps, n_configs`
+- **Classificacao**: legacy / pending C.0 hardening. Loss = `squared_error`
+  (nao a perda primaria pinball post-guardrail); top-50 antes do pairwise
+  gera inferencia pos-selecao; sem HLN; two-sided fixo. **Nao** sustenta
+  claim confirmatorio Phase B; H2a/H2b vivem em `phase_b_dm_family_6.parquet`
+  (§7). Reuso confirmatorio futuro depende do dossie "Diebold-Mariano gold"
+  em [`C0_statistical_methods_hardening.md`](../07_reports/phase-gates/phase-c/C0_statistical_methods_hardening.md).
 
 #### 6.3.11 gold_mcs_results — §6.2.6
 
 - **Grain**: 1 linha por `(asset, parent_sweep_id, split, horizon, config_label)`
 - **Cols**: `config_label, selected_in_mcs_alpha_0_05, mean_loss`
+- **Classificacao**: legacy / pending C.0 hardening. Loss `squared_error`
+  desalinhada da perda primaria; B=300 baixo, `block_len=5` hard-coded; opera
+  apos top-50. Na Phase B, o MCS within-family (BTSF e baselines separados)
+  confirma estabilidade interna dos 15 runs TFT; cross-family inviavel por
+  `split_fingerprint` distintos (caveat Emenda E1.7), substituido
+  inferencialmente por DM family-6 (§7). Reuso confirmatorio futuro depende
+  do dossie "MCS gold" em
+  [`C0_statistical_methods_hardening.md`](../07_reports/phase-gates/phase-c/C0_statistical_methods_hardening.md).
 
 #### 6.3.12 gold_win_rate_pairwise_results — §6.2.7, `gold_builders/pairwise.py:381-447` (`WinRatePairwiseResultsGoldBuilder.build`)
 
@@ -1493,7 +1523,13 @@ Para nao explodir o doc, cada tabela e resumida; o codigo do builder e fonte da 
 - **Grain**: 1 linha por `(asset, parent_sweep_id, split, horizon)` (com config selecionada)
 - **Reads**: `metrics_by_config + robustness_by_horizon + generalization_gap + dm_results + mcs_results + win_rate + paired_intersection`
 - **Logica**: criterio composto — config selecionada deve estar em MCS, ter DM significativo vs baseline (Holm-adjusted), generalization_gap dentro de threshold
-- **Output**: a decisao final que sustenta `STRATEGIC_DIRECTION` claims
+- **Classificacao**: legacy / pending C.0 hardening. **Nao** sustenta o
+  veredito tier H1/H2a/H2b da Phase B (que vive em
+  `phase_b_tier_verdict.parquet`, §7). Herda riscos metodologicos de DM
+  gold, MCS gold, Holm gold e top-50; criterio de selecao nao foi
+  pre-registrado. Reuso confirmatorio futuro depende de
+  [`C0_statistical_methods_hardening.md`](../07_reports/phase-gates/phase-c/C0_statistical_methods_hardening.md)
+  (item "gold_model_decision_final").
 
 #### 6.3.15 gold_quality_statistics_report — `gold_builders/confidence.py:847-966` (`QualityStatisticsReportGoldBuilder.build`)
 
@@ -1573,6 +1609,97 @@ Para nao explodir o doc, cada tabela e resumida; o codigo do builder e fonte da 
 - §A.66 (Holm grouping fixo em `(asset, parent_sweep_id, split, horizon)` — nao agrupa por `split_signature`)
 - §A.67 (`_prob_up_from_quantiles` fallback `0.5` quando width = 0 mascara modelo degenerado — pode esconder problema)
 - §A.68 (`coverage_nominal = 0.80` hard-coded — assume contrato fixo p10/p90; se sweep usar quantis diferentes, `coverage_error` esta errado mas nao falha)
+
+Inventario dos itens §A.63 a §A.68 + dossie por item esta em
+[`C0_statistical_methods_hardening.md`](../07_reports/phase-gates/phase-c/C0_statistical_methods_hardening.md).
+C.0 nao bloqueia a Phase B (cujos claims confirmatorios usam sidecars
+proprios, §7); bloqueia apenas o reuso confirmatorio futuro dessas tabelas
+gold legacy.
+
+## 7. Sidecars Phase B (escopo confirmatorio fechado em 2026-05-25)
+
+A decisao confirmatoria da Phase B sobre H1/H2a/H2b para a cohort
+`phase_b_confirmatorio_20260524` (AAPL; h=1 e h=7; candidato all-features
+sealed; baselines `zero_return`, `historical_mean_rolling` e
+`historical_quantiles_rolling`) **nao** consome `gold_dm_pairwise_results`,
+`gold_mcs_results`, `gold_win_rate_pairwise_results` ou
+`gold_model_decision_final`. Ela usa cinco sidecars dedicados em
+`data/analytics/reports/phase_b/cohort=phase_b_confirmatorio_20260524/`,
+produzidos pelo CLI `src.main_compute_phase_b_tier_metrics` (runbook em
+[`docs/06_runbooks/phase-b/RUN_PHASE_B_TIER_CLASSIFICATION.md`](../06_runbooks/phase-b/RUN_PHASE_B_TIER_CLASSIFICATION.md)).
+
+### 7.1 Inventario dos sidecars
+
+| Arquivo | Rows esperadas | Conteudo | Sustenta |
+|---|---:|---|---|
+| `phase_b_marginal_coverage.parquet` | 60 | `coverage_q10/q50/q90` por `(run_id, split, horizon)` dos runs TFT | **H1** (calibracao marginal por quantil) |
+| `phase_b_tier_verdict.parquet` | 6 | tier ∈ {tier_1, tier_2, refutado} por `(hipotese, horizonte)`, com `criteria_passed_dict`, `numerical_inputs`, `justification` | **H1, H2a, H2b** (veredito mecanico) |
+| `phase_b_dm_family_6.parquet` | 6 | familia primaria DM/Holm: 2 horizontes × 3 baselines, com `dm_stat`, `pvalue_one_sided_less`, `pvalue_two_sided`, `pvalue_adj_holm`, `n_obs_effective`, `hac_lag_used`, `hln_applied`, `direction`, `dedup_rule`, `seed_aggregation` | **H2a, H2b** (DM family-6, fonte confirmatoria) |
+| `phase_b_dm_family_18_sensitivity.parquet` | 18 | sensibilidade conservadora: 3 folds × familia 6, com `analysis_role="sensitivity_conservative"` | sensibilidade conservadora — **nao alimenta tier** |
+| `phase_b_delta_pinball.parquet` | 6 | `delta_mean_pinball_rel` por `(horizon, baseline)` | suporte para criterio de relevancia pratica Tier 1 (≥ 3%) em H2a/H2b |
+
+### 7.2 Protocolo estatistico (Emenda E1.8)
+
+- Unidade estatistica: `target_timestamp_utc` cross-fold com dedup
+  `operationally_latest_fold`.
+- Perda: `pinball_loss_post_guardrail` (Categoria A). Baselines pontuais
+  (`zero_return`, `historical_mean_rolling`) usam convencao degenerada
+  `q10=q50=q90=y_pred` para tornar a comparacao pinball coerente sem
+  introduzir baseline novo.
+- Agregacao de seeds: media aritmetica dos diferenciais de perda `d_t` por
+  timestamp.
+- HAC: Newey-West com `lag = max(horizon - 1, 1)` (`h=1 -> lag=1`,
+  `h=7 -> lag=6`); correcao Harvey-Leybourne-Newbold (HLN) aplicada.
+- Hipotese alternativa: one-sided `H_A: E[d_t] < 0` (TFT melhor).
+- Multiple testing: Holm-Bonferroni sobre a familia primaria de 6 testes
+  (2 horizontes × 3 baselines).
+- Sensibilidade conservadora: familia expandida de 18 testes (3 folds × 6
+  testes primarios) com Holm sobre 18; reportada em
+  `phase_b_dm_family_18_sensitivity.parquet`; nao alimenta veredito tier.
+
+### 7.3 Bandas Tier 1 / Tier 2 (politica ex-ante)
+
+Declaradas em §9 do
+[`preregistration_phase_b.md`](../06_pre_registration/phase-b/preregistration_phase_b.md)
+e em [`docs/04_evaluation/CALIBRATION_AND_RISK.md`](../04_evaluation/CALIBRATION_AND_RISK.md).
+A promocao a Tier 1 / Tier 2 / Refutado e mecanica e foi aplicada pelo
+pos-processador sem reframing pos-observacao.
+
+### 7.4 Veredito da cohort `phase_b_confirmatorio_20260524`
+
+| Hipotese | h=1 | h=7 |
+|---|---|---|
+| H1 (calibracao) | tier_2 | tier_1 |
+| H2a (TFT > `zero_return`) | tier_1 | tier_1 |
+| H2b (TFT > todos baselines) | refutado | refutado |
+
+Detalhes numericos em
+[`B_confirmatory_2026-05-25.md`](../07_reports/phase-gates/phase-b/B_confirmatory_2026-05-25.md)
+§2-§4.
+
+### 7.5 Escopo dos sidecars
+
+- Sidecars sao **read-only** para Sessao-B; nao recomputam tier nem alteram
+  silver/gold.
+- Escopo da decisao: `cohort_decision` em
+  `parent_sweep_id = phase_b_confirmatorio_20260524`.
+- Resultado **nao** se generaliza para outras cohorts. Novas rodadas
+  confirmatorias devem produzir novos sidecars com novo `parent_sweep_id`
+  e novo pre-registro.
+- O archive read-only `data/analytics_archive_phase_b_20260524/` preserva o
+  estado completo da Phase B (silver cohort + gold filtrado +
+  `fact_oos_predictions` filtrado por `run_id` da cohort + sidecars) para
+  reproducao ex-post.
+
+### 7.6 Cross-links operacionais
+
+- Pre-registro F.2 + Emendas E1-E1.8:
+  [`docs/06_pre_registration/phase-b/preregistration_phase_b.md`](../06_pre_registration/phase-b/preregistration_phase_b.md)
+- Runbook CLI: [`docs/06_runbooks/phase-b/RUN_PHASE_B_TIER_CLASSIFICATION.md`](../06_runbooks/phase-b/RUN_PHASE_B_TIER_CLASSIFICATION.md)
+- Relatorio confirmatorio: [`docs/07_reports/phase-gates/phase-b/B_confirmatory_2026-05-25.md`](../07_reports/phase-gates/phase-b/B_confirmatory_2026-05-25.md)
+- Protocolo DM/Holm/walk-forward: [`docs/04_evaluation/STATISTICAL_TESTS.md`](../04_evaluation/STATISTICAL_TESTS.md) §"Unidade Estatistica DM Em Walk-forward..."
+- Hardening C.0 (gold legacy): [`docs/07_reports/phase-gates/phase-c/C0_statistical_methods_hardening.md`](../07_reports/phase-gates/phase-c/C0_statistical_methods_hardening.md)
+- Implementacao do CLI: `src/use_cases/compute_phase_b_tier_metrics_use_case.py`, `src/main_compute_phase_b_tier_metrics.py`
 
 ## A. Lacunas conhecidas
 
