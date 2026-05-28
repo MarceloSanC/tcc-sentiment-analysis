@@ -59,6 +59,72 @@ da Fase B/C:
   `docs/07_reports/living-paper/evidence_log.md` 2026-05-01), foi arquivado
   como diagnóstico e não alimenta resultados do Capítulo 5.
 
+## Limitacoes especificas da Phase B confirmatoria
+
+Estas limitacoes derivam diretamente do escopo pre-registrado da Phase B
+([`preregistration_phase_b.md`](../../06_pre_registration/phase-b/preregistration_phase_b.md)
+§12; [`B_confirmatory_2026-05-25.md`](../phase-gates/phase-b/B_confirmatory_2026-05-25.md)
+§7) e devem ser explicitas no Capitulo 6:
+
+1. **Escopo da cohort.** Os claims H1/H2a/H2b sao validos **apenas** para a
+   cohort `phase_b_confirmatorio_20260524`: ativo AAPL, horizontes h=1 e h=7,
+   candidato TFT all-features sealed (config sha256
+   `fc83b56d7605bf60479b4d1ed4c745c1679702e5e5116f642f3c33061d795bd4`),
+   baselines pre-declarados (`zero_return`, `historical_mean_rolling` w=30,
+   `historical_quantiles_rolling` w=252), 15 replicas TFT + 45 replicas
+   baseline, protocolo Holm-6 (one-sided HAC+HLN).
+2. **H2b refutada localmente.** No protocolo Phase B, o candidato TFT sealed
+   nao supera `historical_quantiles_rolling` em pinball post-guardrail
+   (p_adj_holm = 0,465 em h=1 e 0,685 em h=7; delta_rel ≈ −0,6% / −1,9%).
+   Esse resultado e **da cohort**, nao do TFT em geral. Rodadas futuras com
+   outro candidato, outro feature set ou outro protocolo podem reverter esse
+   veredito, desde que com pre-registro proprio.
+3. **H1 em h=1 em Tier 2.** PICP error 2,02% fica fora da banda Tier 1
+   ±2,0% por 0,02 ponto percentual. Sustenta evidencia secundaria, nao
+   primaria, para calibracao em h=1.
+4. **N efetivo limitado em h=7.** 937 timestamps dedupados cross-fold sobre
+   ~3 anos OOS; HLN aplicado. Poder estatistico limitado para detectar
+   |Δpinball| < ~1%.
+5. **h=30 out-of-scope** per §8 do pre-registro; nao reportado.
+6. **Cross-family MCS / win-rate ausentes.** `split_fingerprint` distintos
+   entre TFT e baselines bloqueiam pairing automatico em `gold_win_rate_*`
+   e `gold_mcs_results`. DM family-6 substitui inferencialmente. Resolver
+   requer Phase-B-bis.
+7. **Walk-forward folds restritos.** 3 folds declarados; sensibilidade B.4
+   (janelas alternativas) declarada como Phase-B-bis (rodada futura).
+8. **TFT nao e dominante em retornos de ativos liquidos** (consistente com
+   STRATEGIC_DIRECTION §3). H2b refutada confirma esse limite empirico
+   declarado ex-ante; nao e achado negativo inesperado.
+
+## O que a Phase B nao conclui
+
+Para evitar leitura excessiva dos resultados confirmatorios da Phase B, o
+Capitulo 6 deve explicitar o que a Phase B nao conclui:
+
+- A Phase B **nao** prova o limite final do desempenho do TFT em forecasting
+  financeiro. Avalia um candidato sealed unico, sob protocolo unico, em uma
+  cohort unica. Outras configuracoes de TFT, outros feature sets, outros
+  ativos, outros horizontes e outras epocas podem produzir resultados
+  diferentes.
+- A Phase B **nao** responde H3 (contribuicao de familias de features). H3
+  e foco da Phase C explicativa, ainda pendente.
+- A Phase B **nao** valida `gold_dm_pairwise_results`, `gold_mcs_results`,
+  `gold_model_decision_final` ou `gold_prediction_risk` como evidencia
+  confirmatoria. Esses artefatos legacy permanecem em escopo de hardening
+  metodologico
+  ([`C0_statistical_methods_hardening.md`](../phase-gates/phase-c/C0_statistical_methods_hardening.md)).
+- A Phase B **nao** sustenta claims de generalizacao para outros tickers,
+  mercados ou periodos nao avaliados sob o protocolo sealed.
+- A Phase B **nao** sustenta claims de causalidade entre features e retorno.
+
+Rodadas futuras que busquem evidencia confirmatoria adicional sobre TFT
+(novas hipoteses, outros feature sets, outros ativos, outros horizontes ou
+melhorias arquiteturais) devem ser declaradas como **novos experimentos**
+com pre-registro proprio, cohort propria e escopo claramente separado da
+Phase B. Mistura de runs futuros com a cohort Phase B viola o veto
+declarado em [`preregistration_phase_b.md`](../../06_pre_registration/phase-b/preregistration_phase_b.md)
+§14.
+
 ## Resultados validos mesmo com hipoteses refutadas
 
 - Se H2a for refutada, o trabalho ainda pode concluir sobre limites do TFT para

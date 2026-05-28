@@ -13,6 +13,8 @@ canonical_for: [living_paper_outline, tcc_thesis, research_question, hypotheses,
 
 Status: draft vivo para alimentar TCC (ABNT) e artigo estilo ML.
 Ultima revisao estrategica: 2026-05-01 (alinhado com `docs/00_overview/STRATEGIC_DIRECTION.md`).
+Fechamento da Phase B confirmatoria: 2026-05-25 (cohort `phase_b_confirmatorio_20260524`;
+ver [`docs/07_reports/phase-gates/phase-b/B_confirmatory_2026-05-25.md`](../phase-gates/phase-b/B_confirmatory_2026-05-25.md)).
 Protocolo operacional de escrita: `docs/07_reports/living-paper/WRITING_PROTOCOL.md`.
 
 ## Objetivo do arquivo
@@ -128,6 +130,31 @@ Nota: qualquer hipotese pode ser refutada. Refutacao honesta e resultado valido
 e academicamente preferivel a forcar claims frageis. A analise de por que uma
 hipotese foi refutada tem valor explicativo proprio.
 
+### Estado pos-Phase B confirmatoria (2026-05-25)
+
+A Phase B confirmatoria (cohort `phase_b_confirmatorio_20260524`, AAPL, h=1 e
+h=7, candidato all-features all-features sealed, baselines `zero_return`,
+`historical_mean_rolling` e `historical_quantiles_rolling`) fecha H1/H2a/H2b
+**apenas no escopo desse protocolo**:
+
+| Hipotese | h=1 | h=7 |
+|---|---|---|
+| H1 (calibracao) | Tier 2 | Tier 1 |
+| H2a (TFT > `zero_return` em pinball post-guardrail) | Tier 1 | Tier 1 |
+| H2b (TFT > todos os baselines em pinball post-guardrail) | Refutada | Refutada |
+
+A Phase B encerra o ciclo confirmatorio dessa cohort, **nao** encerra a
+investigacao sobre TFT em forecasting financeiro. Rodadas futuras (novos
+ativos, outros horizontes, outros feature sets, melhorias arquiteturais) podem
+ser conduzidas como novos experimentos com pre-registro proprio. Resultados de
+Phase B **nao podem ser reinterpretados** por mistura com rodadas futuras.
+
+H3 permanece **out-of-scope da Phase B** e sera tratada na Phase C explicativa
+(VSN + permutation + ablation). Tornar a Phase C confirmatoria sobre o legacy
+gold (`gold_dm_pairwise_results`, `gold_mcs_results`,
+`gold_model_decision_final`) depende do hardening declarado em
+[`docs/07_reports/phase-gates/phase-c/C0_statistical_methods_hardening.md`](../phase-gates/phase-c/C0_statistical_methods_hardening.md).
+
 ## 8) Mapeamento de uso
 - Uso TCC: texto-base para Introducao (tema, problema, justificativa, objetivos e
   delimitacoes); hipoteses para Metodo e Resultados.
@@ -157,18 +184,27 @@ Objetivos especificos:
    permutation importance e ablation explicativa, reportando convergencias e
    divergencias entre os tres metodos.
 
-## 10) Proximo passo imediato (Fase A do roadmap)
-Ver `docs/00_overview/STRATEGIC_DIRECTION.md` §5 (Fase A) para o roadmap completo.
+## 10) Proximo passo imediato
 
-Antes de escrever qualquer capitulo de Resultados:
-- [ ] `A_code_audit.md` concluido com M1-M7 GREEN ou YELLOW com acao concluida
-- [ ] Engenharia pré-Fase B concluída por `docs/05_checklists/phase-b/PHASE_B_IMPLEMENTATION_CHECKLIST.md` (Stages 1-11 da Fase B).
-- [ ] Auditoria de leakage concluida (`docs/07_reports/external-reviews/leakage_audit_<date>.md`)
-- [ ] Baselines persistidos na coorte (`fact_oos_predictions` com mesmos grao)
-- [ ] Pre-registro versionado commitado (`docs/08_governance/preregistration_round1_<date>.md`)
-- [ ] Seed de inferencia fixa documentada
-- [ ] Escopo de ativos definido no pre-registro (AAPL piloto; outros ativos apenas
-      se criterios de inclusao forem declarados)
+Ver `docs/00_overview/STRATEGIC_DIRECTION.md` §5 para o roadmap completo.
+
+Estado atual (2026-05-27):
+- [x] Phase A (sanidade) concluida em 2026-05-23
+      ([`A_audit_closure_2026-05-17.md`](../phase-gates/phase-a/A_audit_closure_2026-05-17.md)).
+- [x] Pre-registro Phase B selado em `067cb32`
+      ([`preregistration_phase_b.md`](../../06_pre_registration/phase-b/preregistration_phase_b.md)).
+- [x] Phase B confirmatoria executada e fechada em 2026-05-25
+      ([`B_confirmatory_2026-05-25.md`](../phase-gates/phase-b/B_confirmatory_2026-05-25.md);
+      cohort `phase_b_confirmatorio_20260524`; 60 runs = 15 TFT + 45 baselines;
+      sidecars em `data/analytics/reports/phase_b/cohort=phase_b_confirmatorio_20260524/`).
+- [ ] Phase C explicativa (H3, VSN + permutation + ablation) e
+      [`C0_statistical_methods_hardening.md`](../phase-gates/phase-c/C0_statistical_methods_hardening.md)
+      (DM/MCS/Holm/top-50/VaR-ES gold legacy) — pendentes.
+
+Para a escrita do Capitulo 5 (Resultados), a Phase B fornece evidencia
+confirmatoria para H1/H2a/H2b **somente sob o protocolo sealed**. Claims
+extra-escopo (outros ativos, outros horizontes, outros feature sets) ficam
+explicitamente sinalizados como future work, nao como conclusao do trabalho.
 
 ## 11) Base da Introducao (v2 sincronizada com `text/2_Introducao`)
 - Contextualizacao: forecasting financeiro como problema desafiador sob HME/HMA
