@@ -28,8 +28,14 @@ prontidao do texto LaTeX. O campo `Status .tex` registra se o capitulo em
 
 Regra de leitura:
 - Round 0 e evidencia exploratoria de hiperparametros.
-- Fase B sera a evidencia confirmatoria do candidato all-features vs baselines.
-- Fase C sera a evidencia de contribuicao/explicabilidade.
+- Fase B fechou em 2026-05-25 como evidencia confirmatoria do candidato
+  all-features sealed vs baselines pre-declarados, escopo cohort
+  `phase_b_confirmatorio_20260524` (AAPL, h=1 e h=7). Tier verdict
+  H1/H2a/H2b por horizonte em
+  [`B_confirmatory_2026-05-25.md`](../phase-gates/phase-b/B_confirmatory_2026-05-25.md).
+- Fase C e pendente; cobre H3 (contribuicao/explicabilidade) e o hardening
+  C.0 dos testes/metricas gold legacy
+  ([`C0_statistical_methods_hardening.md`](../phase-gates/phase-c/C0_statistical_methods_hardening.md)).
 
 ---
 
@@ -96,23 +102,28 @@ baselines persistidos da Fase A.
 | Secao | Fonte primaria | Fonte complementar | Status fonte | Status .tex |
 |---|---|---|---|---|
 | 5.1 Cenarios experimentais | `docs/07_reports/living-paper/30_results_and_analysis.md`, `docs/03_modeling/SWEEPS_AND_SELECTION.md` | `docs/07_reports/ROUND0_023_FROZEN_SHORTLIST.md` | parcial | v2 sincronizado (Round 0 rotulada como diagnostico exploratorio; numeros removidos) |
-| 5.2 Resultados agregados por horizonte/split | `docs/07_reports/living-paper/30_results_and_analysis.md` | Fase B a gerar | pendente | placeholder Fase B declarado no `.tex` |
-| 5.3 Analise da incerteza e calibracao | `docs/04_evaluation/CALIBRATION_AND_RISK.md` | Fase B a gerar; `docs/07_reports/living-paper/evidence_log.md` | parcial | placeholder Fase B declarado no `.tex` |
-| 5.4 Comparacoes entre candidato e baselines | `docs/07_reports/living-paper/30_results_and_analysis.md` | `docs/04_evaluation/BASELINES.md`, `docs/04_evaluation/STATISTICAL_TESTS.md` | pendente | placeholder Fase B declarado no `.tex` |
-| 5.5 Analise estatistica pareada | `docs/04_evaluation/STATISTICAL_TESTS.md` | Fase B a gerar | pendente | placeholder Fase B declarado no `.tex` |
-| 5.6 Interpretabilidade e implicacoes | `docs/04_evaluation/EXPLAINABILITY.md` | Fase C a gerar | pendente | placeholder Fase C declarado no `.tex` |
-| 5.7 Ameacas a validade | `docs/00_overview/STRATEGIC_DIRECTION.md` secao 3 e secao 4.4 | `docs/07_reports/external-reviews/claude_scope_governance_review_2026-04-09.md`, `docs/07_reports/living-paper/evidence_log.md` | pronto | revisar apos Fase B/C |
+| 5.2 Resultados agregados por horizonte/split | `docs/07_reports/phase-gates/phase-b/B_confirmatory_2026-05-25.md`, `docs/07_reports/living-paper/30_results_and_analysis.md` §"Resultados confirmatorios — Phase B" | sidecars `phase_b_marginal_coverage.parquet`, `phase_b_tier_verdict.parquet` | parcial | atualizar `.tex` com tabela tier por (hipotese, horizonte) e parametros sealed |
+| 5.3 Analise da incerteza e calibracao | `docs/07_reports/phase-gates/phase-b/B_confirmatory_2026-05-25.md` §2-§3, `docs/04_evaluation/CALIBRATION_AND_RISK.md` | `phase_b_marginal_coverage.parquet`, `phase_b_tier_verdict.parquet`, `docs/07_reports/living-paper/evidence_log.md` | parcial | propagar PICP/MPIW/cov_qτ Phase B para `.tex` |
+| 5.4 Comparacoes entre candidato e baselines | `docs/07_reports/phase-gates/phase-b/B_confirmatory_2026-05-25.md` §3, `docs/07_reports/living-paper/30_results_and_analysis.md` | `docs/04_evaluation/BASELINES.md` | parcial | propagar tabela descritiva Phase B (3 baselines x 2 horizontes) para `.tex` |
+| 5.5 Analise estatistica pareada | `docs/07_reports/phase-gates/phase-b/B_confirmatory_2026-05-25.md` §4.1 (DM family-6), §11 (DM-18 sensibilidade) | `phase_b_dm_family_6.parquet`, `phase_b_dm_family_18_sensitivity.parquet`, `phase_b_delta_pinball.parquet`, `docs/04_evaluation/STATISTICAL_TESTS.md` | parcial | propagar DM family-6 + apendice DM-18 para `.tex` |
+| 5.6 Interpretabilidade e implicacoes | `docs/04_evaluation/EXPLAINABILITY.md` | Fase C a gerar; `docs/07_reports/phase-gates/phase-c/C0_statistical_methods_hardening.md` | pendente | placeholder Fase C declarado no `.tex` |
+| 5.7 Ameacas a validade | `docs/00_overview/STRATEGIC_DIRECTION.md` secao 3 e secao 4.4, `docs/07_reports/living-paper/40_limitations_and_conclusion.md` §"Limitacoes especificas da Phase B confirmatoria" | `docs/07_reports/external-reviews/claude_scope_governance_review_2026-04-09.md`, `docs/07_reports/living-paper/evidence_log.md` | pronto | propagar limitacoes Phase B para `.tex` |
 
 Observacao: resultados da Round 0 entram apenas como exploracao e motivacao de
-hiperparametros. Claims confirmatorios devem aguardar Fase B.
+hiperparametros. Claims confirmatorios Phase B estao disponiveis em
+[`B_confirmatory_2026-05-25.md`](../phase-gates/phase-b/B_confirmatory_2026-05-25.md)
+e sintetizados em
+[`30_results_and_analysis.md`](30_results_and_analysis.md) §"Resultados
+confirmatorios — Phase B". Fase C / H3 permanece pendente; secao 5.6 fica
+como future work no `.tex` ate a Phase C concluir.
 
 ## Capitulo 6 - Conclusoes (`text/6_Conclusoes/`)
 
 | Secao | Fonte primaria | Fonte complementar | Status fonte | Status .tex |
 |---|---|---|---|---|
-| 6.1 Sintese dos achados | Fase B + Fase C a gerar | `docs/07_reports/living-paper/30_results_and_analysis.md` | pendente | pendente Fase B/C |
-| 6.2 Contribuicoes | `docs/00_overview/STRATEGIC_DIRECTION.md` secao 2 e secao 4 | `docs/07_reports/living-paper/00_outline.md` secao 6, `docs/07_reports/living-paper/40_limitations_and_conclusion.md` §"Contribuicoes metodologicas" | parcial | v2 sincronizado: subsecao "Contribuicoes metodologicas" preenchida (5 contribuicoes: variante quantilica, governanca de coorte, camadas reconstruiveis, hierarquia VSN/permutation/ablation, pre-registro); subsecao "Contribuicoes empiricas" mantem TODO Fase B/C |
-| 6.3 Limitacoes | `docs/00_overview/STRATEGIC_DIRECTION.md` secao 3 e secao 4.4 | `docs/07_reports/living-paper/40_limitations_and_conclusion.md` | parcial | v1 preenchida (8 limitacoes: single-asset, AAPL piloto, sem causalidade, 91,25% historico, reset 2026-05-10, h+30 suplementar, Round 0 exploratoria, interpretabilidade local) |
+| 6.1 Sintese dos achados | `docs/07_reports/phase-gates/phase-b/B_confirmatory_2026-05-25.md` §8, `docs/07_reports/living-paper/30_results_and_analysis.md` §"Resultados confirmatorios — Phase B" | Fase C a gerar (H3) | parcial | propagar sintese Phase B (Tier 1 H2a; Tier 1/Tier 2 H1; H2b refutada) para `.tex`; bloco Fase C / H3 permanece TODO |
+| 6.2 Contribuicoes | `docs/00_overview/STRATEGIC_DIRECTION.md` secao 2 e secao 4 | `docs/07_reports/living-paper/00_outline.md` secao 6, `docs/07_reports/living-paper/40_limitations_and_conclusion.md` §"Contribuicoes metodologicas" | parcial | v2 sincronizado: subsecao "Contribuicoes metodologicas" preenchida (5 contribuicoes: variante quantilica, governanca de coorte, camadas reconstruiveis, hierarquia VSN/permutation/ablation, pre-registro); subsecao "Contribuicoes empiricas" pode ser parcialmente preenchida com Phase B (calibracao Tier 1 h=7; dominancia vs `zero_return`); contribuicao empirica completa aguarda Fase C |
+| 6.3 Limitacoes | `docs/00_overview/STRATEGIC_DIRECTION.md` secao 3 e secao 4.4, `docs/07_reports/living-paper/40_limitations_and_conclusion.md` §"Limitacoes especificas da Phase B confirmatoria" e §"O que a Phase B nao conclui" | sidecars Phase B | parcial | v2 expandida (limitacoes Phase B explicitas: escopo cohort, H2b refutada localmente, H1 h=1 Tier 2, N_eff 937, cross-family ausentes, sem generalizacao); propagar para `.tex` |
 | 6.4 Trabalhos futuros | `docs/00_overview/STRATEGIC_DIRECTION.md` secao 2 | `docs/07_reports/living-paper/40_limitations_and_conclusion.md` | pronto | v1 preenchida (4 direcoes: mais ativos, regimes, causalidade, portfolio/trading) |
 
 Observacao: `40_limitations_and_conclusion.md` ainda precisa consolidar
@@ -125,15 +136,21 @@ limitacoes antes de Capitulo 6 ser considerado pronto.
 | Apendice A - Protocolo operacional e contratos de qualidade | `docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md`, `docs/04_evaluation/METRICS_DEFINITIONS.md`, `docs/04_evaluation/CALIBRATION_AND_RISK.md`, `docs/04_evaluation/STATISTICAL_TESTS.md`, `docs/07_reports/living-paper/30_results_and_analysis.md` §"Criterios quantitativos de aceite" | pronto: v1 inserida no `.tex` (run_id/fingerprints, camadas silver/gold, variante quantilica raw/post-guardrail, gates A/B/C/D, protocolo estatistico, pre-registro) |
 | Apendice B - Glossario tecnico de termos recorrentes | `docs/00_overview/GLOSSARY.md`, `docs/04_evaluation/METRICS_DEFINITIONS.md` | pronto: v1 inserida no `.tex` (calibracao, governanca, modelo/pipeline, testes estatisticos) |
 | Apendice C - Comandos de reproducao | `docs/06_runbooks/RUN_PIPELINE_QUICKSTART.md` e demais runbooks | pronto: v1 inserida no `.tex` (referencias a runbooks de dataset, treino, inferencia, refresh analytics) |
-| Auditoria pre-experimento da Fase A | `docs/07_reports/phase-gates/phase-a/A_code_audit.md` | parcial: pode ser referenciada do Apendice A apos fechamento |
-| Pre-registro Fase B | `docs/08_governance/preregistration_round1_<date>.md` | pendente: pode entrar como apendice adicional apos commit |
+| Auditoria pre-experimento da Fase A | `docs/07_reports/phase-gates/phase-a/A_code_audit.md`, `docs/07_reports/phase-gates/phase-a/A_audit_closure_2026-05-17.md` | pronto: pode ser referenciada do Apendice A |
+| Pre-registro Fase B | `docs/06_pre_registration/phase-b/preregistration_phase_b.md` (commit selo `067cb32`) | pronto: pode entrar como apendice adicional apos decisao editorial |
+| Relatorio Phase B confirmatoria | `docs/07_reports/phase-gates/phase-b/B_confirmatory_2026-05-25.md` | pronto: fonte primaria de §5.2-§5.5 e §6.1 |
+| C.0 hardening Phase C | `docs/07_reports/phase-gates/phase-c/C0_statistical_methods_hardening.md` | pendente: living skeleton; referenciar como future work em §5.6 e §6.4 |
 
 ## Gaps P0 Antes Da Escrita Final
 
 - ~~Expandir `docs/07_reports/living-paper/10_problem_and_related_work.md`.~~ (2026-05-17, branch `docs/tcc-expand-cap3-and-literature`)
-- Preencher `docs/07_reports/phase-gates/phase-a/A_code_audit.md`.
-- Criar pre-registro versionado da Fase B.
-- Implementar e persistir baselines comparaveis.
-- Rodar Fase B para resultados confirmatorios.
-- Rodar Fase C para contribuicao/explicabilidade.
-- Consolidar `docs/07_reports/living-paper/40_limitations_and_conclusion.md`.
+- ~~Preencher `docs/07_reports/phase-gates/phase-a/A_code_audit.md`.~~ (Phase A fechada 2026-05-23)
+- ~~Criar pre-registro versionado da Fase B.~~ (commit selo `067cb32`,
+  `docs/06_pre_registration/phase-b/preregistration_phase_b.md`)
+- ~~Implementar e persistir baselines comparaveis.~~ (cohort `phase_b_confirmatorio_20260524`, 45 runs baseline)
+- ~~Rodar Fase B para resultados confirmatorios.~~ (relatorio
+  `docs/07_reports/phase-gates/phase-b/B_confirmatory_2026-05-25.md`, 2026-05-25)
+- Rodar Fase C para contribuicao/explicabilidade (H3).
+- Concluir C.0 hardening do gold legacy (`docs/07_reports/phase-gates/phase-c/C0_statistical_methods_hardening.md`).
+- Propagar resultados Phase B para `text/5_Resultados/*.tex` e `text/6_Conclusoes/*.tex` (apos validacao editorial).
+- ~~Consolidar `docs/07_reports/living-paper/40_limitations_and_conclusion.md`.~~ (atualizado pos-Phase B em 2026-05-27)

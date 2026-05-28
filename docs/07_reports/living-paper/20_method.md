@@ -135,17 +135,84 @@ uma só (categorização completa em
 
 ### Rastreabilidade
 
-A variante usada por `gold_model_decision_final` (tabela de seleção do paper)
-é declarada via flag `--primary-quantile-contract` e persistida como coluna
-homônima no output, com default `post_guardrail`. Plots herdam a mesma flag.
-Mudança de contrato primário entre versões do paper exige re-refresh com a
-flag alternativa — não retreina o modelo.
+A variante usada pelo refresh do analytics store (e portanto por todas as
+tabelas gold legacy, incluindo `gold_model_decision_final` como diagnostico
+exploratorio) é declarada via flag `--primary-quantile-contract` e persistida
+como coluna homônima no output, com default `post_guardrail`. Plots herdam a
+mesma flag. Mudança de contrato primário entre versões do paper exige
+re-refresh com a flag alternativa — não retreina o modelo. A decisao
+confirmatoria Phase B consome diretamente `pinball_loss_post_guardrail` via
+sidecar `phase_b_dm_family_6.parquet`, sem depender de
+`gold_model_decision_final` (ver §"Protocolo confirmatorio da Phase B
+(sealed)" abaixo).
 
 A política assume silver pos-Stage 8 (colunas `quantile_p*_post_guardrail`
 materializadas no momento da escrita). Runs anteriores ao reset documentado
 em `docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md` §"Archive pre-Phase B"
 (2026-05-10) ficam com `*_post_guardrail = NaN` e não são elegíveis para
 claims confirmatórios.
+
+## Protocolo confirmatorio da Phase B (sealed)
+
+A Phase B opera em escopo unico e fechado, declarado ex-ante no
+pre-registro [`preregistration_phase_b.md`](../../06_pre_registration/phase-b/preregistration_phase_b.md)
+e operacionalizado pela Emenda E1.8 (DM family-6).
+
+Parametros sealed do protocolo confirmatorio:
+
+- **Cohort:** `parent_sweep_id = phase_b_confirmatorio_20260524`.
+- **Ativo:** AAPL (single-asset; sem claim de generalizacao para outros tickers).
+- **Horizontes confirmatorios:** h=1 e h=7. h=30 fica explicitamente out-of-scope.
+- **Candidato:** TFT all-features (config sealed sha256
+  `fc83b56d7605bf60479b4d1ed4c745c1679702e5e5116f642f3c33061d795bd4`,
+  derivado do top-1 robust_score do sweep heritage `phase_b_hpo_20260523`).
+- **Replicas TFT:** 15 = 3 folds walk-forward x 5 seeds.
+- **Baselines pre-declarados:** `zero_return`, `historical_mean_rolling` (w=30),
+  `historical_quantiles_rolling` (w=252); 15 replicas cada, mesmas folds e seeds.
+- **Total dim_run cohort:** 60 (15 TFT + 45 baselines).
+- **Perda primaria:** `pinball_loss_post_guardrail` (Categoria A;
+  variante primaria declarada por hipotese conforme secao anterior).
+- **DM family-6:** 2 horizontes x 3 baselines, HAC Newey-West com
+  `lag = max(h-1, 1)`, correcao Harvey-Leybourne-Newbold (HLN),
+  one-sided `H_A: TFT < baseline`, Holm-Bonferroni sobre a familia de 6.
+- **Bandas Tier 1 / Tier 2:** declaradas em §9 do pre-registro e em
+  [`CALIBRATION_AND_RISK.md`](../../04_evaluation/CALIBRATION_AND_RISK.md);
+  a politica de promocao e mecanica, sem reframing pos-observacao.
+
+### Sidecars confirmatorios da Phase B
+
+A decisao confirmatoria nao consome o gold legacy de
+`data/analytics/gold/`. O pos-processador
+[`src.main_compute_phase_b_tier_metrics`](../../06_runbooks/phase-b/RUN_PHASE_B_TIER_CLASSIFICATION.md)
+materializa 5 sidecars em
+`data/analytics/reports/phase_b/cohort=phase_b_confirmatorio_20260524/`:
+
+| Sidecar | Papel confirmatorio |
+|---|---|
+| `phase_b_marginal_coverage.parquet` | Calibracao marginal q10/q50/q90 dos runs TFT (sustenta H1). |
+| `phase_b_tier_verdict.parquet` | Veredito mecanico tier por (hipotese, horizonte). |
+| `phase_b_dm_family_6.parquet` | Familia primaria DM/Holm (sustenta H2a e H2b). |
+| `phase_b_dm_family_18_sensitivity.parquet` | Sensibilidade conservadora 3 folds x familia 6; nao alimenta tier. |
+| `phase_b_delta_pinball.parquet` | Δpinball relativo TFT vs cada baseline por horizonte. |
+
+### Separacao entre Phase B sidecars e gold legacy
+
+`gold_dm_pairwise_results`, `gold_mcs_results`, `gold_win_rate_pairwise_results`
+e `gold_model_decision_final` permanecem disponiveis no analytics store, mas
+**nao** sustentam claim confirmatorio Phase B. Essas tabelas (i) operam sobre
+`squared_error` em vez da perda primaria pinball post-guardrail, (ii) aplicam
+filtro top-50 antes do DM/MCS (inferencia pos-selecao), (iii) Holm legacy nao
+preserva `split_signature`, e (iv) MCS hard-codeia `B=300, block_len=5`. Em
+escopo Phase B, essas tabelas servem como diagnostico exploratorio
+within-family, nao como fonte de inferencia cross-family. A revisao
+metodologica formal dessas tabelas vive em
+[`C0_statistical_methods_hardening.md`](../phase-gates/phase-c/C0_statistical_methods_hardening.md)
+e e pre-requisito para qualquer reuso confirmatorio futuro.
+
+A Phase B fecha o ciclo confirmatorio **somente** para a cohort sealed.
+Rodadas futuras com outro feature set, outro ativo, outro horizonte ou
+melhoria arquitetural devem ter pre-registro proprio, cohort propria e nao
+podem reinterpretar a Phase B retroativamente.
 
 ## Critério de inclusão para inferências probabilísticas
 
