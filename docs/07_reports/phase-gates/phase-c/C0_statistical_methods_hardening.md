@@ -139,18 +139,18 @@ formalmente confirmado contra a definicao canonica adotada.
 
 | Item | Categoria atual esperada | Uso atual no projeto | Implementacao localizada | Docs que mencionam | Risco metodologico conhecido | Pesquisa primaria necessaria | Testes necessarios | Status inicial | Prioridade |
 |---|---|---|---|---|---|---|---|---|---|
-| Diebold-Mariano gold | unknown (suspeito descriptive) | `gold_dm_pairwise_results` alimenta `gold_model_decision_final` | [`pairwise.py:_compute_dm_pairwise_from_loss_matrix`](../../../../src/domain/services/gold_builders/pairwise.py) (linhas 67-104) | [`STATISTICAL_TESTS.md`](../../../04_evaluation/STATISTICAL_TESTS.md), `DATA_PIPELINE_WALKTHROUGH.md` | loss=squared_error fixa; HAC lag hard-coded `min(max(1, n^{1/3}), 10)`; two-sided fixo; sem HLN; aplicado pos top-50; Holm sem split_signature | DM 1995, HLN 1997, Newey-West 1987; lag policy; alinhamento por target_timestamp/decision_timestamp | Unit: HAC numerico; contrato: alinhamento estrito por (asset, parent_sweep_id, split_signature, split, horizon, target_timestamp); fixture com benchmark externo | TODO_RESEARCH | P0 |
-| MCS gold | unknown (suspeito descriptive) | `gold_mcs_results.selected_in_mcs_alpha_0_05` e mergeado em `gold_model_decision_final` como coluna diagnostica | [`pairwise.py:_compute_mcs_from_loss_matrix`](../../../../src/domain/services/gold_builders/pairwise.py) (linhas 107-180) | `STATISTICAL_TESTS.md`, `DATA_PIPELINE_WALKTHROUGH.md` | B=300 baixo; block_len=5 hard-coded; loss=squared_error; verificar se split_signature esta sempre presente/populada upstream; alimentado por loss_matrix pos top-50 | Hansen-Lunde-Nason 2011; Kunsch 1989 (block bootstrap); justificativa block_len; sensibilidade B | Unit: MCS contra pacote externo em fixture pequena; contrato: saida preserva split_signature e cohort | TODO_RESEARCH | P0 |
-| Holm gold | unknown (suspeito descriptive) | Ajuste aplicado em `gold_dm_pairwise_results.pvalue_adj_holm` | [`pairwise.py:_apply_holm_adjustment_for_dm`](../../../../src/domain/services/gold_builders/pairwise.py) (linhas 183-214) | `STATISTICAL_TESTS.md` | groupby = [asset, parent_sweep_id, split, horizon]; **split_signature ausente**; familia pode subcorrigir multiplicidade real do claim | Holm 1979; definicao formal de familia para cada claim | Unit: formula Holm contra valores manuais; contrato: familia inclui todos os testes que sustentam o mesmo claim; teste de invariancia split_signature | TODO_RESEARCH | P0 |
-| top-50 filter | heuristica de engenharia (a remover ou explicitar como exploratorio) | `_select_top_configs_for_pairwise(..., max_configs=50)` aplicado antes de DM/MCS/win-rate (linhas 299, 351, 396) | [`pairwise.py:43-64`](../../../../src/domain/services/gold_builders/pairwise.py) | `DATA_PIPELINE_WALKTHROUGH.md` lacuna A.65 | **Selecao pos-test:** filtra top-50 por `mean(squared_error)` no proprio test split; viola hipotese de universo pre-definido; cap silencioso | Inferencia seletiva / data snooping (Romano-Wolf, White 2000) | Contrato: ou (a) universo pre-declarado, ou (b) flag explicita `exploratory_only=True` propagada ate `gold_model_decision_final` | TODO_RESEARCH | P0 |
-| PICP | descriptive (potencial confirmatory com bandas + condicional) | `gold_prediction_metrics_*.picp`, `gold_prediction_calibration` | [`quantile.py`](../../../../src/domain/services/gold_builders/quantile.py) (`_build_metrics_single_contract`, linha 102; `covered_80` derivado e agg em ~244-261) | `METRICS_DEFINITIONS.md`, `CALIBRATION_AND_RISK.md`, `STATISTICAL_TESTS.md` | `coverage_nominal=0.80` hard-coded; nao usa contrato dinamico de quantis; sem teste de cobertura condicional/independencia | Christoffersen 1998; Gneiting-Balabdaoui-Raftery 2007; Khosravi et al. 2011 | Unit: PICP contra fixture controlada; contrato: nominal derivado de `quantile_levels` reais; teste de Christoffersen (cobertura condicional + independencia) | TODO_RESEARCH | P1 |
-| MPIW | descriptive | `gold_prediction_metrics_*.mpiw` | [`quantile.py:245`](../../../../src/domain/services/gold_builders/quantile.py) `mpiw=("pred_interval_width", "mean")` | `METRICS_DEFINITIONS.md`, `CALIBRATION_AND_RISK.md` | Sozinho nao mede calibracao; degeneracao da quantil produz MPIW=0 nao informativo; comparacao cross-asset exige normalizacao | Gneiting-Raftery 2007 (interval score / Winkler); Khosravi et al. 2011 | Unit: MPIW = mean(p90 - p10) em fixture; contrato: interval/Winkler score adicional; bloqueio quando degeneracy_rate alto | TODO_RESEARCH | P1 |
-| pinball loss | descriptive (confirmatory na Phase B sidecar) | `gold_prediction_metrics_*.{pinball_q10,q50,q90,mean_pinball}` | [`quantile.py:79`](../../../../src/domain/services/gold_builders/quantile.py) `_pinball_loss`; agg em linhas 188-244 | `METRICS_DEFINITIONS.md`, `STATISTICAL_TESTS.md` | Quantis hard-coded q=0.1, 0.5, 0.9; pesos uniformes implicitos em mean_pinball; sem ressalva sobre triplet degenerado | Koenker-Bassett 1978; Gneiting 2011 | Unit: pinball contra formula canonica; contrato: quantis lidos do contrato real (`quantile_levels`); flag degeneracao | TODO_RESEARCH | P1 |
-| win-rate gold | descriptive | `gold_win_rate_pairwise_results` e mergeado em `gold_model_decision_final` como coluna diagnostica | [`pairwise.py:382`](../../../../src/domain/services/gold_builders/pairwise.py) (`output_table = "gold_win_rate_pairwise_results"`; calculo em linhas ~410-445) | `STATISTICAL_TESTS.md`, `DATA_PIPELINE_WALKTHROUGH.md` | Sem variancia/p-value; risco de consumidor downstream tratar coluna como sinal de selecao; aplicado pos top-50 | Sign test / block bootstrap para inferencia; tratamento de empates | Unit: win_rate e win_rate_ex_ties em fixture; contrato: nao usar como criterio confirmatorio em decision_final; tie_rate reportado | TODO_RESEARCH | P2 |
-| prob_up | heuristic (renomear) | `gold_prediction_metrics_*.{prob_up,prob_down}` | [`quantile.py:_prob_up_from_quantiles`](../../../../src/domain/services/gold_builders/quantile.py) (linha 85), agg em linha 247 | `METRICS_DEFINITIONS.md`, `DATA_PIPELINE_WALKTHROUGH.md` lacuna A.67 | CDF piecewise-linear ad hoc entre q10 e q90; fallback 1/0/0.5 quando width=0 mascara degeneracao | Gneiting-Raftery 2007 (proper scoring); literatura de quantile-to-CDF | Unit: prob_up retorna NaN se q90 <= q10; calibracao empirica vs y_true>0 (reliability/Brier) | TODO_RESEARCH | P2 |
-| confidence_calibrated | heuristic (renomear) | `gold_prediction_metrics_*.confidence_calibrated`, `gold_prediction_calibration` | [`quantile.py:267`](../../../../src/domain/services/gold_builders/quantile.py) `calibration_term * width_term` | `METRICS_DEFINITIONS.md` ("Confidence Proxy") | Produto ad hoc; nao e proper score; depende da escala do target; nome sugere calibracao estatistica | Gneiting et al. 2007 (proper scores: CRPS, WIS, interval score) | Unit: formula determinada; contrato: nao entra como criterio confirmatorio em decision_final; renomear coluna para `heuristic_coverage_width_score` em PR futuro | TODO_RESEARCH | P2 |
-| VaR / ES gold | unknown (suspeito tail_error, nao risco financeiro) | `gold_prediction_risk.{var_10, es_10_approx}` | [`confidence.py:62-109`](../../../../src/domain/services/gold_builders/confidence.py) | `METRICS_DEFINITIONS.md`, `CALIBRATION_AND_RISK.md` | TODO: verificar se variavel base e `y_pred` (quantil), erro (`y_pred - y_true`), ou retorno; aud externa supos `error`, codigo agora parece usar `q10`; sem backtesting de excedencias; nivel alpha implicito | Jorion 2007 (VaR); Acerbi-Tasche 2002 (ES); Fissler-Ziegel 2016 (joint elicitability); Christoffersen 1998 / Kupiec 1995 (backtesting) | Unit: VaR/ES sobre fixture com distribuicao conhecida; contrato: variavel-alvo declarada (retorno/perda) e nivel alpha explicito; backtesting de cobertura | TODO_RESEARCH | P1 |
-| gold_model_decision_final | unknown (depende de inputs P0) | Rollup diagnostico por (`asset`, `horizon`); consumido por plots oficiais | [`confidence.py:_build_model_decision_final`](../../../../src/domain/services/gold_builders/confidence.py) (linha 463); `requires_gold` em linhas 824-831; `output_table = "gold_model_decision_final"` (linha 822) | `ANALYTICS_STORE_ARCHITECTURE.md`, `METRICS_DEFINITIONS.md`, `PLOT_INTERPRETATION.md` | Ordenacao por `rank_rmse, rank_mae` (pontual); pinball/PICP/MPIW entram como colunas; `win_rate_ex_ties_mean` aparece sem disclaimer; herda riscos de DM/MCS/Holm/top-50; sem pre-registro do criterio | Scorecard confirmatorio exige criterio pre-declarado separado | Contrato: nao usar como evidencia confirmatoria sem pre-registro; teste de invariancia que congele criterio pos-promocao | TODO_RESEARCH | P0 |
+| Diebold-Mariano gold | unknown (suspeito descriptive) | `gold_dm_pairwise_results` alimenta `gold_model_decision_final` | [`pairwise.py:_compute_dm_pairwise_from_loss_matrix`](../../../../src/domain/services/gold_builders/pairwise.py) (linhas 67-104) | [`STATISTICAL_TESTS.md`](../../../04_evaluation/STATISTICAL_TESTS.md), `DATA_PIPELINE_WALKTHROUGH.md` | loss=squared_error fixa; HAC lag hard-coded `min(max(1, n^{1/3}), 10)`; two-sided fixo; sem HLN; aplicado pos top-50; Holm sem split_signature | DM 1995, HLN 1997, Newey-West 1987; lag policy; alinhamento por target_timestamp/decision_timestamp | Unit: HAC numerico; contrato: alinhamento estrito por (asset, parent_sweep_id, split_signature, split, horizon, target_timestamp); fixture com benchmark externo | CODE_LOCATED | P0 |
+| MCS gold | unknown (suspeito descriptive) | `gold_mcs_results.selected_in_mcs_alpha_0_05` e mergeado em `gold_model_decision_final` como coluna diagnostica | [`pairwise.py:_compute_mcs_from_loss_matrix`](../../../../src/domain/services/gold_builders/pairwise.py) (linhas 107-180) | `STATISTICAL_TESTS.md`, `DATA_PIPELINE_WALKTHROUGH.md` | B=300 baixo; block_len=5 hard-coded; loss=squared_error; verificar se split_signature esta sempre presente/populada upstream; alimentado por loss_matrix pos top-50 | Hansen-Lunde-Nason 2011; Kunsch 1989 (block bootstrap); justificativa block_len; sensibilidade B | Unit: MCS contra pacote externo em fixture pequena; contrato: saida preserva split_signature e cohort | CODE_LOCATED | P0 |
+| Holm gold | unknown (suspeito descriptive) | Ajuste aplicado em `gold_dm_pairwise_results.pvalue_adj_holm` | [`pairwise.py:_apply_holm_adjustment_for_dm`](../../../../src/domain/services/gold_builders/pairwise.py) (linhas 183-214) | `STATISTICAL_TESTS.md` | groupby = [asset, parent_sweep_id, split, horizon]; **split_signature ausente**; familia pode subcorrigir multiplicidade real do claim | Holm 1979; definicao formal de familia para cada claim | Unit: formula Holm contra valores manuais; contrato: familia inclui todos os testes que sustentam o mesmo claim; teste de invariancia split_signature | CODE_LOCATED | P0 |
+| top-50 filter | heuristica de engenharia (a remover ou explicitar como exploratorio) | `_select_top_configs_for_pairwise(..., max_configs=50)` aplicado antes de DM/MCS/win-rate (linhas 299, 351, 396) | [`pairwise.py:43-64`](../../../../src/domain/services/gold_builders/pairwise.py) | `DATA_PIPELINE_WALKTHROUGH.md` lacuna A.65 | **Selecao pos-test:** filtra top-50 por `mean(squared_error)` no proprio test split; viola hipotese de universo pre-definido; cap silencioso | Inferencia seletiva / data snooping (Romano-Wolf, White 2000) | Contrato: ou (a) universo pre-declarado, ou (b) flag explicita `exploratory_only=True` propagada ate `gold_model_decision_final` | CODE_LOCATED | P0 |
+| PICP | descriptive (potencial confirmatory com bandas + condicional) | `gold_prediction_metrics_*.picp`, `gold_prediction_calibration` | [`quantile.py`](../../../../src/domain/services/gold_builders/quantile.py) (`_build_metrics_single_contract`, linha 102; `covered_80` derivado e agg em ~244-261) | `METRICS_DEFINITIONS.md`, `CALIBRATION_AND_RISK.md`, `STATISTICAL_TESTS.md` | `coverage_nominal=0.80` hard-coded; nao usa contrato dinamico de quantis; sem teste de cobertura condicional/independencia | Christoffersen 1998; Gneiting-Balabdaoui-Raftery 2007; Khosravi et al. 2011 | Unit: PICP contra fixture controlada; contrato: nominal derivado de `quantile_levels` reais; teste de Christoffersen (cobertura condicional + independencia) | CODE_LOCATED | P1 |
+| MPIW | descriptive | `gold_prediction_metrics_*.mpiw` | [`quantile.py:245`](../../../../src/domain/services/gold_builders/quantile.py) `mpiw=("pred_interval_width", "mean")` | `METRICS_DEFINITIONS.md`, `CALIBRATION_AND_RISK.md` | Sozinho nao mede calibracao; degeneracao da quantil produz MPIW=0 nao informativo; comparacao cross-asset exige normalizacao | Gneiting-Raftery 2007 (interval score / Winkler); Khosravi et al. 2011 | Unit: MPIW = mean(p90 - p10) em fixture; contrato: interval/Winkler score adicional; bloqueio quando degeneracy_rate alto | CODE_LOCATED | P1 |
+| pinball loss | descriptive (confirmatory na Phase B sidecar) | `gold_prediction_metrics_*.{pinball_q10,q50,q90,mean_pinball}` | [`quantile.py:79`](../../../../src/domain/services/gold_builders/quantile.py) `_pinball_loss`; agg em linhas 188-244 | `METRICS_DEFINITIONS.md`, `STATISTICAL_TESTS.md` | Quantis hard-coded q=0.1, 0.5, 0.9; pesos uniformes implicitos em mean_pinball; sem ressalva sobre triplet degenerado | Koenker-Bassett 1978; Gneiting 2011 | Unit: pinball contra formula canonica; contrato: quantis lidos do contrato real (`quantile_levels`); flag degeneracao | CODE_LOCATED | P1 |
+| win-rate gold | descriptive | `gold_win_rate_pairwise_results` e mergeado em `gold_model_decision_final` como coluna diagnostica | [`pairwise.py:382`](../../../../src/domain/services/gold_builders/pairwise.py) (`output_table = "gold_win_rate_pairwise_results"`; calculo em linhas ~410-445) | `STATISTICAL_TESTS.md`, `DATA_PIPELINE_WALKTHROUGH.md` | Sem variancia/p-value; risco de consumidor downstream tratar coluna como sinal de selecao; aplicado pos top-50 | Sign test / block bootstrap para inferencia; tratamento de empates | Unit: win_rate e win_rate_ex_ties em fixture; contrato: nao usar como criterio confirmatorio em decision_final; tie_rate reportado | CODE_LOCATED | P2 |
+| prob_up | heuristic (renomear) | `gold_prediction_metrics_*.{prob_up,prob_down}` | [`quantile.py:_prob_up_from_quantiles`](../../../../src/domain/services/gold_builders/quantile.py) (linha 85), agg em linha 247 | `METRICS_DEFINITIONS.md`, `DATA_PIPELINE_WALKTHROUGH.md` lacuna A.67 | CDF piecewise-linear ad hoc entre q10 e q90; fallback 1/0/0.5 quando width=0 mascara degeneracao | Gneiting-Raftery 2007 (proper scoring); literatura de quantile-to-CDF | Unit: prob_up retorna NaN se q90 <= q10; calibracao empirica vs y_true>0 (reliability/Brier) | CODE_LOCATED | P2 |
+| confidence_calibrated | heuristic (renomear) | `gold_prediction_metrics_*.confidence_calibrated`, `gold_prediction_calibration` | [`quantile.py:267`](../../../../src/domain/services/gold_builders/quantile.py) `calibration_term * width_term` | `METRICS_DEFINITIONS.md` ("Confidence Proxy") | Produto ad hoc; nao e proper score; depende da escala do target; nome sugere calibracao estatistica | Gneiting et al. 2007 (proper scores: CRPS, WIS, interval score) | Unit: formula determinada; contrato: nao entra como criterio confirmatorio em decision_final; renomear coluna para `heuristic_coverage_width_score` em PR futuro | CODE_LOCATED | P2 |
+| VaR / ES gold | unknown (suspeito tail_error, nao risco financeiro) | `gold_prediction_risk.{var_10, es_10_approx}` | [`confidence.py:62-109`](../../../../src/domain/services/gold_builders/confidence.py) | `METRICS_DEFINITIONS.md`, `CALIBRATION_AND_RISK.md` | TODO: verificar se variavel base e `y_pred` (quantil), erro (`y_pred - y_true`), ou retorno; aud externa supos `error`, codigo agora parece usar `q10`; sem backtesting de excedencias; nivel alpha implicito | Jorion 2007 (VaR); Acerbi-Tasche 2002 (ES); Fissler-Ziegel 2016 (joint elicitability); Christoffersen 1998 / Kupiec 1995 (backtesting) | Unit: VaR/ES sobre fixture com distribuicao conhecida; contrato: variavel-alvo declarada (retorno/perda) e nivel alpha explicito; backtesting de cobertura | CODE_LOCATED | P1 |
+| gold_model_decision_final | unknown (depende de inputs P0) | Rollup diagnostico por (`asset`, `horizon`); consumido por plots oficiais | [`confidence.py:_build_model_decision_final`](../../../../src/domain/services/gold_builders/confidence.py) (linha 463); `requires_gold` em linhas 824-831; `output_table = "gold_model_decision_final"` (linha 822) | `ANALYTICS_STORE_ARCHITECTURE.md`, `METRICS_DEFINITIONS.md`, `PLOT_INTERPRETATION.md` | Ordenacao por `rank_rmse, rank_mae` (pontual); pinball/PICP/MPIW entram como colunas; `win_rate_ex_ties_mean` aparece sem disclaimer; herda riscos de DM/MCS/Holm/top-50; sem pre-registro do criterio | Scorecard confirmatorio exige criterio pre-declarado separado | Contrato: nao usar como evidencia confirmatoria sem pre-registro; teste de invariancia que congele criterio pos-promocao | CODE_LOCATED | P0 |
 | Phase B DM family-6 | confirmatory (Phase B fechada, **apenas H2a/H2b**) | `phase_b_dm_family_6.parquet` (sidecar), 6 testes one-sided HAC+HLN, Holm sobre familia 6 | [`dm_tft_vs_baseline.py`](../../../../src/domain/services/dm_tft_vs_baseline.py), [`holm_family_6.py`](../../../../src/domain/services/holm_family_6.py), [`compute_phase_b_tier_metrics_use_case.py`](../../../../src/use_cases/compute_phase_b_tier_metrics_use_case.py) | `STATISTICAL_TESTS.md` §"Unidade Estatistica DM Em Walk-forward", `preregistration_phase_b.md` E1.8, `B_confirmatory_2026-05-25.md` §4.1 | Item ja **pre-registrado e fechado**; risco C.0 e apenas registro/duplicacao acidental; H1 vive em `phase_b_marginal_coverage.parquet` + `phase_b_tier_verdict.parquet`, nao aqui | Nenhuma — referenciar Phase B; nao reabrir | C.0 nao testa; apenas verifica que gold legacy nao seja confundido com este sidecar | PROMOTED_CONFIRMATORY (escopo Phase B) | N/A |
 
 Onde diz "TODO" ou "suspeito", **nao tomar como verdade**. Quem promover ou
@@ -242,14 +242,15 @@ o projeto reivindica resultado probabilistico.
 - Arquivo: [`src/domain/services/gold_builders/pairwise.py`](../../../../src/domain/services/gold_builders/pairwise.py)
 - Funcao: `_compute_dm_pairwise_from_loss_matrix`
 - Linhas aproximadas: 67-104
-- Evidencia (resumo verificado por leitura direta):
-  - loss = `squared_error` (calculado em `_pairwise_preprocess`, linha 280)
-  - n minimo = 5
-  - HAC Bartlett com lag `int(min(max(1, n^(1/3)), 10))` (linha 82)
-  - estatistica = `mean_d / sqrt(var_mean)`; pvalue = two-sided normal (linha 93)
-  - top-50 filter aplicado **antes** (linha 299: `g = _select_top_configs_for_pairwise(g, max_configs=50)`)
-  - **sem HLN small-sample correction**
-  - **sem versao one-sided**
+- Evidencia (confirmada por leitura linha-a-linha em 2026-05-28):
+  - loss = `squared_error`: `df["squared_error"] = (df["y_pred"] - df["y_true"]) ** 2` em `_pairwise_preprocess` (linha 280)
+  - n minimo = 5: `if n < 5: continue` (linha 78)
+  - HAC Bartlett: lag `int(min(max(1, n ** (1 / 3)), 10))` (linha 82); kernel `weight = 1.0 - (k / (lag + 1))` (linha 87)
+  - estatistica = `mean_d / math.sqrt(var_mean)` (linha 92); pvalue = `2.0 * (1.0 - _norm_cdf(abs(stat)))`, two-sided (linha 93)
+  - top-50 filter aplicado **antes** por `DmPairwiseResultsGoldBuilder.build()` (linha 299: `g = _select_top_configs_for_pairwise(g, max_configs=50)`)
+  - **sem HLN small-sample correction** (confirmado — nao ha chamada a HLN em nenhum ponto do fluxo)
+  - **sem versao one-sided** (confirmado)
+  - Holm correction aplicada em `DmPairwiseResultsGoldBuilder.build()` (linha 333): `return _apply_holm_adjustment_for_dm(pd.concat(rows, ...))` — saida `gold_dm_pairwise_results` ja inclui colunas `pvalue_adj_holm` e `significant_adj_0_05`; porem `_build_model_decision_final` usa `pvalue_two_sided` (nao `pvalue_adj_holm`) para calcular `dm_net_wins` (conf. confidence.py L605)
 
 **Definicao canonica esperada**
 TODO: Diebold-Mariano 1995 (R1); HLN 1997 (R2) para small-sample; Newey-West
@@ -304,7 +305,7 @@ definida, (6) sensibilidade ao lag reportada.
   oficial).
 
 **Status**
-`TODO_RESEARCH` (codigo localizado e parcialmente lido; falta validacao formal contra paper).
+`CODE_LOCATED` (arquivo, funcao e linhas confirmados por leitura direta em 2026-05-28; evidencia atualizada com nota sobre Holm em L333).
 
 ---
 
@@ -374,7 +375,7 @@ saida preserva `split_signature`, interpretacao no texto rebaixada de
   `ANALYTICS_STORE_ARCHITECTURE.md`.
 
 **Status**
-`TODO_RESEARCH`.
+`CODE_LOCATED` (arquivo, funcao e linhas confirmados por leitura direta em 2026-05-28).
 
 ---
 
@@ -432,7 +433,7 @@ sem justificativa.
 - TODO: `STATISTICAL_TESTS.md` (atualizar §"Multiple Testing"), `DATA_PIPELINE_WALKTHROUGH.md` (lacuna A.66).
 
 **Status**
-`TODO_RESEARCH`.
+`CODE_LOCATED` (arquivo, funcao e linhas confirmados por leitura direta em 2026-05-28; groupby sem split_signature em L191 confirmado).
 
 ---
 
@@ -452,9 +453,15 @@ metodologico: aplicar antes de DM/MCS muda a pergunta inferencial.
   foram excluidas.
 
 **Implementacao atual localizada**
-- Arquivo: `src/domain/services/gold_builders/pairwise.py`
+- Arquivo: [`src/domain/services/gold_builders/pairwise.py`](../../../../src/domain/services/gold_builders/pairwise.py)
 - Funcao: `_select_top_configs_for_pairwise`
-- Linhas aproximadas: 43-64
+- Linhas: 43-64
+- Evidencia (confirmada por leitura linha-a-linha em 2026-05-28):
+  - Retorna o proprio DataFrame sem filtro se `cfg_count <= max_configs` (linha 55)
+  - Ranking: `grouped_oos.groupby("config_label")["squared_error"].mean().sort_values(ascending=True).head(max_configs)` (linhas 57-61) — menor squared_error = melhor
+  - max_configs default = 50 (linha 46)
+  - Aplicado em `DmPairwiseResultsGoldBuilder.build()` (linha 299), `McsResultsGoldBuilder.build()` (linha 351), `WinRatePairwiseResultsGoldBuilder.build()` (linha 396)
+  - Configs excluidas nao aparecem nos outputs gold (cap silencioso confirmado — nao ha coluna indicando excluidas)
 
 **Definicao canonica esperada**
 TODO: nao ha; literatura exige universo pre-definido em test
@@ -500,7 +507,7 @@ N/A — top-50 nao deve ser promovido. Decisoes possiveis:
   `ANALYTICS_STORE_ARCHITECTURE.md`.
 
 **Status**
-`TODO_RESEARCH` (codigo localizado; decisao metodologica pendente).
+`CODE_LOCATED` (arquivo, funcao e linhas confirmados por leitura direta em 2026-05-28; evidencia adicionada).
 
 ---
 
@@ -517,12 +524,15 @@ Proporcao empirica de cobertura intervalar para [q10, q90] (nominal 0.80).
   nao como criterio de ordenacao nem de `academic_decision_ready`.
 
 **Implementacao atual localizada**
-- Arquivo: `src/domain/services/gold_builders/quantile.py`
-- Funcao: `_build_metrics_single_contract` (linha 102); calculo row-level
-  + agg em linhas ~188-261
-- Evidencia: `covered_80 = 1{q10 <= y_true <= q90}` derivado in-line
-  no DataFrame; `picp = mean(covered_80)` (linha 244);
-  `coverage_nominal = 0.80` hard-coded.
+- Arquivo: [`src/domain/services/gold_builders/quantile.py`](../../../../src/domain/services/gold_builders/quantile.py)
+- Funcao: `_build_metrics_single_contract` (linhas 102-285)
+- Evidencia (confirmada por leitura linha-a-linha em 2026-05-28):
+  - `covered_80`: `valid["covered_80"] = ((valid["y_true"] >= valid[q10_col]) & (valid["y_true"] <= valid[q90_col])).astype(float)` (linhas 178-180)
+  - `covered_80` so e computado para linhas `_prob_eligible` (Cat C filter, linhas 148-171): prediction_mode==quantile E raw q10 != raw q90
+  - Linhas nao-elegiveis (point/degenerate) tem `covered_80` forcado a NaN (linhas 210-212)
+  - agg: `picp=("covered_80", "mean")` (linha 244)
+  - `coverage_nominal = 0.80` hard-coded: `agg["coverage_nominal"] = 0.80` (linha 260)
+  - `coverage_error = picp - coverage_nominal` (linha 261)
 
 **Definicao canonica esperada**
 TODO: Christoffersen 1998 (R13) para cobertura condicional; Gneiting et al.
@@ -564,8 +574,7 @@ gate de degeneracao bloqueante.
   `DATA_PIPELINE_WALKTHROUGH.md` lacuna A.68.
 
 **Status**
-`TODO_RESEARCH` (codigo localizado e formula confere com docs internos;
-falta validacao academica formal e cobertura condicional).
+`CODE_LOCATED` (arquivo, funcao e linhas confirmados por leitura linha-a-linha em 2026-05-28; evidencia atualizada com Cat C filter e linhas exatas).
 
 ---
 
@@ -579,9 +588,13 @@ Largura media do intervalo preditivo (sharpness).
   `gold_prediction_calibration`.
 
 **Implementacao atual localizada**
-- Arquivo: `src/domain/services/gold_builders/quantile.py`
-- Linha aproximada: 245 (`mpiw=("pred_interval_width", "mean")`)
-- `pred_interval_width = q90 - q10` (definido em row-level derived columns).
+- Arquivo: [`src/domain/services/gold_builders/quantile.py`](../../../../src/domain/services/gold_builders/quantile.py)
+- Funcao: `_build_metrics_single_contract` (linhas 102-285)
+- Evidencia (confirmada por leitura linha-a-linha em 2026-05-28):
+  - `pred_interval_width = q90_col - q10_col` por linha: `valid["pred_interval_width"] = valid[q90_col] - valid[q10_col]` (linha 177)
+  - Sujeito ao mesmo Cat C filter que PICP: linhas nao-elegiveis tem `pred_interval_width` forcado a NaN (linhas 210-212)
+  - agg: `mpiw=("pred_interval_width", "mean")` (linha 245)
+  - Tambem emitido: `pred_interval_width=("pred_interval_width", "mean")` como coluna separada (linha 246)
 
 **Definicao canonica esperada**
 TODO: Gneiting-Raftery 2007 (R11), Khosravi et al. 2011 (R14). Interval
@@ -618,7 +631,7 @@ isolado.
 - TODO: `METRICS_DEFINITIONS.md`, `CALIBRATION_AND_RISK.md`.
 
 **Status**
-`TODO_RESEARCH`.
+`CODE_LOCATED` (arquivo, funcao e linhas confirmados por leitura linha-a-linha em 2026-05-28).
 
 ---
 
@@ -634,11 +647,14 @@ Proper scoring rule para quantis; perda primaria para claims probabilisticos.
   `phase_b_dm_family_6.parquet` (Emenda E1.8).
 
 **Implementacao atual localizada**
-- Arquivo: `src/domain/services/gold_builders/quantile.py`
-- Funcao: `_pinball_loss`
-- Linha: 79
-- Formula `max(q*(y_true-y_pred_q), (q-1)*(y_true-y_pred_q))` (verifica
-  exatamente).
+- Arquivo: [`src/domain/services/gold_builders/quantile.py`](../../../../src/domain/services/gold_builders/quantile.py)
+- Funcao: `_pinball_loss` (linhas 79-82)
+- Evidencia (re-verificada por leitura linha-a-linha em 2026-05-28):
+  - Formula: `diff = y_true - y_pred_q; return np.maximum(q * diff, (q - 1.0) * diff)` (linhas 81-82) — equivale a `max(q*(y_true-y_pred_q), (q-1)*(y_true-y_pred_q))` ✓
+  - Aplicada para q=0.1, q=0.5, q=0.9 (linhas 188-190 em `_build_metrics_single_contract`)
+  - `pinball_mean_row = (q10 + q50 + q90) / 3.0` (linhas 191-193) — media simples com pesos iguais
+  - agg: `mean_pinball=("pinball_mean_row", "mean")` (linha 243)
+  - Pinball e calculado para TODAS as linhas elegiveis (Cat C filter aplica mascara NaN para nao-elegiveis antes do agg)
 
 **Definicao canonica esperada**
 TODO: Koenker-Bassett 1978 (R10), Gneiting 2011 (R15).
@@ -673,7 +689,7 @@ loss primaria em DM gold corrigido (depende de §"Diebold-Mariano gold").
 - TODO: `METRICS_DEFINITIONS.md`, `STATISTICAL_TESTS.md`.
 
 **Status**
-`CODE_LOCATED` (formula confere; falta verificar quantile_levels dinamico).
+`CODE_LOCATED` (re-verificado por leitura linha-a-linha em 2026-05-28; formula confirma; quantis q=0.1/0.5/0.9 hard-coded em L188-190, nao lidos de quantile_levels).
 
 ---
 
@@ -695,11 +711,15 @@ Estatistica descritiva: proporcao de timestamps em que `loss_left < loss_right`.
   `target_exact_alignment` — **nao** depende de win-rate.
 
 **Implementacao atual localizada**
-- Arquivo: `src/domain/services/gold_builders/pairwise.py`
-- `output_table = "gold_win_rate_pairwise_results"` (linha 382)
-- Calculo em linhas ~410-445 (left_win_rate, right_win_rate,
-  left_win_rate_ex_ties, right_win_rate_ex_ties)
-- Aplicado pos top-50 (linha 396).
+- Arquivo: [`src/domain/services/gold_builders/pairwise.py`](../../../../src/domain/services/gold_builders/pairwise.py)
+- Classe: `WinRatePairwiseResultsGoldBuilder`; `output_table = "gold_win_rate_pairwise_results"` (linha 382); `build()` (linha 385)
+- Evidencia (re-verificada por leitura linha-a-linha em 2026-05-28):
+  - Top-50 aplicado antes (linha 396) — usando a mesma `_select_top_configs_for_pairwise`
+  - Loop de pares em linhas 409-444; cada par calcula `left_wins`, `right_wins`, `ties`
+  - `left_win_rate = left_wins / n` (linha 434); `right_win_rate = right_wins / n` (linha 435)
+  - `left_win_rate_ex_ties = left_wins / non_ties` (linha 436); `right_win_rate_ex_ties = right_wins / non_ties` (linha 437), onde `non_ties = max(1, left_wins + right_wins)` (linha 418)
+  - Coluna `ties` presente na saida (linha 432); `tie_rate` NAO e computado diretamente (nao ha coluna tie_rate no output)
+  - `split_signature` propagada condicionalmente (linha 422)
 
 **Definicao canonica esperada**
 TODO: nao e teste estatistico; para inferencia exige sign test/block
@@ -746,7 +766,7 @@ bootstrap e teste de sinais formal.
   descriptive); `DATA_PIPELINE_WALKTHROUGH.md`.
 
 **Status**
-`CODE_LOCATED`.
+`CODE_LOCATED` (re-verificado por leitura linha-a-linha em 2026-05-28; linhas corrigidas de ~410-445 para 409-444; nota sobre ausencia de tie_rate direto adicionada).
 
 ---
 
@@ -760,12 +780,16 @@ heuristica.
 - Colunas `prob_up`, `prob_down` em `gold_prediction_metrics_*`.
 
 **Implementacao atual localizada**
-- Arquivo: `src/domain/services/gold_builders/quantile.py`
-- Funcao: `_prob_up_from_quantiles` (linha 85)
-- Aggregator: linha 247 (`prob_up=("prob_up_row", "mean")`)
-- Variantes raw/post-guardrail materializadas em
-  `PredictionMetricsByRunSplitHorizonGoldBuilder` em
-  `src/domain/services/gold_builders/quantile.py` (linhas 300-404).
+- Arquivo: [`src/domain/services/gold_builders/quantile.py`](../../../../src/domain/services/gold_builders/quantile.py)
+- Funcao: `_prob_up_from_quantiles` (linhas 85-99)
+- Evidencia (re-verificada por leitura linha-a-linha em 2026-05-28):
+  - CDF piecewise-linear: `cdf0 = 0.1 + 0.8 * ((0.0 - q10) / safe_width)` (linha 90), clipada a [0.1, 0.9] (linha 91)
+  - Hard bounds: se `q10 > 0`, `cdf0 = 0` (linha 93); se `q90 < 0`, `cdf0 = 1` (linha 94)
+  - Quando width ≈ 0: `safe_width = NaN` (linha 88); fallback usa q50 como ancora: `q50 > 0 → cdf0=1.0; q50 < 0 → cdf0=0.0; q50=0 → cdf0=0.5` (linha 96) — entao `prob_up = 1 - cdf0`
+  - Saida: `return pd.Series(1.0 - cdf0, ...)` (linha 99)
+  - Row-level: `valid["prob_up_row"] = _prob_up_from_quantiles(valid[q10_col], valid[q50_col], valid[q90_col])` (linhas 194-196) sujeito ao Cat C filter (NaN para nao-elegiveis)
+  - Aggregator: `prob_up=("prob_up_row", "mean")` (linha 247)
+  - Variantes raw/post-guardrail computadas em `PredictionMetricsByRunSplitHorizonGoldBuilder` (quantile.py, linhas 288-404) e **passadas-through** por `PredictionCalibrationGoldBuilder` (descriptive.py, linhas 363-419) como colunas `prob_up_raw`, `prob_up_post_guardrail` em `gold_prediction_calibration`
 
 **Definicao canonica esperada**
 TODO: piecewise-linear CDF entre q10 e q90 nao e canonica; alternativas:
@@ -803,7 +827,7 @@ q90 <= q10; opcional calibracao empirica reportada em coluna separada.
   lacuna A.67.
 
 **Status**
-`CODE_LOCATED` (formula localizada; renomeacao + NaN fallback pendentes).
+`CODE_LOCATED` (re-verificado por leitura linha-a-linha em 2026-05-28; evidencia expandida com fallback exato e nota sobre descriptive.py pass-through).
 
 ---
 
@@ -823,10 +847,14 @@ Score heuristico que combina cobertura e largura. **Nao e** proper score.
   como metrica de calibracao estatistica.
 
 **Implementacao atual localizada**
-- Arquivo: `src/domain/services/gold_builders/quantile.py`
-- Linha 267: `agg["confidence_calibrated"] = calibration_term * width_term`
-- `calibration_term = clip(1 - abs(coverage_error)/coverage_nominal, 0, 1)`
-- `width_term = 1 / (1 + clip(pred_interval_width, lower=0))`
+- Arquivo: [`src/domain/services/gold_builders/quantile.py`](../../../../src/domain/services/gold_builders/quantile.py)
+- Funcao: `_build_metrics_single_contract` (linhas 102-285)
+- Evidencia (re-verificada por leitura linha-a-linha em 2026-05-28):
+  - `calibration_term = (1.0 - (agg["coverage_error"].abs() / agg["coverage_nominal"])).clip(lower=0.0, upper=1.0)` (linhas 263-265)
+  - `width_term = 1.0 / (1.0 + agg["pred_interval_width"].clip(lower=0.0))` (linha 266)
+  - `agg["confidence_calibrated"] = calibration_term * width_term` (linha 267)
+  - `agg["coverage_error"] = agg["picp"] - agg["coverage_nominal"]` (linha 261) — depende do picp agregado e do coverage_nominal=0.80
+  - Tambem passada-through por `PredictionCalibrationGoldBuilder` (descriptive.py, linhas 363-419) como `confidence_calibrated_raw` e `confidence_calibrated_post_guardrail` em `gold_prediction_calibration`
 
 **Definicao canonica esperada**
 TODO: nao tem definicao canonica equivalente; substituicao indicada e CRPS
@@ -866,7 +894,7 @@ qualquer claim confirmatorio futuro.
 - TODO: `METRICS_DEFINITIONS.md` (renomear "Confidence Proxy" -> "Heuristic Coverage-Width Score"); `CALIBRATION_AND_RISK.md`.
 
 **Status**
-`CODE_LOCATED`.
+`CODE_LOCATED` (re-verificado por leitura linha-a-linha em 2026-05-28; formula e linhas confirmadas; nota sobre pass-through em descriptive.py adicionada).
 
 ---
 
@@ -879,19 +907,19 @@ Value-at-Risk e Expected Shortfall sobre a distribuicao preditiva do alvo.
 - `gold_prediction_risk.var_10`, `gold_prediction_risk.es_10_approx`.
 
 **Implementacao atual localizada**
-- Arquivo: `src/domain/services/gold_builders/confidence.py`
-- Linhas 62-109
-- Evidencia (re-verificada):
-  - `var_10_row = q10_post_guardrail` (linha 70)
-  - `es_10_approx_row = 1.125 * q10_post_guardrail - 0.125 * q50_post_guardrail` (linha 71)
-  - clip `es <= var` (linha 72)
-  - agg media por groupby de 8 colunas
-    `[run_id, asset, feature_set_name, config_signature, split, fold, seed, horizon]`
-    (linhas ~89-108); colunas `var_10` e `es_10_approx` em linhas 108-109
-- **Discrepancia com auditoria externa:** auditoria supos que VaR/ES
-  eram calculados sobre `error = y_pred - y_true`; a implementacao atual
-  usa quantis post-guardrail. Auditoria externa pode estar desatualizada
-  ou referir-se a uma versao anterior.
+- Arquivo: [`src/domain/services/gold_builders/confidence.py`](../../../../src/domain/services/gold_builders/confidence.py)
+- Classe: `PredictionRiskGoldBuilder`; `output_table = "gold_prediction_risk"` (linha 36); `build()` (linha 39)
+- Evidencia (re-verificada por leitura linha-a-linha em 2026-05-28):
+  - Variaveis base: `post_q10 = "quantile_p10_post_guardrail"` (linha 65), `post_q50 = "quantile_p50_post_guardrail"` (linha 66)
+  - `var_10_row = df[post_q10]` (linha 70) — identico ao q10_post_guardrail
+  - `es_10_approx_row = 1.125 * df[post_q10] - 0.125 * df[post_q50]` (linha 71)
+  - clip: `es_10_approx_row = np.minimum(es_10_approx_row, var_10_row)` (linha 72)
+  - Tambem ha: `expected_move_row = y_pred.abs()` (linha 59) e `downside_risk_row = max(-y_pred, 0)` (linha 60) — **nao ha `max_drawdown`** (ao contrario do que a auditoria externa citou)
+  - agg por 8 colunas `[run_id, asset, feature_set_name, config_signature, split, fold, seed, horizon]` (linhas 87-100); colunas `var_10=("var_10_row","mean")` e `es_10_approx=("es_10_approx_row","mean")` (linhas 108-109)
+- **Discrepancia com auditoria externa (RESOLVIDA por leitura direta):**
+  - Auditoria supos: VaR/ES calculados sobre `error = y_pred - y_true`; tambem cita `max_drawdown`
+  - Codigo real: usa exclusivamente `quantile_p10_post_guardrail` e `quantile_p50_post_guardrail`; nao ha `max_drawdown` no builder atual
+  - Explicacao: auditoria foi feita sobre `DATA_PIPELINE_WALKTHROUGH.md` (que pode descrever versao anterior), nao sobre o codigo atual
 
 **Definicao canonica esperada**
 TODO: Jorion 2007 (VaR), Acerbi-Tasche 2002 (ES), Fissler-Ziegel 2016
@@ -933,8 +961,7 @@ alpha explicito; backtesting de cobertura (Kupiec/Christoffersen); par
   `DATA_PIPELINE_WALKTHROUGH.md`.
 
 **Status**
-`CODE_LOCATED` (auditoria externa precisa ser atualizada com o achado de
-que codigo usa quantis, nao erro).
+`CODE_LOCATED` (re-verificado por leitura linha-a-linha em 2026-05-28; discrepancia com auditoria externa resolvida — codigo usa quantis post-guardrail, nao error; max_drawdown ausente no builder atual).
 
 ---
 
@@ -949,25 +976,22 @@ scorecard confirmatorio final sem regra de vencedor pre-registrada.
   ([`generate_prediction_analysis_plots_use_case.py:819`](../../../../src/use_cases/generate_prediction_analysis_plots_use_case.py)).
 
 **Implementacao atual localizada**
-- Arquivo: `src/domain/services/gold_builders/confidence.py`
-- Funcao: `_build_model_decision_final` (linha 463)
+- Arquivo: [`src/domain/services/gold_builders/confidence.py`](../../../../src/domain/services/gold_builders/confidence.py)
+- Funcao: `_build_model_decision_final` (linha 463); classe `ModelDecisionFinalGoldBuilder` (linha 821)
 - `output_table = "gold_model_decision_final"` (linha 822)
-- Consome (verificado em
-  [`confidence.py:824-831`](../../../../src/domain/services/gold_builders/confidence.py),
-  `ModelDecisionFinalGoldBuilder.requires_gold`):
-  `gold_prediction_metrics_by_config`,
-  `gold_prediction_robustness_by_horizon`,
-  `gold_prediction_generalization_gap`,
-  `gold_dm_pairwise_results`,
-  `gold_mcs_results`,
-  `gold_win_rate_pairwise_results`,
-  `gold_paired_oos_intersection_by_horizon`.
-- **Nao consome** `gold_prediction_calibration` nem `confidence_calibrated`.
-  Calibracao entra indiretamente via `mean_picp_post_guardrail` /
-  `mean_mpiw_post_guardrail` lidas de `gold_prediction_metrics_by_config`
-  ([`confidence.py:492-499`](../../../../src/domain/services/gold_builders/confidence.py)).
-- Win-rate entra como **coluna** (`win_rate_ex_ties_mean`), nao como
-  criterio de ordenacao nem de `academic_decision_ready`.
+- Evidencia (confirmada por leitura linha-a-linha em 2026-05-28):
+  - `requires_gold`: linhas 824-832 (corrigido de 824-831): `gold_prediction_metrics_by_config`, `gold_prediction_robustness_by_horizon`, `gold_prediction_generalization_gap`, `gold_dm_pairwise_results`, `gold_mcs_results`, `gold_win_rate_pairwise_results`, `gold_paired_oos_intersection_by_horizon`
+  - `primary_metric_map`: linhas 492-499 — inclui `mean_pinball_q10/q50/q90/{primary}`, `mean_mean_pinball_{primary}`, `mean_picp_{primary}`, `mean_mpiw_{primary}`; **nao inclui `confidence_calibrated`**
+  - DM processing: linhas 588-631 (winners/losers por `pvalue_two_sided < 0.05`, nao `pvalue_adj_holm`)
+  - MCS summary: linhas 633-647; renomeia `selected_in_mcs_alpha_0_05` → `mcs_selected_alpha_0_05`
+  - Win-rate processing: linhas 649-694; agrega `win_rate_ex_ties_mean` por config
+  - `rank_rmse`: linhas 785-789 (`mean_rmse.rank(ascending=True)`)
+  - `rank_mae`: linhas 790-794 (`mean_mae.rank(ascending=True)`) — corrigido de L816
+  - `academic_decision_ready`: linhas 803-813 — depende de `pairwise_ready_dm & pairwise_ready_mcs & target_exact_alignment`; **nao** depende de win-rate
+  - sort_values final: linhas 815-818 por `["asset","parent_sweep_id","horizon","rank_rmse","rank_mae"]`
+- **Nao consome** `gold_prediction_calibration` nem `confidence_calibrated`; calibracao entra como `mean_picp_{primary}` / `mean_mpiw_{primary}` via `gold_prediction_metrics_by_config` (L492-499)
+- Win-rate entra como coluna (`win_rate_ex_ties_mean`), nao como criterio de ordenacao nem de `academic_decision_ready`
+- Consumidor de plots: [`generate_prediction_analysis_plots_use_case.py:819`](../../../../src/use_cases/generate_prediction_analysis_plots_use_case.py) (confirmado por grep em 2026-05-28)
 
 **Definicao canonica esperada**
 TODO: nao ha definicao canonica; e regra de engenharia. Para uso
@@ -1022,7 +1046,7 @@ TODO. Esboco: bloqueio explicito enquanto qualquer input P0 estiver em
   `METRICS_DEFINITIONS.md`.
 
 **Status**
-`TODO_RESEARCH`.
+`CODE_LOCATED` (confirmado por leitura linha-a-linha em 2026-05-28; correcoes: requires_gold L824-832 nao 824-831; rank_mae em L790-794 nao L816; rank_rmse L785-789 correto; plots consumer L819 confirmado por grep).
 
 ---
 
@@ -1042,11 +1066,12 @@ unidade `target_timestamp_utc` com dedup operationally-latest cross-fold.
   sustenta H1.
 
 **Implementacao atual localizada**
-- `src/domain/services/dm_tft_vs_baseline.py`
-- `src/domain/services/holm_family_6.py`
-- `src/use_cases/compute_phase_b_tier_metrics_use_case.py`
+- [`src/domain/services/dm_tft_vs_baseline.py`](../../../../src/domain/services/dm_tft_vs_baseline.py) — **caminho confirmado** por `ls` em 2026-05-28 ✓
+- [`src/domain/services/holm_family_6.py`](../../../../src/domain/services/holm_family_6.py) — **caminho confirmado** ✓
+- [`src/use_cases/compute_phase_b_tier_metrics_use_case.py`](../../../../src/use_cases/compute_phase_b_tier_metrics_use_case.py) — **caminho confirmado** ✓
 - Pre-registro: `docs/06_pre_registration/phase-b/preregistration_phase_b.md` (Emenda E1.8).
 - Relatorio: `docs/07_reports/phase-gates/phase-b/B_confirmatory_2026-05-25.md` §4.1.
+- Nota C.0.1: metodologia nao auditada nesta sessao (escopo Phase B fechado); apenas caminhos verificados.
 
 **Definicao canonica esperada**
 Diebold-Mariano 1995 + HLN 1997 + Newey-West 1987 + Holm 1979.
@@ -1219,8 +1244,8 @@ Regras explicitas para evitar que C.0 vire um projeto sem fim:
 
 ## 11. Checklist final do arquivo
 
-- [ ] Todos os 13 itens inventariados em §4 com linha completa
-- [ ] Codigo localizado (arquivo, funcao, linhas) para todos os itens
+- [x] Todos os 13 itens inventariados em §4 com linha completa
+- [x] Codigo localizado (arquivo, funcao, linhas) para todos os itens (C.0.1 concluido em 2026-05-28)
 - [ ] Docs canonicos linkados para todos os itens
 - [ ] Papers/documentacao primaria definidos para itens P0
 - [ ] Papers/documentacao primaria definidos para itens P1
@@ -1257,3 +1282,225 @@ Regras explicitas para evitar que C.0 vire um projeto sem fim:
 | Relatorio Phase B confirmatorio | [`docs/07_reports/phase-gates/phase-b/B_confirmatory_2026-05-25.md`](../phase-b/B_confirmatory_2026-05-25.md) |
 | Auditoria metodologica externa | [`docs/07_reports/external-reviews/auditoria_metodologica_forecasting_financeiro.md`](../../external-reviews/auditoria_metodologica_forecasting_financeiro.md) |
 | Analytics store architecture | [`docs/01_architecture/ANALYTICS_STORE_ARCHITECTURE.md`](../../../01_architecture/ANALYTICS_STORE_ARCHITECTURE.md) |
+
+## 13. C.0.1 — Log de verificacao (line-by-line)
+
+Data da sessao de inspecao: **2026-05-28**. Todos os arquivos foram lidos integralmente antes do preenchimento dos dossiês. Nenhum arquivo em `src/` foi modificado.
+
+---
+
+### #1 — Diebold-Mariano gold
+
+**Refs confirmados:**
+- `pairwise.py:67-104` — funcao `_compute_dm_pairwise_from_loss_matrix`
+- `pairwise.py:280` — `squared_error` calculado em `_pairwise_preprocess`
+- `pairwise.py:78` — `if n < 5: continue`
+- `pairwise.py:82` — lag Bartlett `int(min(max(1, n**(1/3)), 10))`
+- `pairwise.py:87` — kernel Bartlett `weight = 1.0 - (k / (lag + 1))`
+- `pairwise.py:92-93` — stat e pvalue two-sided
+- `pairwise.py:299` — top-50 aplicado antes (em `DmPairwiseResultsGoldBuilder.build()`)
+- `pairwise.py:333` — Holm aplicado dentro do builder: `_apply_holm_adjustment_for_dm(pd.concat(...))`
+
+**Correcoes feitas:** Nenhuma nos bullets existentes. **Adicao**: nota sobre Holm aplicado em L333 (nao estava documentado no skeleton).
+
+**Cross-check auditoria externa:** CONCORDA parcialmente. Auditoria (§3.1) descreveu corretamente a formula DM, o lag, o two-sided e o top-50. Auditoria nao citou a aplicacao do Holm dentro do builder (L333).
+
+---
+
+### #2 — MCS gold
+
+**Refs confirmados:**
+- `pairwise.py:107-180` — funcao `_compute_mcs_from_loss_matrix`
+- `pairwise.py:110-113` — alpha=0.05, bootstrap_samples=300, block_len=5, random_seed=42
+- `pairwise.py:124-130` — nested `_block_bootstrap_indices` (moving block, wrap-around)
+- `pairwise.py:153` — `tr_stat = nanmax(|dbar/sqrt(var)|)`
+- `pairwise.py:170` — eliminacao por `argmax(losses_mean)` (worst_local)
+- `pairwise.py:351` — top-50 aplicado antes (em `McsResultsGoldBuilder.build()`)
+- `pairwise.py:368-374` — split_signature propagada condicionalmente
+
+**Correcoes feitas:** Nenhuma — todos os bullets do skeleton conferem.
+
+**Cross-check auditoria externa:** CONCORDA. Auditoria (§3.3) identificou B=300 baixo, block_len=5 hard-coded, loss squared_error e top-50 propagar; tudo confirmado no codigo.
+
+---
+
+### #3 — Holm gold
+
+**Refs confirmados:**
+- `pairwise.py:183-214` — funcao `_apply_holm_adjustment_for_dm`
+- `pairwise.py:191` — `group_cols = [c for c in ["asset", "parent_sweep_id", "split", "horizon"] ...]` — split_signature AUSENTE confirmado
+- `pairwise.py:203-207` — formula: ordena p-values; `(m - j + 1) * pval`; `np.maximum.accumulate`; clip 1
+- `pairwise.py:211-213` — `significant_adj_0_05 = pvalue_adj_holm < 0.05`
+
+**Correcoes feitas:** Nenhuma — todos os bullets conferem.
+
+**Cross-check auditoria externa:** CONCORDA. Auditoria (§3.2) identificou formula correta e familia potencialmente incorreta (split_signature ausente); confirmado em L191.
+
+---
+
+### #4 — top-50 filter
+
+**Refs confirmados:**
+- `pairwise.py:43-64` — funcao `_select_top_configs_for_pairwise`
+- `pairwise.py:55` — retorno sem filtro se `cfg_count <= max_configs`
+- `pairwise.py:57-61` — ranking por `squared_error.mean()` ascendente
+- `pairwise.py:46` — `max_configs=50` default
+- `pairwise.py:299, 351, 396` — aplicado antes de DM, MCS, win-rate respectivamente
+
+**Correcoes feitas:** Nenhuma nos numeros existentes. Adicao: nota de cap silencioso confirmada (sem coluna indicando configs excluidas).
+
+**Cross-check auditoria externa:** CONCORDA. Auditoria (§3.12) identificou o top-50 por test loss como risco de inferencia seletiva; confirmado em L57-61.
+
+---
+
+### #5 — PICP
+
+**Refs confirmados:**
+- `quantile.py:102-285` — funcao `_build_metrics_single_contract` (corpo completo)
+- `quantile.py:148-171` — Cat C filter (prediction_mode==quantile AND raw p10!=p90)
+- `quantile.py:178-180` — `covered_80 = (y_true >= q10_col) & (y_true <= q90_col)`
+- `quantile.py:210-212` — mascara NaN para linhas nao-elegiveis
+- `quantile.py:244` — agg `picp=("covered_80","mean")`
+- `quantile.py:260` — `agg["coverage_nominal"] = 0.80` hard-coded
+- `quantile.py:261` — `agg["coverage_error"] = agg["picp"] - agg["coverage_nominal"]`
+
+**Correcoes feitas:** Skeleton dizia "agg em linhas ~188-261" — linhas exatas sao: row-level L178-180, agg L244, coverage_nominal L260.
+
+**Cross-check auditoria externa:** CONCORDA. Auditoria (§3.4) identificou coverage_nominal=0.80 hard-coded e ausencia de cobertura condicional; confirmados.
+
+---
+
+### #6 — MPIW
+
+**Refs confirmados:**
+- `quantile.py:177` — `valid["pred_interval_width"] = valid[q90_col] - valid[q10_col]`
+- `quantile.py:245` — agg `mpiw=("pred_interval_width","mean")`
+- `quantile.py:246` — agg `pred_interval_width=("pred_interval_width","mean")` (coluna separada)
+- Sujeito ao Cat C filter (NaN para nao-elegiveis)
+
+**Correcoes feitas:** Skeleton dizia apenas "Linha aproximada: 245 + row-level derived columns"; adicionadas linhas exatas 177 e 246.
+
+**Cross-check auditoria externa:** CONCORDA. Auditoria (§3.5) descreveu MPIW = mean(q90-q10); confirmado.
+
+---
+
+### #7 — Pinball loss
+
+**Refs confirmados:**
+- `quantile.py:79-82` — funcao `_pinball_loss`
+- `quantile.py:81-82` — formula: `diff = y_true - y_pred_q; return np.maximum(q * diff, (q - 1.0) * diff)` — identica a canonica
+- `quantile.py:188-190` — aplicada para q=0.1, 0.5, 0.9 (hard-coded)
+- `quantile.py:191-193` — `pinball_mean_row = (q10 + q50 + q90) / 3.0`
+- `quantile.py:243` — agg `mean_pinball=("pinball_mean_row","mean")`
+
+**Correcoes feitas:** Skeleton dizia "Linha: 79; Formula ... (verifica exatamente)" — formula verificada e confirmada identica a canonica. Adicionados: linhas de aplicacao (188-190) e mean_pinball (191-193, 243).
+
+**Cross-check auditoria externa:** CONCORDA. Auditoria (§3.6) considerou a formula correta; confirmado.
+
+---
+
+### #8 — win-rate gold
+
+**Refs confirmados:**
+- `pairwise.py:382` — `output_table = "gold_win_rate_pairwise_results"` (linha exata)
+- `pairwise.py:385` — `def build(...)` — inicio do builder
+- `pairwise.py:396` — top-50 aplicado antes
+- `pairwise.py:409-444` — loop de pares; calculo de wins/ties/rates
+- `pairwise.py:415-416` — `left_wins = (l < r).sum(); right_wins = (r < l).sum()`
+- `pairwise.py:434-437` — `left_win_rate`, `right_win_rate`, `left_win_rate_ex_ties`, `right_win_rate_ex_ties`
+- `pairwise.py:418` — `non_ties = max(1, left_wins + right_wins)`
+- `pairwise.py:432` — `ties` no output; `tie_rate` NAO e calculado como coluna separada
+
+**Correcoes feitas:** Linhas corridas de "~410-445" para "409-444"; adicionado `build()` em L385.
+
+**Cross-check auditoria externa:** CONCORDA. Auditoria (§3.7) descreveu win_rate como descritivo auxiliar sem p-value; confirmado; nota sobre ties correto.
+
+---
+
+### #9 — prob_up
+
+**Refs confirmados:**
+- `quantile.py:85-99` — funcao `_prob_up_from_quantiles`
+- `quantile.py:88` — `safe_width = width.where(width.abs() > 1e-12, np.nan)`
+- `quantile.py:90` — `cdf0 = 0.1 + 0.8 * ((0.0 - q10) / safe_width)`
+- `quantile.py:91` — `cdf0.clip(lower=0.1, upper=0.9)`
+- `quantile.py:93` — hard bound: `q10 > 0 → cdf0 = 0.0`
+- `quantile.py:94` — hard bound: `q90 < 0 → cdf0 = 1.0`
+- `quantile.py:96` — fallback cdf0: `q50 > 0 → 1.0; q50 < 0 → 0.0; q50 = 0 → 0.5`
+- `quantile.py:99` — `return 1.0 - cdf0`
+- `quantile.py:194-196` — `valid["prob_up_row"] = _prob_up_from_quantiles(...)`
+- `quantile.py:247` — agg `prob_up=("prob_up_row","mean")`
+- `descriptive.py:363-419` — `PredictionCalibrationGoldBuilder` passa-through `prob_up_raw`, `prob_up_post_guardrail` para `gold_prediction_calibration` (L408-409)
+
+**Correcoes feitas:** Skeleton descrevia localizacao corretamente (quantile.py). Adicoes: linhas exatas da funcao (85-99), detalhamento do fallback (cdf0, nao prob_up diretamente), confirmacao do pass-through em descriptive.py L363-419.
+
+**Cross-check auditoria externa:** CONCORDA PARCIALMENTE. Auditoria (§3.8) descreveu CDF piecewise-linear e fallback 1/0/0.5; confirmado, porem os valores 1/0/0.5 referem-se a `cdf0` (nao a prob_up diretamente) — prob_up = 1 - cdf0, entao q50>0 → prob_up=0.0, q50<0 → prob_up=1.0. Auditoria nao identificou o descriptive.py pass-through.
+
+---
+
+### #10 — confidence_calibrated
+
+**Refs confirmados:**
+- `quantile.py:263-265` — `calibration_term = (1.0 - coverage_error.abs() / coverage_nominal).clip(0, 1)`
+- `quantile.py:266` — `width_term = 1.0 / (1.0 + pred_interval_width.clip(lower=0.0))`
+- `quantile.py:267` — `agg["confidence_calibrated"] = calibration_term * width_term`
+- `descriptive.py:363-419` — pass-through para `gold_prediction_calibration` como `confidence_calibrated_raw` (L398) e `confidence_calibrated_post_guardrail` (L407)
+
+**Correcoes feitas:** Skeleton tinha linha 267 correta. Adicoes: linhas exatas 263-265, 266; confirmacao do pass-through em descriptive.py.
+
+**Cross-check auditoria externa:** CONCORDA. Auditoria (§3.9) descreveu corretamente a formula produto e a dependencia de escala; confirmado.
+
+---
+
+### #11 — VaR / ES gold
+
+**Refs confirmados:**
+- `confidence.py:35-36` — `class PredictionRiskGoldBuilder; output_table = "gold_prediction_risk"`
+- `confidence.py:39` — `def build(...)`
+- `confidence.py:59-60` — `expected_move_row = y_pred.abs(); downside_risk_row = max(-y_pred, 0)`
+- `confidence.py:65-66` — `post_q10 = "quantile_p10_post_guardrail"; post_q50 = "quantile_p50_post_guardrail"`
+- `confidence.py:70` — `var_10_row = df[post_q10]`
+- `confidence.py:71` — `es_10_approx_row = 1.125 * df[post_q10] - 0.125 * df[post_q50]`
+- `confidence.py:72` — `es_10_approx_row = np.minimum(es_10_approx_row, var_10_row)`
+- `confidence.py:87-100` — group_cols (8 colunas)
+- `confidence.py:108-109` — `var_10=("var_10_row","mean"); es_10_approx=("es_10_approx_row","mean")`
+- **max_drawdown NAO existe** no builder atual
+
+**Discrepancia VaR/ES (RESOLVIDA):** Auditoria externa afirmou que VaR/ES eram calculados sobre `error = y_pred - y_true`. O codigo atual usa exclusivamente `quantile_p10_post_guardrail` e `quantile_p50_post_guardrail`. A auditoria tambem citou `max_drawdown` que nao existe no builder atual. Conclusao: o walkthrough descrevia comportamento de versao anterior; o codigo atual usa quantis post-guardrail.
+
+**Cross-check auditoria externa:** DIVERGE. Auditoria (§3.10) afirmou `error = y_pred - y_true` e `max_drawdown`; codigo atual usa quantis post-guardrail e nao tem max_drawdown. Discrepancia atribuida a walkthrough desatualizado.
+
+---
+
+### #12 — gold_model_decision_final
+
+**Refs confirmados:**
+- `confidence.py:463` — `def _build_model_decision_final(...)`
+- `confidence.py:821-822` — `class ModelDecisionFinalGoldBuilder; output_table = "gold_model_decision_final"`
+- `confidence.py:824-832` — `requires_gold` (correcao: skeleton dizia 824-831; linha 832 fecha o tuple)
+- `confidence.py:492-499` — `primary_metric_map` (pinball, picp, mpiw; **sem confidence_calibrated**)
+- `confidence.py:588-631` — DM processing (usa `pvalue_two_sided`, nao `pvalue_adj_holm`)
+- `confidence.py:633-647` — MCS summary
+- `confidence.py:649-694` — win-rate processing (`win_rate_ex_ties_mean`)
+- `confidence.py:785-789` — `rank_rmse` (correcao: era citado como L785; rank_mae estava como L816)
+- `confidence.py:790-794` — `rank_mae` (corrigido de L816)
+- `confidence.py:803-813` — `academic_decision_ready` (pairwise_ready_dm & mcs & target_exact_alignment)
+- `confidence.py:815-818` — `sort_values` final por rank_rmse, rank_mae
+- `generate_prediction_analysis_plots_use_case.py:819` — consumidor de plots confirmado por grep
+
+**Correcoes feitas:** requires_gold L824-831 → L824-832; rank_mae L816 → L790-794.
+
+**Cross-check auditoria externa:** CONCORDA PARCIALMENTE. Auditoria (§3.14) identificou combinacao de DM/MCS/win-rate/gaps sem regra ex-ante; confirmado. Auditoria nao detalhou os numeros de linha.
+
+---
+
+### #13 — Phase B DM family-6 (referencia)
+
+**Caminhos confirmados por `ls` em 2026-05-28:**
+- `src/domain/services/dm_tft_vs_baseline.py` ✓
+- `src/domain/services/holm_family_6.py` ✓
+- `src/use_cases/compute_phase_b_tier_metrics_use_case.py` ✓
+
+**Metodologia NAO auditada** (escopo Phase B fechado; status `PROMOTED_CONFIRMATORY` mantido).
+
+**Cross-check auditoria externa:** N/A — auditoria nao cobriu o sidecar Phase B.
