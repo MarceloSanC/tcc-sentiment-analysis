@@ -332,57 +332,37 @@ Pertencer ao MCS significa "não foi possível rejeitar este modelo como inferio
   ✅ **Confere:** `block = [(start + o) % n_obs for o in range(block_len)]`; loop
   `while len(idx) < n_obs`.
 
-**6. Estimador de variância: `np.var(boot, ddof=1)` + guard 1e-12**
-- **O que o doc afirma:** (implícito no dossiê; o skeleton menciona "range t-stat" (o maior t-stat entre todos os pares de modelos ativos) sem
-  detalhar o estimador de variância).
-- **Como deveria funcionar (exemplo):** para o par (A, B), o código sorteou B=300 amostras
-  bootstrap e calculou `dbar_boot[b, A, B]` em cada uma. A variância de `dbar[A,B]` é
-  estimada pela dispersão dessas 300 estimativas: `var[A,B] = Var(boot[:, A, B], ddof=1)`.
-  Com ddof=1 e B=300 amostras, divide-se por 299 (não por 300). O guard
-  `var <= 1e-12 → nan` evita divisão por zero em casos de losses idênticas.
-- **O que esperar no código:** `var = np.var(boot, axis=0, ddof=1)` seguido de
-  `var[var <= 1e-12] = np.nan`.
+**6. Variância de `dbar` estimada pelo bootstrap**
+- **O que o doc afirma:** para cada par de modelos (i, j), a variância de `dbar[i,j]` é
+  estimada pela dispersão das B=300 estimativas bootstrap: `var = np.var(boot, ddof=1)`.
+  Pares com variância ≤ 1e-12 recebem `nan` para evitar divisão por zero no t-stat.
+- **Como deveria funcionar (exemplo):** para o par (TFT, LSTM), o código calculou
+  `dbar_boot[b]` — a média de (loss_TFT − loss_LSTM) — em cada uma das B=300 amostras.
+  Suponha que essas 300 estimativas variem entre −0.2 e +0.4; a variância delas é ≈ 0.03.
+  Esse valor vai para o denominador do t-stat: `T = dbar_obs / sqrt(0.03)`.
+
+  Três detalhes que ajudam a ler o código:
+  - **Por que dispersão bootstrap = variância de `dbar`:** porque é a própria definição —
+    se você calculou `dbar` em B versões dos dados, a dispersão *é* o quanto `dbar` varia
+    de amostra para amostra. Como cada amostra usa blocos contíguos, a autocorrelação
+    temporal já fica capturada implicitamente, sem fórmula HAC.
+  - **Variância da média, não da série:** `dbar[i,j]` é a *média* de `d_t` ao longo de n
+    timestamps; `var[i,j]` mede o quanto essa média varia entre amostras. Com n=100 e
+    Var(série) ≈ 1.0: Var(média) ≈ 0.01 — a média é muito mais estável do que cada ponto
+    individual, e é esse valor menor que vai para o denominador, tornando o t-stat maior
+    para diferenças consistentes.
+  - **Guard → nan:** ocorre quando dois modelos têm losses idênticas (mesmo seed, mesmos
+    dados) — `dbar_boot` nunca varia, `var = 0`. O `nan` faz o `nanmax` ignorar esse par
+    ao calcular TR, que é o comportamento correto.
+- **O que esperar no código:** `var = np.var(boot, axis=0, ddof=1)` produzindo uma matriz
+  M×M (um valor por par); `var[var <= 1e-12] = np.nan` logo abaixo.
 - **Ref do doc → código:** [`pairwise.py:147-148`](../../../../src/domain/services/gold_builders/pairwise.py#L147).
   ✅ **Confere:** exatamente `var = np.var(boot, axis=0, ddof=1)` e
   `var[var <= 1e-12] = np.nan`.
-
-  **Por que a dispersão das amostras bootstrap estima a variância de `dbar`?**
-  A lógica é direta: se você calculou `dbar` em B versões reamostradas dos dados, a
-  dispersão dessas B estimativas *é*, por definição, a variância amostral de `dbar`. Não
-  é uma aproximação — é a própria definição de variância bootstrap. O block bootstrap
-  garante que cada amostra preserva a dependência temporal (blocos contíguos), então a
-  variância estimada já "embute" a autocorrelação da série, sem precisar de fórmula HAC.
-
-  **`var[A,B]` é a variância da média, não da série**
-  Detalhe importante: `dbar[A,B]` é a *média* de `d_t = loss_A(t) - loss_B(t)` ao longo
-  de n_obs timestamps. `var[A,B]` estima a variância *dessa média* — quanto `dbar` varia
-  de amostra para amostra. Isso é diferente da variância de `d_t` (a série bruta):
-
-  ```
-  Var(série d_t) ≈ 1.0      # cada ponto tem muita variação
-  Var(mean de d_t) ≈ 1.0/n  # a média de n pontos é muito mais estável
-  ```
-
-  É essa segunda quantidade que o denominador do t-stat precisa — a incerteza sobre a
-  *média*, não sobre cada ponto individualmente.
-
-  **ddof=1 vs ddof=0**
-  `ddof=1` divide por `B-1 = 299` em vez de `B = 300` — é a correção de Bessel para
-  variância amostral não-viesada. Com B=300, a diferença é `300/299 ≈ 1.003`, ou seja
-  0.3% — praticamente irrelevante. Com B=10 seria importante; com B=300 é apenas boa
-  prática estatística.
-
-  **Guard `<= 1e-12 → nan`**
-  Ocorre quando dois modelos têm losses *idênticas* em todos os timestamps — ex: dois
-  runs com mesmo seed e mesmos dados. Nesse caso `dbar_boot` nunca varia entre amostras
-  → `var = 0` → divisão por zero no t-stat. O `nan` propaga corretamente: `tmat[A,B] =
-  nan`, e `nanmax` ignora esse par ao computar TR. O par fica de fora da estatística, o
-  que é o comportamento correto (dois modelos idênticos não contribuem para TR).
-
-  **Diferença em relação ao HAC do DM**
-  O DM usa uma fórmula analítica (kernel Bartlett) para estimar a variância de `mean_d`
-  a partir da autocovariância observada. O MCS usa a dispersão empírica das amostras
-  bootstrap. Ambas estimam a mesma quantidade (`Var(mean_d)`) por caminhos diferentes:
+- ⚠️ **Ponto de atenção — estimador bootstrap vs HAC: caminhos diferentes para a mesma quantidade**
+  O DM estima `Var(mean_d)` por fórmula analítica (kernel Bartlett sobre a autocovariância
+  observada). O MCS estima a mesma quantidade pela dispersão empírica das amostras
+  bootstrap. Ambas são válidas nos seus contextos:
 
   | | DM (HAC) | MCS (bootstrap) |
   |---|---|---|
@@ -391,7 +371,8 @@ Pertencer ao MCS significa "não foi possível rejeitar este modelo como inferio
   | Parâmetro crítico | lag (n^1/3) | block_len |
   | Escala | Um par de modelos | Matriz M×M simultaneamente |
 
-  A qualidade do estimador do MCS depende da qualidade do block bootstrap — ver ⚠️ no
+  A abordagem bootstrap é a especificada por Hansen-Lunde-Nason (2011) para o MCS e está
+  correta — mas a qualidade da estimativa depende diretamente de block_len. Ver ⚠️ no
   elemento 4 (block_len=5 sem justificativa).
 
 **7. Estatística TR (range t-stat — o maior t-stat entre todos os pares de modelos ativos): `nanmax|dbar/sqrt(var)|`**
