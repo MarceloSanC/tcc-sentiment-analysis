@@ -333,7 +333,7 @@ Pertencer ao MCS significa "não foi possível rejeitar este modelo como inferio
   `while len(idx) < n_obs`.
 
 **6. Estimador de variância: `np.var(boot, ddof=1)` + guard 1e-12**
-- **O que o doc afirma:** (implícito no dossiê; o skeleton menciona "range t-stat" sem
+- **O que o doc afirma:** (implícito no dossiê; o skeleton menciona "range t-stat" (o maior t-stat entre todos os pares de modelos ativos) sem
   detalhar o estimador de variância).
 - **Como deveria funcionar (exemplo):** para o par (A, B), o código sorteou B=300 amostras
   bootstrap e calculou `dbar_boot[b, A, B]` em cada uma. A variância de `dbar[A,B]` é
