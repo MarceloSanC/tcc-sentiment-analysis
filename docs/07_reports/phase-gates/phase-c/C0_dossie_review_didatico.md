@@ -394,7 +394,7 @@ Pertencer ao MCS significa "não foi possível rejeitar este modelo como inferio
   A qualidade do estimador do MCS depende da qualidade do block bootstrap — ver ⚠️ no
   elemento 4 (block_len=5 sem justificativa).
 
-**7. Estatística TR (range t-stat): `nanmax|dbar/sqrt(var)|`**
+**7. Estatística TR (range t-stat — o maior t-stat entre todos os pares de modelos ativos): `nanmax|dbar/sqrt(var)|`**
 - **O que o doc afirma:** `tr_stat = nanmax(|dbar / sqrt(var)|)` (linha 153).
 - **Como deveria funcionar (exemplo):** com 3 modelos ativos {A, B, C} e médias de loss
   {0.5, 0.8, 1.2}: calcula `T_{AB} = |dbar_{AB} / sqrt(var_{AB})|`, `T_{AC}`, `T_{BC}`.
