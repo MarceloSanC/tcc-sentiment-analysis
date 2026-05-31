@@ -58,7 +58,7 @@ update_when:
 - [x] #6 — MPIW
 - [ ] #7 — Pinball loss
 - [x] #8 — Win-rate gold
-- [ ] #9 — prob_up
+- [x] #9 — prob_up
 - [ ] #10 — confidence_calibrated
 - [x] #11 — VaR / ES gold
 - [ ] #12 — gold_model_decision_final
@@ -1645,6 +1645,290 @@ não é mencionada. Não há defeito de localização; as decisões (interval/Wi
 normalizado, tratamento de cruzamento) são de C.0.2/C.0.3. Decisões recomendadas
 registradas nos elementos 1, 3 e 4 — pendentes de confirmação com a pesquisa acadêmica do
 paper.
+
+---
+
+## #9 — prob_up
+
+### O que é (didático)
+
+`prob_up` tenta responder uma pergunta simples: **qual a probabilidade de o ativo subir**
+(do alvo ser positivo, `P(Y > 0)`)? O problema é que o modelo só emite **três pontos** da
+distribuição preditiva — os quantis q10, q50 e q90. Com apenas três âncoras não dá para
+conhecer a distribuição inteira; então o código **reconstrói uma CDF aproximada**: assume
+que, entre q10 e q90, a probabilidade acumulada cresce em **linha reta** (de 10% em q10 até
+90% em q90), descobre onde essa reta cruza o valor `0` e lê quanto da massa fica **acima**
+de zero.
+
+O "truque" — e a fragilidade — é que `P(Y>0)` a partir de 3 quantis é **subdeterminada**:
+existem infinitas distribuições compatíveis com os mesmos q10/q50/q90, e a reta é só **uma
+escolha** entre elas. Por isso `prob_up` é uma **heurística**, não uma probabilidade
+calibrada — o nome promete mais do que a fórmula entrega (a própria §6 classifica o item
+como *heuristic, renomear*).
+
+### Elementos
+
+**1. Fórmula central — CDF piecewise-linear entre q10 e q90**
+- **O que o doc afirma:** CDF piecewise-linear `cdf0 = 0.1 + 0.8 * ((0.0 - q10) / safe_width)`
+  (linha 90), clipada a `[0.1, 0.9]` (linha 91), e a saída é `prob_up = 1 − cdf0` (linha 99).
+- **Como deveria funcionar (exemplo):** com `q10 = −2`, `q50 = +1`, `q90 = +4` → largura = 6.
+  A reta liga `(−2; 0,10)` a `(+4; 0,90)`. Em `x = 0`:
+  `cdf0 = 0,1 + 0,8·((0 − (−2))/6) = 0,1 + 0,8·0,333 = 0,367`. Logo
+  `prob_up = 1 − 0,367 = 0,633` (~63% de subir). Coerente: a mediana é +1 (positiva), então
+  mais da metade da massa está acima de 0.
+- **O que esperar no código:** `width = q90 − q10`, interpolação linear ancorada em 0,1/0,9
+  e `return 1 − cdf0`.
+- **Ref do doc → código:** [`quantile.py:87`](../../../../src/domain/services/gold_builders/quantile.py#L87)
+  (width), [`:90`](../../../../src/domain/services/gold_builders/quantile.py#L90) (cdf0),
+  [`:91`](../../../../src/domain/services/gold_builders/quantile.py#L91) (clip),
+  [`:99`](../../../../src/domain/services/gold_builders/quantile.py#L99) (return). ✅ **Confere:**
+  `width = (q90 - q10).astype(float)` (L87); `cdf0 = 0.1 + 0.8 * ((0.0 - q10) / safe_width)`
+  (L90); `cdf0.clip(lower=0.1, upper=0.9)` (L91); `return pd.Series(1.0 - cdf0, ...)` (L99).
+- ⚠️ **Ponto de atenção — âncoras 0,1/0,9 hard-coded e linearidade assumida**
+  Dois pressupostos embutidos, ambos não declarados:
+
+  | Pressuposto | O que o código faz | Quando é aceitável | Quando quebra |
+  |---|---|---|---|
+  | **Níveis 0,1/0,9 fixos** | as âncoras de CDF (0,1 e 0,9) são **literais** (L90), enquanto as *colunas* q10/q50/q90 vêm por posição | sweep usa sempre `quantile_levels = [0.1, 0.5, 0.9]` (contrato atual) | sweep futuro com, p.ex., `[0.05, 0.5, 0.95]`: a coluna "q10" passa a ser o **percentil 5**, mas o código ainda âncora em 0,10 → CDF mal-escalada → `prob_up` enviesado **em silêncio** |
+  | **CDF linear entre q10 e q90** | trata a acumulada como **reta** | só se quer um indicador direcional grosseiro | retornos financeiros têm cauda gorda / curvatura; quando `0` está longe de `q50`, a reta erra bastante a massa real |
+
+  Esse é o mesmo **drift de hard-code** que afeta o pinball (item #7) e o `coverage_nominal`
+  do PICP (item #5): funciona enquanto o contrato de quantis não muda, e degrada **sem aviso**
+  se mudar. **Para o claim do TCC:** `prob_up` é heurística (a §6 já a marca como *heuristic*);
+  o nome sugere probabilidade calibrada, mas é interpolação ad-hoc. A Phase B **não** usa
+  `prob_up` para H1/H2a/H2b — então nenhum claim confirmatório depende dela hoje; o risco é
+  leitura indevida do número como se fosse calibrado.
+
+  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: **não promover**;
+  > para uso operacional honesto, **renomear** a coluna para algo como
+  > `prob_up_heuristic_from_q10_q90` e **ler os níveis de quantil do contrato real** em vez de
+  > fixar 0,1/0,9. Alternativas mais defensáveis citadas no skeleton: distribuição paramétrica
+  > ajustada, grade densa de quantis, ou amostras preditivas.
+
+**2. Hard bounds — `q10 > 0` ⇒ prob_up = 1; `q90 < 0` ⇒ prob_up = 0**
+- **O que o doc afirma:** se `q10 > 0`, `cdf0 = 0` (linha 93); se `q90 < 0`, `cdf0 = 1`
+  (linha 94).
+- **Como deveria funcionar (exemplo):** `q10 = +0,5`, `q50 = +2`, `q90 = +5` → **todo** o
+  intervalo está acima de 0 → `cdf0 = 0` → `prob_up = 1,0` ("certamente sobe"). A direção
+  está **correta**: se até o percentil 10 é positivo, quase toda a massa é positiva.
+- **O que esperar no código:** dois `np.where` sobrescrevendo `cdf0`.
+- **Ref do doc → código:** [`quantile.py:93`](../../../../src/domain/services/gold_builders/quantile.py#L93)
+  e [`:94`](../../../../src/domain/services/gold_builders/quantile.py#L94). ✅ **Confere:**
+  `cdf0 = np.where(q10 > 0.0, 0.0, cdf0)` (L93); `cdf0 = np.where(q90 < 0.0, 1.0, cdf0)` (L94).
+- ⚠️ **Ponto de atenção — descontinuidade e extremos {0, 1} fora da faixa do interior**
+  O **interior** da fórmula é clipado a `[0,1; 0,9]` (elemento 1, L91) → `prob_up ∈ [0,1; 0,9]`.
+  Mas os hard bounds saltam para **exatamente** `{0, 1}`. Isso cria uma **descontinuidade**: em
+  `q10 = 0` o interior dá `prob_up = 0,9`; em `q10 = 0,0001` o hard bound dá `prob_up = 1,0` →
+  **salto de 0,1** ao cruzar zero. **Quando importa:** quando `q10` mal ultrapassa 0, afirmar
+  `prob_up = 1,0` é declarar **certeza** ("100% de subir") — overconfiança que nenhuma previsão
+  probabilística honesta deveria fazer, ainda mais a partir de uma reconstrução linear de 3
+  pontos. **Quando é tolerável:** se `prob_up` é lido só como **flag direcional** ("o intervalo
+  inteiro está de um lado de zero"), o extremo é informativo. **Quando não:** se for tratado
+  como probabilidade calibrada para qualquer claim — aí o `{0,1}` forçado e o degrau de 0,1 são
+  artefatos da fórmula, não evidência.
+
+**3. Fallback degenerado (largura ≈ 0) — âncora em q50: 1 / 0 / 0,5**
+- **O que o doc afirma:** quando `width ≈ 0`, `safe_width = NaN` (linha 88); o fallback usa q50
+  como âncora — `q50 > 0 → cdf0 = 1,0`; `q50 < 0 → cdf0 = 0,0`; `q50 = 0 → cdf0 = 0,5`
+  (linhas 96–97); depois `prob_up = 1 − cdf0`.
+- **Como deveria funcionar (exemplo):**
+  - Degenerado em **+3** (`q10 = q50 = q90 = 3`): largura = 0 → `safe_width = NaN` → `cdf0 = NaN`,
+    mas o **hard bound** L93 dispara primeiro (`q10 = 3 > 0` → `cdf0 = 0`) → `prob_up = 1,0`
+    (correto, via L93 — o fallback nem é alcançado).
+  - Tudo **zero** (`q10 = q50 = q90 = 0`): não cai nos hard bounds (`q10` não `> 0`, `q90` não
+    `< 0`) → `cdf0` segue `NaN` → fallback `q50 = 0 → cdf0 = 0,5` → `prob_up = 0,5` (correto:
+    sem informação direcional, é cara-ou-coroa).
+- **O que esperar no código:** `safe_width = width.where(width.abs() > 1e-12, np.nan)` e o
+  fallback via `np.where` aninhado, aplicado só onde `cdf0` ficou `NaN`.
+- **Ref do doc → código:** [`quantile.py:88`](../../../../src/domain/services/gold_builders/quantile.py#L88)
+  e [`:96-97`](../../../../src/domain/services/gold_builders/quantile.py#L96). ✅ **Confere:**
+  `safe_width = width.where(width.abs() > 1e-12, np.nan)` (L88);
+  `fallback = np.where(q50 > 0.0, 1.0, np.where(q50 < 0.0, 0.0, 0.5))` (L96);
+  `cdf0 = np.where(np.isnan(cdf0), fallback, cdf0)` (L97).
+- ⚠️ **Ponto de atenção — (a) inversão de sinal latente no fallback e (b) mascaramento de degeneração**
+
+  **(a) Inversão de sinal.** Os valores do fallback parecem ter sido escritos como se fossem
+  **`prob_up`** (`q50 > 0 → 1`, `q50 < 0 → 0`, `q50 = 0 → 0,5`), mas são atribuídos a **`cdf0`**
+  e depois **invertidos** pela linha final `prob_up = 1 − cdf0`. Resultado: para `q50 > 0` o
+  fallback produz `prob_up = 0,0` — quando o esperado, para um ponto degenerado **positivo**,
+  seria `prob_up ≈ 1,0`. O caminho é **invertido em relação à própria semântica** (e em relação
+  aos hard bounds do elemento 2, que usam a direção **correta**).
+
+  **Por que quase nunca aparece (sombreamento):** o ramo só é alcançado quando `cdf0` ainda é
+  `NaN` **após** os hard bounds, i.e. `width ≤ 1e-12` **e** `q10 ≤ 0 ≤ q90`. Isso força
+  `q10 ≈ q90 ≈ q50 ≈ 0` numa faixa de `~1e-12` ao redor de zero — numérico, não financeiro.
+  Para qualquer ponto degenerado **claramente** fora de zero, os hard bounds (L93/L94) já
+  resolvem **com o sinal certo**; e o filtro Cat C (elemento 4) remove linhas cruamente
+  degeneradas antes da média. Então o **dano prático ≈ 0**, mas é uma **inconsistência lógica**
+  real (hard bounds corretos, fallback invertido) que merece registro para a reescrita.
+
+  **(b) Mascaramento de degeneração.** Sempre que o fallback **ou** um hard bound dispara num
+  ponto colapsado, `prob_up` devolve um valor **confiante** (1,0 / 0,0 / 0,5) que é
+  **indistinguível** de uma previsão genuína e confiante. É exatamente o risco que o skeleton
+  registra ("fallback 1/0/0.5 quando width=0 mascara degeneracao"). **Quando importa:** o
+  comportamento honesto para uma distribuição degenerada (o modelo não emitiu um intervalo
+  usável) seria **`NaN`**, não um número que parece certeza. **Quando é tolerável:** nunca como
+  estatística probabilística — um ponto degenerado não carrega informação de incerteza.
+
+  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: **retornar `NaN`
+  > quando `q90 ≤ q10`** (skeleton), em vez de cair no fallback — elimina de uma vez a inversão
+  > latente e o mascaramento de degeneração, deixando o filtro Cat C (elemento 4) ser a única
+  > fonte de verdade sobre elegibilidade.
+
+**4. Row-level + máscara Cat C — elegibilidade julgada nos quantis CRUS**
+- **O que o doc afirma:** `prob_up_row` é computado por linha (linhas 194–196) e sujeito ao
+  filtro Cat C (NaN para linhas não-elegíveis).
+- **Como deveria funcionar (exemplo):**
+  - **Contrato raw:** uma linha cruamente degenerada (`q10_raw == q90_raw`) é **não-elegível**
+    → `prob_up_row` mascarado a `NaN` → fora da média. Assim, no `prob_up_raw`, o fallback do
+    elemento 3 **nunca sobrevive** (degeneração crua ⇒ não-elegível).
+  - **Contrato post-guardrail:** a mesma linha pode ser **crua-genuína** (`q10_raw ≠ q90_raw`,
+    logo **elegível**) mas ter o intervalo **colapsado pelo guardrail** (`post_q10 ≈ post_q90`).
+    Como a elegibilidade é julgada no **raw**, a linha **passa** no filtro, e `prob_up_row` é
+    calculado sobre os quantis **post** (largura ≈ 0) → fallback/hard bound dispara → o valor
+    confiante do ponto colapsado **sobrevive** no `prob_up_post_guardrail`.
+- **O que esperar no código:** `is_non_degenerate` derivado de `RAW_QUANTILE_COLUMNS`
+  independentemente do contrato; `prob_up_row` na lista mascarada.
+- **Ref do doc → código:** elegibilidade em
+  [`quantile.py:162-166`](../../../../src/domain/services/gold_builders/quantile.py#L162);
+  cômputo em [`:194-196`](../../../../src/domain/services/gold_builders/quantile.py#L194);
+  máscara em [`:206`](../../../../src/domain/services/gold_builders/quantile.py#L206)
+  e [`:210-212`](../../../../src/domain/services/gold_builders/quantile.py#L210). ✅ **Confere:**
+  `is_non_degenerate = (p10_raw != p90_raw) & ...` usando `RAW_QUANTILE_COLUMNS` (L162–166);
+  `valid["prob_up_row"] = _prob_up_from_quantiles(valid[q10_col], valid[q50_col], valid[q90_col])`
+  (L194–196); `prob_up_row` em `prob_row_cols` (L206); `valid.loc[~prob_eligible_mask, col] = np.nan`
+  (L210–212).
+- ⚠️ **Ponto de atenção — assimetria raw-vs-post (idêntica a PICP #5 e MPIW #6)**
+  A elegibilidade é sempre decidida nos **quantis crus**, mesmo quando o contrato processado é o
+  **post-guardrail**. A consequência é a mesma residual-path do MPIW (item #6): o único caminho
+  pelo qual a degeneração entra no agregado é o **colapso causado pelo guardrail** de linhas
+  cruamente genuínas. No `prob_up_raw` esse caminho está fechado (degeneração crua ⇒ máscara);
+  no `prob_up_post_guardrail` ele fica **aberto** → valores confiantes de pontos colapsados
+  entram na média **em silêncio**. **Quando importa:** sweeps em que o guardrail efetivamente
+  achata intervalos (crua-genuíno → post-degenerado). É o mesmo mecanismo que o item #6 detalha
+  para o `mpiw_post_guardrail`; aqui ele se manifesta como **mascaramento de degeneração**
+  (elemento 3b), não como largura zero.
+
+**5. Agregação — `mean(prob_up_row)` e `prob_down = 1 − prob_up`**
+- **O que o doc afirma:** o agregador usa `prob_up=("prob_up_row", "mean")` (linha 247) e
+  `prob_down` é derivado.
+- **Como deveria funcionar (exemplo):** 4 linhas elegíveis com `prob_up_row`
+  `{0,60; 0,70; 0,55; 0,65}` → `prob_up = 0,625`; `prob_down = 1 − 0,625 = 0,375`.
+- **O que esperar no código:** `prob_up` na cláusula `.agg(...)` por grupo e `prob_down`
+  como complemento.
+- **Ref do doc → código:** [`quantile.py:247`](../../../../src/domain/services/gold_builders/quantile.py#L247)
+  (`prob_up`) e [`:262`](../../../../src/domain/services/gold_builders/quantile.py#L262)
+  (`prob_down`). ✅ **Confere:** `prob_up=("prob_up_row", "mean")` (L247);
+  `agg["prob_down"] = 1.0 - agg["prob_up"]` (L262).
+- ⚠️ **Ponto de atenção — `prob_down` é espelho determinístico, não estimativa independente**
+  `prob_down = 1 − prob_up` **exatamente** (L262), não uma segunda estimativa derivada da CDF.
+  Reportar `prob_up` e `prob_down` lado a lado pode **parecer** dois sinais, mas é um só (a
+  soma é sempre 1 por construção). Além disso, a agregação é uma **média de probabilidades por
+  linha** — uma estatística descritiva legítima, mas **não** "a probabilidade do evento
+  agregado". **Quando importa:** quem ler `prob_down` como confirmação independente de
+  `prob_up` está contando a mesma informação duas vezes. **Quando é tolerável:** desde que se
+  saiba que `prob_down` é só o complemento.
+
+**6. Variantes raw/post-guardrail + alias nu `prob_up` = post-guardrail**
+- **O que o doc afirma:** as variantes raw/post-guardrail são computadas no
+  `PredictionMetricsByRunSplitHorizonGoldBuilder` (linhas 288–404).
+- **Como deveria funcionar (exemplo):** o parquet de run/split/horizon carrega
+  `prob_up_raw = 0,58`, `prob_up_post_guardrail = 0,62` **e** uma coluna **nua** `prob_up = 0,62`
+  (= post-guardrail, via alias).
+- **O que esperar no código:** rename `{m}_raw` / `{m}_post_guardrail`, e um alias nu para um
+  conjunto restrito de bases (`confidence_calibrated`, `prob_up`, `prob_down`).
+- **Ref do doc → código:** rename raw em
+  [`quantile.py:335-337`](../../../../src/domain/services/gold_builders/quantile.py#L335);
+  rename post em [`:391-393`](../../../../src/domain/services/gold_builders/quantile.py#L391);
+  definição do alias em [`:348-354`](../../../../src/domain/services/gold_builders/quantile.py#L348)
+  e aplicação em [`:399-400`](../../../../src/domain/services/gold_builders/quantile.py#L399).
+  ✅ **Confere:** `_set_alias_post_primary` faz `frame[base] = frame[post_col]` (L352) e roda
+  para `("confidence_calibrated", "prob_up", "prob_down")` (L399–400).
+- ⚠️ **Ponto de atenção — `prob_up` nu significa post-guardrail (ao contrário do PICP)**
+  Diferentemente do PICP — que **não** tem coluna nua (o item #5 registra que
+  `_set_alias_post_primary` só roda para `confidence_calibrated`, `prob_up`, `prob_down`) —
+  aqui a coluna **nua `prob_up`** existe e é o **post-guardrail** por padrão. **Quando importa:**
+  quem consulta `prob_up` (ou `prob_down`) sem o sufixo recebe o número **post-guardrail** sem
+  perceber, e ao comparar/citar "prob_up" precisa perguntar **raw ou post-guardrail?**. **Quando
+  é tolerável:** desde que o contrato (post-guardrail) seja sempre declarado junto. É imprecisão
+  de **nomenclatura/expectativa**, não referência quebrada — o código é coerente (o alias
+  privilegia o post-guardrail, igual ao `mean_picp` do item #5).
+
+**7. Pass-through em `gold_prediction_calibration`; NÃO consumido por `decision_final`/plots**
+- **O que o doc afirma:** as variantes são **passadas-through** pelo
+  `PredictionCalibrationGoldBuilder` (descriptive.py, linhas 363–419) como `prob_up_raw`,
+  `prob_up_post_guardrail` em `gold_prediction_calibration`.
+- **Como deveria funcionar (exemplo):** o `gold_prediction_calibration` carrega
+  `prob_up_raw`, `prob_up_post_guardrail`, `prob_down_raw`, `prob_down_post_guardrail` **e** as
+  colunas nuas `prob_up`/`prob_down` — sem recomputar nada (cópia de colunas).
+- **O que esperar no código:** lista `keep` em `descriptive.py` selecionando essas colunas e
+  `return metrics_run_split_h[keep].copy()`.
+- **Ref do doc → código:** [`descriptive.py:408-414`](../../../../src/domain/services/gold_builders/descriptive.py#L408)
+  (seleção de `prob_up_raw`, `prob_up_post_guardrail`, `prob_down_raw`, `prob_down_post_guardrail`,
+  `prob_up`, `prob_down`) e [`:419`](../../../../src/domain/services/gold_builders/descriptive.py#L419)
+  (`return ...[keep].copy()`). ✅ **Confere.** Cross-file adicional: `grep` por `prob_up`/`prob_down`
+  em [`confidence.py`](../../../../src/domain/services/gold_builders/confidence.py) retorna **vazio**
+  → `_build_model_decision_final` **não lê** `prob_up`; e o `grep` no consumidor de plots
+  [`generate_prediction_analysis_plots_use_case.py`](../../../../src/use_cases/generate_prediction_analysis_plots_use_case.py)
+  também é vazio → `prob_up` **não é nomeado** ali.
+- ⚠️ **Ponto de atenção — o contrato anti-leak do skeleton é hoje preventivo, não corretivo**
+  O skeleton lista como teste de contrato "bloquear consumo de `prob_up` por
+  `gold_model_decision_final` e por plots oficiais sem disclaimer". A verificação direta mostra
+  que esse consumo **não existe hoje**: `prob_up`/`prob_down` vivem **apenas** nos parquets de
+  métricas (`gold_prediction_metrics_by_run_split_horizon`, agregados `mean_prob_up_*` em
+  `gold_prediction_metrics_by_config` via `prediction_metric_columns()`) e em
+  `gold_prediction_calibration`. **Quando importa:** o contrato é **forward-looking** — protege
+  contra um vazamento futuro, não conserta um vazamento ativo. É bom registrar que a heurística
+  está **contida** ao subsistema de métricas/calibração e não contamina o rollup de decisão.
+
+### Cross-check — o que NÃO está corretamente indicado/referenciado
+
+Li a função `_prob_up_from_quantiles` inteira (85–99), o corpo de
+`_build_metrics_single_contract` (102–285), o builder run/split/horizon (288–404), o
+pass-through em `descriptive.py` (363–419) e a agregação por config (615–667). Pontos a
+registrar:
+
+1. **Nenhuma referência quebrada.** Linhas-âncora **exatas**: `safe_width` L88; `cdf0` L90;
+   clip L91; hard bounds L93/L94; fallback L96/L97; return L99; `is_non_degenerate` (RAW)
+   L162–166; `prob_up_row` L194–196; máscara L206/L210–212; `prob_up=("prob_up_row","mean")`
+   L247; `prob_down = 1 − prob_up` L262; rename raw L335–337; rename post L391–393; alias
+   L399–400; pass-through `descriptive.py` L408–414/L419.
+
+2. **"Uso atual no projeto" é fiel, mas incompleto.** O dossiê diz só "Colunas `prob_up`,
+   `prob_down` em `gold_prediction_metrics_*`". Não menciona: (a) a coluna **nua** `prob_up` é
+   o **post-guardrail** por alias (L399–400, elemento 6); (b) `prob_down` é **`1 − prob_up`**
+   (L262, elemento 5), não uma estimativa independente; (c) `prob_up` **não** chega ao
+   `gold_model_decision_final` nem é nomeado nos plots (grep vazio, elemento 7) — o risco que o
+   skeleton quer bloquear é **latente**, não ativo.
+
+3. **Inversão de sinal latente no fallback (elemento 3a) não é sinalizada pelo dossiê.** O
+   skeleton descreve o fallback **fielmente** (`q50 > 0 → cdf0 = 1.0`), mas não nota que isso,
+   após `prob_up = 1 − cdf0`, produz `prob_up = 0,0` para mediana positiva — **invertido**
+   relativamente à semântica e aos hard bounds. É defeito **lógico**, sombreado na prática pelos
+   hard bounds (L93/L94) e pela máscara Cat C (elemento 4), mas vale registro para a reescrita.
+
+4. **Pontos residuais metodológicos já capturados pelo dossiê.** "Fallback 1/0/0.5 mascara
+   degeneração", "hard bounds forçam extremos sem ressalva" e "sem calibração empírica vs
+   `y_true > 0`" constam dos "Riscos conhecidos". Os aprofundamentos acima detalham o mecanismo
+   (âncoras hard-coded + linearidade, descontinuidade de 0,1, inversão latente, assimetria
+   raw-vs-post) e o "quando cada escolha se aplica".
+
+### Veredito do item #9
+
+🟡 **Ressalvas.** Referências **intactas** e evidência fiel ao código — `prob_up` é calculado
+exatamente como o dossiê afirma (CDF piecewise-linear ancorada em 0,1/0,9, hard bounds, fallback
+em q50, máscara Cat C, média por grupo, `prob_down` complementar). As ressalvas são (a)
+**metodológicas** — é uma **heurística** (CDF linear de 3 pontos, âncoras 0,1/0,9 **hard-coded**
+com drift silencioso se o contrato mudar), os hard bounds forçam extremos `{0,1}` com
+descontinuidade, e não há calibração empírica; (b) um **defeito lógico latente** — o fallback
+tem o **sinal invertido** (`q50 > 0 ⇒ prob_up = 0,0`), de impacto prático ≈ 0 por ser sombreado
+pelos hard bounds e pela máscara Cat C, mas inconsistente; e (c) **de precisão/completude do
+dossiê** — a coluna **nua `prob_up` é o post-guardrail**, `prob_down` é só o **espelho** de
+`prob_up`, e `prob_up` **não é consumido** por `gold_model_decision_final` nem pelos plots (o
+contrato anti-leak é preventivo). Não há defeito de localização; as decisões (renomear para
+`prob_up_heuristic_from_q10_q90`, retornar `NaN` quando `q90 ≤ q10`, calibração empírica em
+coluna separada) são de C.0.2/C.0.3. Decisões recomendadas registradas nos elementos 1 e 3 —
+pendentes de confirmação com a pesquisa acadêmica do paper.
 
 ---
 
