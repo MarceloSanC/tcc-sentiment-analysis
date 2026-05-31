@@ -53,7 +53,7 @@ update_when:
 - [x] #1 — Diebold-Mariano gold
 - [x] #2 — MCS gold
 - [x] #3 — Holm gold
-- [ ] #4 — top-50 filter
+- [x] #4 — top-50 filter
 - [ ] #5 — PICP
 - [ ] #6 — MPIW
 - [ ] #7 — Pinball loss
@@ -827,6 +827,204 @@ Matrix* (não é dormente), propagando a família mal-definida para um artefato 
 (c) `m` é contado sobre o universo já filtrado pelo top-50. Decisões de declarar a
 família, unificar qual p-value cada artefato consome e parametrizar α são de
 C.0.2/C.0.3.
+
+---
+
+## #4 — top-50 filter
+
+### O que é (didático)
+
+O **top-50 filter** **não é um teste estatístico** — é um **pré-filtro de
+engenharia** que roda **antes** do DM, do MCS e do win-rate. Dentro de cada grupo
+(asset, sweep, [split_signature], split, horizonte), se houver **mais de 50
+configs**, ele mantém apenas as **50 com menor `squared_error` médio no próprio
+split de teste** e descarta o resto. A motivação legítima é **conter custo
+combinatório**: o nº de pares cresce com `C(k,2)` (≈ k²/2), então 200 configs dão
+~19.900 pares e 50 configs dão 1.225. O **problema** é o critério: filtrar pelo
+**resultado do teste** e depois **testar sobre os mesmos dados** é **seleção sobre
+o desfecho** — o pecado clássico de **inferência seletiva / data snooping**. E o
+corte é **silencioso**: nada downstream registra que o universo foi podado.
+
+### Elementos
+
+**1. Critério de seleção: menor `mean(squared_error)` no test split**
+- **O que o doc afirma:** "filtra top-50 por `mean(squared_error)` no próprio test
+  split"; ranking `groupby("config_label")["squared_error"].mean().sort_values(
+  ascending=True).head(max_configs)` (linhas 57-61) — menor squared_error = melhor.
+- **Como deveria funcionar (exemplo):** de 200 configs, computa a média de
+  `squared_error` de cada config sobre as linhas do grupo (test split), ordena
+  crescente e mantém as 50 menores. Ex.: config A média 0,50; B 0,55; … a 50ª com
+  0,90 entra; a 51ª com 0,91 é descartada. "Menor é melhor" porque squared_error é
+  erro — quanto menor, mais acurado.
+- **O que esperar no código:** `rank = grouped_oos.groupby("config_label",
+  dropna=False)["squared_error"].mean().sort_values(ascending=True).head(max_configs)`,
+  depois `keep = set(rank.index.tolist())` e `grouped_oos[...isin(keep)].copy()`.
+- **Ref do doc → código:** [`pairwise.py:57-61`](../../../../src/domain/services/gold_builders/pairwise.py#L57)
+  (rank) + [`pairwise.py:63-64`](../../../../src/domain/services/gold_builders/pairwise.py#L63)
+  (keep + filtro). ✅ **Confere** (li a função inteira, 43-64): `rank = (
+  grouped_oos.groupby("config_label", dropna=False)["squared_error"].mean()
+  .sort_values(ascending=True).head(max_configs))`; `keep = set(rank.index.tolist())`;
+  `return grouped_oos[grouped_oos["config_label"].isin(keep)].copy()`.
+- ⚠️ **Ponto de atenção — inferência seletiva / data snooping (o ponto central do item)**
+  Este é o coração do item #4. Selecionar as 50 melhores **no test set** e depois
+  rodar DM/MCS/win-rate **no mesmo test set** significa **pré-triar pelo próprio
+  desfecho** que se vai testar. As 50 configs mantidas são, por construção, as que
+  **por acaso** foram bem nesta amostra de teste — incluindo as que foram bem por
+  **sorte**. Os p-values/confidence sets subsequentes são computados sobre um
+  universo **já enviesado** para baixa perda.
+
+  **Por que infla a "significância":** imagine 200 configs todas **igualmente boas**
+  (sem efeito real). Por puro ruído, ~algumas terão `squared_error` baixo nesta
+  amostra. Ao manter só as 50 de menor perda e comparar, você está comparando
+  "vencedoras de sorteio" — a diferença média parece maior do que é, e o teste
+  rejeita H₀ com mais frequência do que o α nominal. É o mesmo mecanismo do
+  "winner's curse".
+
+  **Quando cada escolha se aplica e por quê:**
+
+  | Situação | A seleção é aceitável? | Por quê |
+  |---|---|---|
+  | Universo **pré-declarado** (configs escolhidas **antes** de ver o test) | ✅ Sim | Não há uso do desfecho na seleção |
+  | Seleção em **validation**, teste em **test** (out-of-sample) | ✅ Sim | A triagem e a inferência usam dados **disjuntos** |
+  | Top-50 por **test loss**, rotulado **exploratório** | ⚠️ Tolerável | Desde que **nunca** vire claim |
+  | Top-50 por **test loss**, lido como evidência de superioridade | 🔴 Não | Data snooping puro — α nominal não vale |
+
+  **Correção principled** quando se precisa testar sobre um universo grande: usar um
+  procedimento que controla o erro **sobre o universo inteiro**, não sobre o
+  subconjunto pré-triado — o **Reality Check de White (2000)** ou o **stepdown de
+  Romano-Wolf** (citados no dossiê). Eles foram desenhados exatamente para "testar
+  muitos modelos e ainda controlar a taxa de falsos positivos".
+
+  **Comparação com a Phase B:** a Phase B **não usa** este filtro — opera sobre um
+  **cohort fixo de 6 testes pré-registrados** (3 baselines × 2 horizontes). A família
+  é escolhida **antes** de ver os dados; não há seleção por desfecho.
+
+  **Implicação para o TCC:** qualquer número de DM/MCS/win-rate do gold legacy é
+  **condicional a um universo selecionado pelo teste**. Reportado como "superioridade"
+  ele **superestima** — a garantia estatística não cobre a etapa de seleção.
+
+**2. Idempotência / passthrough quando `cfg_count ≤ 50` (cap silencioso)**
+- **O que o doc afirma:** "retorna o próprio DataFrame sem filtro se `cfg_count <=
+  max_configs` (linha 55)".
+- **Como deveria funcionar (exemplo):** com 30 configs e max=50, devolve `g`
+  inalterado — o filtro "não morde". Com 200 configs, mantém 50 e descarta 150 — **sem
+  log, sem flag, sem coluna** registrando que cortou. O comportamento muda
+  silenciosamente conforme o nº de configs cruza 50.
+- **O que esperar no código:** `cfg_count = int(grouped_oos["config_label"].nunique())`
+  seguido de `if cfg_count <= max_configs: return grouped_oos`.
+- **Ref do doc → código:** [`pairwise.py:54-56`](../../../../src/domain/services/gold_builders/pairwise.py#L54).
+  ✅ **Confere:** `cfg_count = int(grouped_oos["config_label"].nunique())`; `if
+  cfg_count <= max_configs: return grouped_oos`.
+- ⚠️ **Ponto de atenção — cap silencioso: o corte é invisível downstream**
+  O filtro **não deixa rastro**. Não há `exploratory_only` flag, não há coluna
+  `n_configs_original` vs `n_configs_kept`, não há log. Downstream
+  (`gold_model_decision_final`, via DM/MCS/win-rate) **não consegue distinguir** um
+  resultado vindo do universo completo (≤50 configs, intacto) de um vindo de um
+  universo truncado (>50, só o top-50). Pior: o campo `n_configs` gravado na saída
+  ([`pairwise.py:324`](../../../../src/domain/services/gold_builders/pairwise.py#L324)
+  no DM, [`:376`](../../../../src/domain/services/gold_builders/pairwise.py#L376) no
+  MCS) registra o tamanho da **loss_matrix pós-filtro** — ou seja, **no máximo 50** —
+  então **nem esse campo revela** que houve poda. Quem lê o artefato vê "n_configs=50"
+  e não sabe se o universo original tinha 50 ou 500.
+
+  **Quando importa:** sempre que o artefato for lido como evidência — o leitor não tem
+  como saber que o universo foi podado **pelo test loss**. **Quando é tolerável:**
+  exploração pura, **desde que rotulada**. O contrato sugerido pelo dossiê endereça
+  exatamente isso: ou **(a)** universo pré-declarado, ou **(b)** flag explícita
+  `exploratory_only=True` **propagada até** `gold_model_decision_final`.
+
+**3. Aplicado *antes* de DM/MCS/win-rate — 3 callsites, `max_configs=50` por grupo**
+- **O que o doc afirma:** "`_select_top_configs_for_pairwise(..., max_configs=50)`
+  aplicado antes de DM/MCS/win-rate (linhas 299, 351, 396)".
+- **Como deveria funcionar (exemplo):** em cada um dos três builders, a **primeira**
+  operação dentro do loop de grupos é `g = _select_top_configs_for_pairwise(g,
+  max_configs=50)`, **antes** do `by_ts`/`pivot`/`dropna` que monta a loss_matrix. E é
+  **50 por grupo** `(asset, parent_sweep_id, [split_signature], split, horizonte)` — não
+  50 global —, pois a chamada está dentro de `for keys, g in df.groupby(group_cols, ...)`.
+- **O que esperar no código:** chamada idêntica nos três builders, logo após abrir o
+  `for ... in df.groupby(group_cols, dropna=False)`.
+- **Ref do doc → código:** [`pairwise.py:299`](../../../../src/domain/services/gold_builders/pairwise.py#L299)
+  (DM), [`pairwise.py:351`](../../../../src/domain/services/gold_builders/pairwise.py#L351)
+  (MCS), [`pairwise.py:396`](../../../../src/domain/services/gold_builders/pairwise.py#L396)
+  (win-rate). ✅ **Confere:** os três contêm exatamente `g =
+  _select_top_configs_for_pairwise(g, max_configs=50)` como primeira linha do corpo do
+  loop de grupos, antes da construção da loss_matrix.
+- ⚠️ **Ponto de atenção — `50` hard-coded em três lugares; o default existe mas é sobrescrito**
+  A função expõe `max_configs` como parâmetro (default 50, [`pairwise.py:46`](../../../../src/domain/services/gold_builders/pairwise.py#L46)),
+  mas **os três callsites passam `max_configs=50` explicitamente** — então o default
+  **nunca** é usado e o valor está **duplicado três vezes**. Para mudar o cap (ou
+  desligá-lo) é preciso editar três pontos, não um. E o "50" em si é **arbitrário/não
+  documentado**: não há justificativa amarrada a orçamento de cálculo nem a um universo
+  pré-registrado. **Quando importa:** numa promoção a confirmatório, o cap precisa ser
+  **removido** ou **substituído** por seleção baseada em validação — não re-tunado. Um
+  parâmetro central (uma fonte de verdade) tornaria a política auditável; hoje ela está
+  espalhada.
+
+**4. Guard de robustez (colunas ausentes / df vazio)**
+- **O que o doc afirma:** (implícito) early return defensivo.
+- **Como deveria funcionar (exemplo):** se faltar `config_label` ou `squared_error`,
+  ou se `g` estiver vazio, devolve `g` inalterado — o filtro **não quebra** o pipeline,
+  apenas vira no-op.
+- **O que esperar no código:** `if grouped_oos.empty or "config_label" not in cols or
+  "squared_error" not in cols: return grouped_oos`.
+- **Ref do doc → código:** [`pairwise.py:48-53`](../../../../src/domain/services/gold_builders/pairwise.py#L48).
+  ✅ **Confere:** guard que retorna o input quando vazio ou sem as colunas
+  `config_label`/`squared_error`. Comportamento benigno (no-op), não mascara erro.
+
+### Cross-check — o que NÃO está corretamente indicado/referenciado
+
+As referências do dossiê para o top-50 (matriz §4 linha 145; dossiê §6; log C.0.1 §13)
+**conferem** com o código (li a função inteira 43-64 e os três callsites 299/351/396).
+Pontos a registrar:
+
+1. **Nenhuma referência quebrada.** Linhas-âncora corretas: função 43-64 ✅; default
+   `max_configs=50` em L46 ✅; passthrough `cfg_count <= max_configs` em L55 ✅; ranking
+   `groupby.mean.sort_values.head` em L57-61 ✅; callsites 299/351/396 ✅. O log C.0.1
+   (§13, #4) registra "Cross-check auditoria externa: CONCORDA — §3.12 identificou o
+   top-50 por test loss como risco de inferência seletiva; confirmado em L57-61" — bate
+   com a leitura.
+
+2. **Nuance não capturada pelo dossiê — suporte da seleção ≠ suporte do teste.** O
+   ranking (passo 1) calcula a média de `squared_error` de cada config sobre **as
+   próprias linhas dela** no grupo (toda a cobertura daquele config). Mas o teste
+   DM/MCS real (passo 3) roda sobre a **interseção** `dropna(axis=0, how="any")` das 50
+   configs mantidas (só os timestamps em que **todas** as 50 previram). Logo, um config
+   pode ser **selecionado** por uma média calculada sobre timestamps que **não
+   sobrevivem** à interseção — a loss que **seleciona** não é exatamente a loss que
+   **testa**. É secundário ao problema central de snooping, mas significa que "top-50 por
+   test loss" é um pouco mais sutil do que a frase do dossiê sugere.
+
+3. **`n_configs` registra o tamanho pós-filtro, não o original.** O campo gravado em
+   `gold_dm_pairwise_results`/`gold_mcs_results` (`int(loss_matrix.shape[1])`, L324/L376)
+   é **≤ 50** por construção — então o artefato **não** carrega o tamanho do universo
+   original. O "cap silencioso" do dossiê é portanto ainda mais literal do que o texto
+   indica: nem o único campo numérico de contagem revela a poda.
+
+4. **Determinismo de empate (benigno).** `sort_values(ascending=True)` usa quicksort
+   (não estável). Num **empate exato** entre o 50º e o 51º config (mesma média de
+   `squared_error`), **qual** entra no corte poderia variar entre execuções. Empates
+   exatos em média de floats são praticamente impossíveis, então é benigno — registro
+   por completude/determinismo (mesmo espírito da nota de `sort` estável no item #3),
+   não como defeito.
+
+5. **Ponto residual central já bem capturado pelo dossiê.** "Seleção pos-test; viola
+   hipótese de universo pré-definido; cap silencioso" + referências a data snooping
+   (White 2000, Romano-Wolf) descrevem **corretamente** o risco P0. O aprofundamento
+   acima detalha o mecanismo (winner's curse) e o "quando cada escolha se aplica".
+
+### Veredito do item #4
+
+🟡 **Ressalvas.** Referências **intactas** e evidência fiel ao código — a função faz
+exatamente o que o dossiê afirma (seleção top-50 por `squared_error` no test split,
+passthrough abaixo de 50, aplicada antes dos três builders). As ressalvas são (a)
+**metodológicas e inerentes ao item** — é o mais grave da família pairwise: **seleção
+sobre o desfecho do teste, sem rastro**, contaminando todo artefato pairwise downstream
+e, por carona, `gold_model_decision_final`; e (b) **de completude do dossiê** — três
+nuances não capturadas: suporte da seleção ≠ suporte do teste, `n_configs` registra o
+tamanho pós-filtro (poda literalmente invisível), e o empate de `sort` não-estável
+(benigno). Não é defeito de localização; a decisão (remover / mover para validação /
+marcar exploratório com flag propagada) é de C.0.2/C.0.3. A Phase B, corretamente,
+**não usa** este filtro.
 
 ---
 
