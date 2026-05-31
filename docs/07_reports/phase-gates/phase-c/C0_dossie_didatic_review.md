@@ -1596,6 +1596,25 @@ combina num número só.
   à parte em
   [`marginal_coverage_calculator.py:105`](../../../../src/domain/services/marginal_coverage_calculator.py#L105)
   (`_finite_mean(q90 − q10)`, outro cohort, outra tabela — `phase_b_marginal_coverage`).
+
+  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper; decisão de
+  > C.0.2/C.0.3)*: deduplicar para **uma só** coluna agregada. Remover o **gêmeo agregado**
+  > `pred_interval_width` ([`quantile.py:246`](../../../../src/domain/services/gold_builders/quantile.py#L246))
+  > e manter apenas `mpiw` como métrica; o **per-row** `pred_interval_width`
+  > ([`quantile.py:177`](../../../../src/domain/services/gold_builders/quantile.py#L177))
+  > **permanece** (é a fonte de `mpiw` e do `width_term` do `confidence_calibrated`), e o
+  > `width_term` passa a ler `agg["mpiw"]`
+  > ([`quantile.py:266`](../../../../src/domain/services/gold_builders/quantile.py#L266)).
+  > Elimina o par byte-a-byte e o risco de leitura. **Não é one-liner — tem raio de impacto:**
+  > `pred_interval_width_raw`/`_post_guardrail` são colunas **persistidas** em
+  > `gold_prediction_metrics_*`, `gold_prediction_calibration`
+  > ([`descriptive.py:396`](../../../../src/domain/services/gold_builders/descriptive.py#L396)/[`:405`](../../../../src/domain/services/gold_builders/descriptive.py#L405))
+  > e no guardrail audit ([`quantile.py:470`](../../../../src/domain/services/gold_builders/quantile.py#L470)),
+  > e há **fixtures byte-identical** que as incluem → remover muda schema e quebra esses
+  > testes. A Phase B **não** é afetada (o sidecar usa `mpiw`, não `pred_interval_width` —
+  > [`parquet_phase_b_tier_sidecar_writer.py:25`](../../../../src/adapters/parquet_phase_b_tier_sidecar_writer.py#L25)).
+  > **Prioridade baixa** perto de acoplar MPIW↔PICP e criar o interval score; alternativa de
+  > menor custo é apenas **documentar** que são aliases, sem mexer no schema.
 - ⚠️ **Ponto de atenção — MPIW sozinho não mede calibração (sharpness sem cobertura)**
   Este é o ponto metodológico central do item. MPIW responde "quão estreito?", **nunca**
   "quão honesto?". Dois modelos com larguras muito diferentes podem ser igualmente
