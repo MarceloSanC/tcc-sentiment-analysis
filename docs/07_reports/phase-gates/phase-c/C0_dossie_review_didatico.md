@@ -623,6 +623,13 @@ família que você alimenta. No gold legacy, a fórmula está correta; a famíli
 - ⚠️ **Ponto de atenção — Holm herda o p-value que recebe; aqui é two-sided**
   O Holm é **agnóstico à direção do teste**: corrige *qualquer* vetor de p-values. Ele recebe o `pvalue_two_sided` do DM gold (ver item #1, elemento 5). Isso significa que **todas as ressalvas do p-value de entrada são herdadas pelo ajustado**: se o claim do TCC é direcional ("TFT melhor que baseline em pinball"), o p two-sided é o "errado para o claim", e o `pvalue_adj_holm` apenas corrige a multiplicidade de um teste já desalinhado. A Phase B faz o caminho coerente: corrige `pvalue_one_sided` ([`holm_family_6.py:16`](../../../../src/domain/services/holm_family_6.py#L16)). **Quando importa:** sempre que o número ajustado for lido como evidência do claim — aí o desalinhamento two-sided/one-sided do insumo se propaga para a conclusão. **Quando é tolerável:** se o uso for puramente diagnóstico/exploratório. Não é defeito do Holm; é o insumo que precisa casar com o claim (decisão de C.0.2/C.0.3, ver item #1).
 
+  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: **herdar a
+  > decisão do item #1, elemento 5** — alimentar o Holm com o `pvalue_one_sided` (na
+  > direção pré-registrada do claim) acrescido da correção **HLN**, em vez do
+  > `pvalue_two_sided`. Assim o ajuste de multiplicidade corrige um teste já alinhado
+  > ao claim, como na Phase B. Não é uma decisão própria do Holm: ele segue o que o
+  > item #1 definir para o p-value de entrada.
+
 **2. Composição da família: groupby `[asset, parent_sweep_id, split, horizon]` — `split_signature` ausente**
 - **O que o doc afirma:** o groupby da família é `[asset, parent_sweep_id, split, horizon]` (linha 191) e **`split_signature` NÃO entra**, apesar de o DM ter `split_signature` na grain de pré-processamento.
 - **Como deveria funcionar (exemplo):** Holm controla o FWER dentro de **uma família** = o conjunto de testes que sustentam **um claim**, declarada **antes** de olhar os p-values. Se o claim é "config A bate config B em BTC, sweep S1, horizonte 7", a família correta é o conjunto de pares testados sob *exatamente* esse desenho. Misturar testes de desenhos diferentes (ou repetir o mesmo teste em vários folds) numa só família contamina a contagem `m`.
@@ -688,6 +695,15 @@ família que você alimenta. No gold legacy, a fórmula está correta; a famíli
   corresponde à partição usada. Promover esse número a confirmatório exige primeiro
   **declarar a família** e fazer o groupby/agregação baterem com ela.
 
+  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: **incluir
+  > `split_signature` no groupby do Holm** — reusar `_pairwise_group_cols`
+  > (`pairwise.py:25-29`) em vez da lista hard-coded de `pairwise.py:191`, alinhando a
+  > família ao mesmo grain que o DM já usa para computar os testes. Adicionalmente,
+  > **declarar a família a partir do claim** — idealmente apenas os pares
+  > TFT-vs-baseline relevantes (à la Phase B), em vez de "todos contra todos" — o que
+  > dá ao `pvalue_adj_holm` interpretação de FWER bem-definida e, de quebra, dispensa o
+  > pré-filtro top-50 (ver elemento 4: as decisões #1 e #4 se resolvem juntas).
+
 **3. Fórmula Holm step-down: ordena, `(m − j + 1)·p`, `maximum.accumulate`, clip em 1**
 - **O que o doc afirma:** dentro de cada grupo, ordena os p-values; calcula `(m − j + 1) · p` para o *j*-ésimo menor; aplica `np.maximum.accumulate`; faz clip em 1 (linhas 197-208).
 - **Como deveria funcionar (exemplo):** família de 3 pares com p-values crus `{0.01, 0.04, 0.04}` → `m = 3`.
@@ -737,6 +753,14 @@ família que você alimenta. No gold legacy, a fórmula está correta; a famíli
   "controlamos o FWER da comparação de todos os modelos". Liga-se diretamente ao
   problema de inferência seletiva do item #4.
 
+  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: **remover o
+  > filtro top-50** antes do DM/Holm (elimina o viés de inferência seletiva).
+  > **Ressalva:** removê-lo mantendo "todos contra todos" faz o `m` explodir
+  > (`C(N, 2)`) e torna o Holm conservador demais; por isso a remoção deve vir junto
+  > com a **família-do-claim** (elemento 2) — testar só os pares relevantes
+  > (TFT vs baselines) mantém o `m` pequeno e justificável. As decisões #1 e #4 se
+  > resolvem juntas.
+
 **5. Flag `significant_adj_0_05 = pvalue_adj_holm < 0.05`**
 - **O que o doc afirma:** a flag booleana `significant_adj_0_05` é `pvalue_adj_holm < 0.05` (linhas 211-213).
 - **Como deveria funcionar (exemplo):** par com `pvalue_adj_holm = 0.03` → `True`; com `0.06` → `False`; com `NaN` (par sem ajuste) → `False`, porque `NaN < 0.05` é `False` em pandas/numpy. Ou seja, ausência de ajuste é tratada como **não-significativo**, que é o comportamento conservador correto.
@@ -778,6 +802,15 @@ família que você alimenta. No gold legacy, a fórmula está correta; a famíli
   **Quando é tolerável:** se tudo isso for explicitamente rotulado como descritivo
   não-inferencial. A decisão de unificar (qual p-value cada artefato usa, e sobre
   qual família) é de C.0.2/C.0.3.
+
+  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: **unificar
+  > os três artefatos num único `pvalue_adj_holm`** — concretamente, **aplicar Holm
+  > também em B** (`_build_model_decision_final`, hoje em `pvalue_two_sided` cru). O
+  > mecanismo limpo é fazer o rollup (B) e o plot (C) **consumirem a coluna
+  > `significant_adj_0_05`/`pvalue_adj_holm` já computada pelo builder do DM** (single
+  > source of truth, cálculo no write-time), em vez de cada artefato decidir a própria
+  > significância. Assim parquet (A), rollup (B) e plot (C) reportam o mesmo veredito e
+  > some a supercontagem de vitórias por p cru em B.
 
 ### Cross-check — o que NÃO está corretamente indicado/referenciado
 
@@ -826,7 +859,10 @@ dossiê subdescreve o consumo — o Holm gold **é** usado pela figura *DM P-Val
 Matrix* (não é dormente), propagando a família mal-definida para um artefato visual;
 (c) `m` é contado sobre o universo já filtrado pelo top-50. Decisões de declarar a
 família, unificar qual p-value cada artefato consome e parametrizar α são de
-C.0.2/C.0.3.
+C.0.2/C.0.3. Decisões recomendadas registradas nos elementos 1, 2, 4 e 6
+(one-sided + HLN herdados do item #1; `split_signature` na família + família-do-claim;
+remoção do top-50; unificação em `pvalue_adj_holm` aplicando Holm também em B) —
+pendentes de confirmação com a pesquisa acadêmica do paper.
 
 ---
 
