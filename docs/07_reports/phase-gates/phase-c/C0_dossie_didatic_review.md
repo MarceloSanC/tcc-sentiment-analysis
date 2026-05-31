@@ -1514,33 +1514,42 @@ combina num número só.
   (L208) e o loop `valid.loc[~prob_eligible_mask, col] = np.nan` (L210-212) o mascara; a
   elegibilidade vem de `is_non_degenerate = (p10_raw != p90_raw) & ...` (L166) e
   `is_quantile_mode` (L169).
-- ⚠️ **Ponto de atenção — "MPIW=0 em degenerados" está mitigado; mas a elegibilidade é julgada no CRU mesmo para o post-guardrail**
+- ⚠️ **Ponto de atenção — "MPIW=0 em degenerados" está mitigado; o guardrail é um *sort* puro (nunca colapsa intervalo genuíno)**
   O risco listado no dossiê ("MPIW=0 em quantis degenerados") está **majoritariamente
-  mitigado**: uma linha com intervalo colapsado **não entra** na média (vira NaN). Se uma
-  run for **toda** degenerada, `n_probabilistic_samples = 0` e o MPIW vira **NaN** (não
-  `0`) — então a frase do dossiê **superestima** o risco não-tratado: o filtro já o
-  contém, e o resultado de uma degeneração total é NaN, não um zero enganoso.
+  mitigado**: uma linha com intervalo colapsado na origem (`q10_raw == q90_raw`) **não
+  entra** na média (vira NaN). Se uma run for **toda** degenerada,
+  `n_probabilistic_samples = 0` e o MPIW vira **NaN** (não `0`) — então a frase do dossiê
+  **superestima** o risco não-tratado.
 
-  **Mas há a mesma sutileza do PICP (elemento 2 do item #5), e aqui ela é ainda mais
-  visível:** a elegibilidade (`is_non_degenerate`) é **sempre** calculada nos
-  **quantis CRUS** (`RAW_QUANTILE_COLUMNS`, [`quantile.py:162-166`](../../../../src/domain/services/gold_builders/quantile.py#L162)),
-  **mesmo quando o contrato processado é o post-guardrail**. A largura, porém, é a do
-  contrato corrente. Daí uma **assimetria** específica do MPIW:
+  E, ao contrário do que se poderia supor, **o guardrail não colapsa intervalos
+  genuínos**. Ele é um *sort* puro: `enforce_monotonic_triplet` faz
+  `ordered = sorted([p10, p50, p90])`
+  ([`quantile_guardrail_service.py:53`](../../../../src/domain/services/quantile_guardrail_service.py#L53))
+  — apenas **reordena** a tripla, nunca inventa nem zera valores. Logo a largura
+  pós-guardrail é `max(tripla) − min(tripla) ≥ |q90_raw − q10_raw|`, e **só é zero se as
+  três pontas forem iguais** — ou seja, exatamente o caso `q10_raw == q90_raw` que o filtro
+  **já exclui**. Conclusão: **nenhuma linha de largura zero entra no `mpiw_post_guardrail`**;
+  não existe "colapso induzido pelo guardrail". (Um intervalo bem-ordenado como `[95, 110]`
+  é devolvido **intacto** pelo *sort* — não vira `[100, 100]`.)
 
-  | Linha | q10/q90 crus | q10/q90 pós-guardrail | Entra no `mpiw_post_guardrail`? | Largura que entra |
-  |---|---|---|---|---|
-  | genuína | 95 / 110 | 95 / 110 | ✅ sim | 15 |
-  | colapsada na origem | 100 / 100 | 100 / 100 | ❌ não (cru degenerado) | — |
-  | genuína no cru, **colapsada pelo guardrail** | 95 / 110 | 100 / 100 | ✅ **sim** (cru não é degenerado) | **0** |
+  O que **de fato** distingue os dois contratos:
+  - para linhas **bem-ordenadas** (o caso normal `q10 ≤ q50 ≤ q90`), a largura
+    pós-guardrail é **idêntica** à crua (o `q50` no meio não afeta `max`/`min`) → `mpiw_raw`
+    e `mpiw_post_guardrail` coincidem;
+  - eles **só divergem nas linhas patológicas**: uma linha **cruzada** (elemento 1)
+    contribui com largura **negativa** ao `mpiw_raw` e com a largura **positiva ordenada**
+    ao `mpiw_post_guardrail` (o *sort* conserta o cruzamento). Por isso o
+    `mpiw_post_guardrail` tende a ser **≥** ao `mpiw_raw`, nunca puxado para baixo por zeros.
 
-  **Quando importa:** se o guardrail colapsar intervalos genuínos (clampando q10_post ==
-  q90_post para forçar monotonicidade), essas linhas **continuam elegíveis** (porque o cru
-  era genuíno) e entram no `mpiw_post_guardrail` com **largura 0**, **puxando-o para
-  baixo**. É a **assimetria inversa** à do PICP: lá o cru-degenerado é excluído mesmo
-  quando o guardrail "abre" o intervalo; aqui o cru-genuíno é incluído mesmo quando o
-  guardrail "fecha" o intervalo. **Por que é defensável:** medir genuinidade pelo que o
-  **modelo** emitiu (cru) é coerente entre PICP e MPIW; mas a consequência sobre a *média
-  de largura* é que zeros induzidos pelo guardrail entram no denominador.
+  **Sutileza residual (a mesma do PICP, elemento 2 do item #5):** a elegibilidade
+  (`is_non_degenerate`) compara **só as pontas cruas** (`q10_raw != q90_raw`,
+  [`quantile.py:166`](../../../../src/domain/services/gold_builders/quantile.py#L166)). Uma
+  linha como `(q10=100, q50=99, q90=100)` tem `q10_raw == q90_raw` → é tratada como
+  **degenerada e excluída**, embora a tripla ordenada `[99, 100, 100]` tenha largura
+  pós-guardrail **positiva** (1). **Quando importa:** é um efeito pequeno (exige
+  `q10_raw == q90_raw` com `q50` fora desse valor), mas significa que algumas linhas com
+  spread pós-guardrail real ficam de fora. **Por que é defensável:** julgar genuinidade
+  pelo que o **modelo** emitiu (cru) é coerente entre PICP e MPIW.
 
 **3. Agregação: MPIW = média de `pred_interval_width` (e a coluna gêmea idêntica)**
 - **O que o doc afirma:** `mpiw = ("pred_interval_width", "mean")`
@@ -1682,10 +1691,11 @@ builder run/split/horizon 288-404, `gold_prediction_calibration` em descriptive.
    elemento 3.
 
 4. **Risco "MPIW=0 em degenerados" superestimado.** O Cat C filter **já mascara** linhas
-   cruamente degeneradas (q10_raw == q90_raw) a NaN — o resultado de uma run toda
-   degenerada é **NaN**, não `0`. O caminho residual de largura-zero é o **colapso pelo
-   guardrail** de linhas cruamente genuínas (elemento 2), não a degeneração crua que o
-   dossiê descreve.
+   cruamente degeneradas (`q10_raw == q90_raw`) a NaN — o resultado de uma run toda
+   degenerada é **NaN**, não `0`. E como o guardrail é um *sort* puro
+   ([`quantile_guardrail_service.py:53`](../../../../src/domain/services/quantile_guardrail_service.py#L53)),
+   a largura pós-guardrail é `max − min ≥ |q90_raw − q10_raw|`: **nenhuma** linha elegível
+   entra com largura zero — não existe "colapso induzido pelo guardrail" (elemento 2).
 
 5. **Cruzamento de quantis (largura negativa) não capturado pelo dossiê.** O filtro exclui
    só a igualdade exata, não o cruzamento (`q10 > q90`); larguras negativas entram no
@@ -1695,8 +1705,8 @@ builder run/split/horizon 288-404, `gold_prediction_calibration` em descriptive.
 6. **Pontos residuais metodológicos centrais já capturados pelo dossiê.** "Comparar
    largura sem cobertura", "MPIW=0 em degenerados" e "sem normalização cross-asset" constam
    dos "Riscos conhecidos". Os aprofundamentos acima detalham o mecanismo (sharpness sem
-   cobertura via tabela A/B/C, assimetria de elegibilidade raw-vs-post, unidades absolutas)
-   e o "quando cada escolha se aplica".
+   cobertura via tabela A/B/C, guardrail como *sort* puro e elegibilidade pelas pontas
+   cruas, unidades absolutas) e o "quando cada escolha se aplica".
 
 ### Veredito do item #6
 
@@ -1709,9 +1719,10 @@ o contrato cru pode conter **largura negativa** (cruzamento) que o filtro não p
 **de precisão/completude do dossiê** — "Uso atual" subdimensiona o alcance (MPIW chega ao
 `gold_model_decision_final` como `mean_mpiw`, alimenta o `confidence_calibrated` e aparece
 no guardrail audit), `mpiw` e `pred_interval_width` são colunas **idênticas**, o risco
-"MPIW=0 em degenerados" está **superestimado** (o filtro já o mitiga → NaN, não 0) e a
-assimetria de elegibilidade julgada nos quantis **crus** mesmo para o `mpiw_post_guardrail`
-não é mencionada. Não há defeito de localização; as decisões (interval/Winkler score, MPIW
+"MPIW=0 em degenerados" está **superestimado** (o filtro já o mitiga → NaN, não 0; e o
+guardrail é um *sort* puro que **nunca** colapsa um intervalo genuíno, então não há
+largura-zero entrando no `mpiw_post_guardrail`) e a sutileza de a elegibilidade ser julgada
+pelas **pontas cruas** não é mencionada. Não há defeito de localização; as decisões (interval/Winkler score, MPIW
 normalizado, tratamento de cruzamento) são de C.0.2/C.0.3. Decisões recomendadas
 registradas nos elementos 1, 3 e 4 — pendentes de confirmação com a pesquisa acadêmica do
 paper.
