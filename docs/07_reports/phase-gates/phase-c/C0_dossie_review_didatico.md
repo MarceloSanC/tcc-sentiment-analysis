@@ -1,52 +1,52 @@
 ---
-title: "C.0 — Revisao didatica dos dossies (§6) + cross-check contra codigo"
+title: "C.0 — Revisão didática dos dossiês (§6) + cross-check contra código"
 scope: |
   Documento companion do C0_statistical_methods_hardening.md. Para cada um dos
-  13 itens da §6 (Dossies por item), registra: (a) explicacao didatica do
-  teste/metrica; (b) decomposicao elemento a elemento com o que o doc afirma,
+  13 itens da §6 (Dossiês por item), registra: (a) explicação didática do
+  teste/métrica; (b) decomposição elemento a elemento com o que o doc afirma,
   como deveria funcionar (com exemplo), o que esperar no código e a referência
-  doc->codigo; (c) para cada ponto de atencao (⚠️), um aprofundamento didatico
-  embutido no proprio elemento (o que e, por que importa, quando cada escolha
-  se aplica, o que implica para o claim do projeto); (d) cross-check do que NAO
-  esta corretamente indicado/referenciado contra o codigo real; (e) um veredito.
-  Este material e base de estudo para revisao manual da C.0.1 e insumo de
-  redacao do TCC. Sera FUNDIDO depois com a pesquisa academica online (GPT web)
-  por item para entao tomar decisao e preencher o C0 canonico. Este arquivo NAO
-  e canonico e NAO toma decisao metodologica final.
+  doc->código; (c) para cada ponto de atenção (⚠️), um aprofundamento didático
+  embutido no próprio elemento (o que é, por que importa, quando cada escolha
+  se aplica, o que implica para o claim do projeto); (d) cross-check do que NÃO
+  está corretamente indicado/referenciado contra o código real; (e) um veredito.
+  Este material é base de estudo para revisão manual da C.0.1 e insumo de
+  redação do TCC. Será FUNDIDO depois com a pesquisa acadêmica online (GPT web)
+  por item para então tomar decisão e preencher o C0 canônico. Este arquivo NÃO
+  é canônico e NÃO toma decisão metodológica final.
 status: in_progress
 created_at: 2026-05-29
 relates_to:
-  - "C0_statistical_methods_hardening.md (§6 Dossies por item) — fonte das refs verificadas"
-  - "external-reviews/ (pesquisa academica GPT web, a fundir por item)"
+  - "C0_statistical_methods_hardening.md (§6 Dossiês por item) — fonte das refs verificadas"
+  - "external-reviews/ (pesquisa acadêmica GPT web, a fundir por item)"
 update_when:
-  - cada item da §6 receber sua revisao didatica (progresso 1/13 ... 13/13)
-  - uma referencia doc->codigo for confirmada/corrigida contra o src real
-  - um ponto de atencao receber aprofundamento didatico
+  - cada item da §6 receber sua revisão didática (progresso 1/13 ... 13/13)
+  - uma referência doc->código for confirmada/corrigida contra o src real
+  - um ponto de atenção receber aprofundamento didático
 ---
 
-# C.0 — Revisao didatica dos dossies (§6) + cross-check contra codigo
+# C.0 — Revisão didática dos dossiês (§6) + cross-check contra código
 
-> **Para que serve.** Este documento traduz cada dossie tecnico da §6 do
+> **Para que serve.** Este documento traduz cada dossiê técnico da §6 do
 > [`C0_statistical_methods_hardening.md`](C0_statistical_methods_hardening.md)
-> em uma explicacao didatica, verifica elemento a elemento contra o codigo real
-> em `src/`, e aprofunda cada ponto de atencao com o "quando e por que" que
-> embasa as decisoes futuras de C.0.2/C.0.3. Nao substitui o dossie nem decide
-> nada: e estudo e cross-check, e sera fundido com a pesquisa academica online
-> antes de qualquer preenchimento canonico.
+> em uma explicação didática, verifica elemento a elemento contra o código real
+> em `src/`, e aprofunda cada ponto de atenção com o "quando e por que" que
+> embasa as decisões futuras de C.0.2/C.0.3. Não substitui o dossiê nem decide
+> nada: é estudo e cross-check, e será fundido com a pesquisa acadêmica online
+> antes de qualquer preenchimento canônico.
 
 > **Como ler cada item.**
-> - **O que é (didatico):** a ideia central em linguagem simples.
-> - **Elementos:** cada componente do teste/metrica, com 4 campos fixos
+> - **O que é (didático):** a ideia central em linguagem simples.
+> - **Elementos:** cada componente do teste/métrica, com 4 campos fixos
 >   (o que o doc afirma / como deveria funcionar com exemplo / o que esperar no
->   codigo / ref doc->codigo) e, **quando houver**, um bloco ⚠️ com
->   aprofundamento de extensao variavel.
-> - **Cross-check:** discrepancias entre o que os campos "Uso atual no projeto"
->   e "Implementacao atual localizada" afirmam e o que o codigo real mostra.
-> - **Veredito:** 🟢 integro / 🟡 ressalvas / 🔴 referencia quebrada.
+>   código / ref doc->código) e, **quando houver**, um bloco ⚠️ com
+>   aprofundamento de extensão variável.
+> - **Cross-check:** discrepâncias entre o que os campos "Uso atual no projeto"
+>   e "Implementação atual localizada" afirmam e o que o código real mostra.
+> - **Veredito:** 🟢 íntegro / 🟡 ressalvas / 🔴 referência quebrada.
 
-> **Convencao de cross-check.** ✅ = ref do doc confirmada por leitura direta do
-> codigo; ⚠️ = ponto metodologico (nao e erro de referencia); 🔴 = ref
-> quebrada/divergente. Toda confirmacao cita a linha real observada.
+> **Convenção de cross-check.** ✅ = ref do doc confirmada por leitura direta do
+> código; ⚠️ = ponto metodológico (não é erro de referência); 🔴 = ref
+> quebrada/divergente. Toda confirmação cita a linha real observada.
 
 ## Progresso
 
@@ -91,7 +91,7 @@ subestimar o desvio e gerar p-value otimista demais.
 - **O que esperar no código:** uma coluna `squared_error` derivada de `y_pred` e `y_true`, **antes** do pivot da matriz de losses.
 - **Ref do doc → código:** [`pairwise.py:280`](../../../../src/domain/services/gold_builders/pairwise.py#L280). ✅ **Confere:** `df["squared_error"] = (df["y_pred"] - df["y_true"]) ** 2`.
 - ⚠️ **Ponto de atenção — a loss casa com o claim?**
-  O DM **não quebra** com modelo probabilístico: ele é **agnóstico a loss** — testa a media da diferenca de *qualquer* loss por periodo. O que precisa casar é **a loss com o claim**:
+  O DM **não quebra** com modelo probabilístico: ele é **agnóstico a loss** — testa a média da diferença de *qualquer* loss por período. O que precisa casar é **a loss com o claim**:
 
   | Loss alimentada no DM | O que o teste passa a medir | Claim que sustenta |
   |---|---|---|
@@ -115,15 +115,15 @@ subestimar o desvio e gerar p-value otimista demais.
 
 **3. n mínimo = 5**
 - **O que o doc afirma:** pares com menos de 5 timestamps em comum são pulados.
-- **Como deveria funcionar (exemplo):** com 3 pontos nao da para estimar variancia de forma confiavel; o teste e abortado para aquele par.
+- **Como deveria funcionar (exemplo):** com 3 pontos não dá para estimar variância de forma confiável; o teste é abortado para aquele par.
 - **O que esperar no codigo:** um guard `if n < 5: continue`.
 - **Ref do doc → codigo:** [`pairwise.py:78`](../../../../src/domain/services/gold_builders/pairwise.py#L78). ✅ **Confere** exatamente.
 
 **4. Variância HAC (kernel de Bartlett) + política de lag**
 - **O que o doc afirma:** HAC Bartlett com lag `int(min(max(1, n^(1/3)), 10))` e peso `1 − k/(lag+1)`.
 - **Como deveria funcionar (exemplo):** com n=1000 timestamps, `n^(1/3)≈10`, então usa lag 10 (teto). Soma a variância "crua" (`gamma0`) mais as autocovarianças até o lag 10, cada uma com peso decrescente (lag 1 pesa mais que lag 10). Isso "infla" a variância para refletir a autocorrelação e evita p-value falsamente pequeno.
-- **O que esperar no codigo:** `gamma0` + loop `for k in range(1, lag+1)` somando `2 * weight * cov`.
-- **Ref do doc → codigo:** [`pairwise.py:82`](../../../../src/domain/services/gold_builders/pairwise.py#L82) (lag) e [`:87`](../../../../src/domain/services/gold_builders/pairwise.py#L87) (peso). ✅ **Confere** exatamente.
+- **O que esperar no código:** `gamma0` + loop `for k in range(1, lag+1)` somando `2 * weight * cov`.
+- **Ref do doc → código:** [`pairwise.py:82`](../../../../src/domain/services/gold_builders/pairwise.py#L82) (lag) e [`:87`](../../../../src/domain/services/gold_builders/pairwise.py#L87) (peso). ✅ **Confere** exatamente.
 - ⚠️ **Ponto de atenção — deveria seguir Newey-West clássico?**
   Há uma razão teórica específica para previsão. **Erros de previsão *h*-passos-à-frente** (sob otimalidade) seguem um processo **MA(h−1)** — autocorrelacionados até o lag *h−1* e não além. Por isso o padrao de livro-texto para DM e **lag = h − 1**.
   - **Phase B usou `max(h−1, 1)`** → exatamente essa regra (h=7 → lag 6; h=1 → lag 1). É a escolha canônica para DM de *h*-passos.
@@ -135,6 +135,11 @@ subestimar o desvio e gerar p-value otimista demais.
   com a Phase B e (b) para h=7 pode usar lag até 10 onde o correto seria 6 →
   variância e p-value ligeiramente diferentes. Não é bug; é política de lag menos
   alinhada a teoria de previsao.
+
+  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: adotar
+  > **lag = `max(h−1, 1)`** (Newey-West com bandwidth da estrutura MA(h−1) dos erros
+  > *h*-passos), substituindo a regra `min(max(1, n^(1/3)), 10)`. Alinha o DM gold à
+  > Phase B e à teoria de previsão; elimina o teto arbitrário 10.
 
 **5. Estatística DM e p-value**
 - **O que o doc afirma:** `stat = mean_d / sqrt(var_mean)`; `pvalue = 2·(1 − Φ(|stat|))`, **two-sided**, normal.
@@ -155,6 +160,13 @@ subestimar o desvio e gerar p-value otimista demais.
   - **Por que importa:** o one-sided tem **mais poder** para detectar o efeito na direção esperada, mas exige comprometer-se com a direção antes — senão vira p-hacking.
   - **Exemplo:** se `stat = 1,9`, two-sided (corte ±1,96) **não** rejeita; one-sided (corte 1,645) **rejeita**. Mesma evidência, conclusão diferente.
   - **No projeto:** o claim H2a/H2b é direcional ("TFT < baseline em pinball"), então Phase B usou **one-sided** corretamente. O gold legacy two-sided é "seguro" mas **perde poder** para um claim direcional.
+
+  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: adotar
+  > **teste one-sided** na direção pré-registrada do claim (TFT melhor que baseline),
+  > alinhando o DM gold à Phase B e ganhando poder estatístico. Exige que a direção
+  > seja fixada antes de ver os dados (já é o caso em H2a/H2b). **Decisão paralela
+  > ainda pendente** no mesmo elemento: aplicar a correção **HLN** de amostra pequena
+  > (Phase B já aplica; barata e sempre recomendada) — confirmar junto.
 
 **6. top-50 aplicado *antes* do teste**
 - **O que o doc afirma:** `_select_top_configs_for_pairwise(g, max_configs=50)` roda antes de montar a matriz.
@@ -191,6 +203,13 @@ subestimar o desvio e gerar p-value otimista demais.
   aplicar Holm em tudo que alimenta claim; ou (b) marcar `dm_net_wins` como
   **diagnostico nao-inferencial** para que o p cru nao seja confundido com evidencia.
 
+  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: adotar a
+  > saída (a) — **definir uma família correta** (com `split_signature` no groupby — ver
+  > item #3) e **aplicar Holm em tudo que alimenta claim**, inclusive em `dm_net_wins`
+  > no `_build_model_decision_final` (hoje usa `pvalue_two_sided` cru). Elimina os dois
+  > veredictos divergentes e impede a supercontagem de vitórias por ruído de múltiplas
+  > comparações.
+
 ### Cross-check — o que NÃO está corretamente indicado/referenciado
 
 Para o DM, **todas as referências de "Uso atual" e "Implementação atual localizada" conferem** com o código (verifiquei 280, 299, 333 em `pairwise.py` e 599-628 em `confidence.py`). Pontos a registrar:
@@ -203,7 +222,9 @@ Para o DM, **todas as referências de "Uso atual" e "Implementação atual local
 
 🟢 **Íntegro.** Referências intactas; evidência fiel ao código. Pontos
 metodologicos (loss, lag, HLN/one-sided, Holm) sao decisoes para C.0.2/C.0.3,
-nao defeitos de localizacao.
+nao defeitos de localizacao. Decisões recomendadas registradas nos elementos 1, 4,
+5 e 7 (pinball, lag `h−1`, one-sided + HLN, Holm sobre família correta) — pendentes
+de confirmação com a pesquisa acadêmica do paper.
 
 ---
 
