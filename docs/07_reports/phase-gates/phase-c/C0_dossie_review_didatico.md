@@ -56,7 +56,7 @@ update_when:
 - [x] #4 — top-50 filter
 - [x] #5 — PICP
 - [x] #6 — MPIW
-- [ ] #7 — Pinball loss
+- [x] #7 — Pinball loss
 - [x] #8 — Win-rate gold
 - [x] #9 — prob_up
 - [ ] #10 — confidence_calibrated
@@ -1929,6 +1929,601 @@ contrato anti-leak é preventivo). Não há defeito de localização; as decisõ
 `prob_up_heuristic_from_q10_q90`, retornar `NaN` quando `q90 ≤ q10`, calibração empírica em
 coluna separada) são de C.0.2/C.0.3. Decisões recomendadas registradas nos elementos 1 e 3 —
 pendentes de confirmação com a pesquisa acadêmica do paper.
+
+---
+
+## #8 — Win-rate gold
+
+### O que é (didático)
+
+Win-rate é a **"média de rebatidas"** entre dois modelos. A pergunta é simples: **dos
+instantes em que ambos previram, em que fração o modelo A errou menos que o modelo B?** Em
+cada timestamp compara-se a loss dos dois e conta-se quem "ganhou" (loss menor). Win-rate de
+60% lê-se "A foi melhor em 60% dos timestamps comuns".
+
+O truque — e a armadilha — é que win-rate **descarta duas informações**: (1) o **tamanho**
+da vitória (ganhar por 0,001 conta igual a ganhar por 1000) e (2) a **incerteza** (60% sobre
+50 pontos parece igual a 60% sobre 5000, mas a confiança é muito diferente). Por isso
+win-rate é **descritivo, não um teste**: não tem variância, p-value nem intervalo de
+confiança. É um **placar**, não uma inferência.
+
+### Elementos
+
+**1. Critério de "vitória": loss = `squared_error`, decidida pelo sinal de `l < r`**
+- **O que o doc afirma:** estatística descritiva = proporção de timestamps em que
+  `loss_left < loss_right`; a loss é a `squared_error` herdada de `_pairwise_preprocess`.
+- **Como deveria funcionar (exemplo):** no timestamp *t*, A prevê 101 (real 100) → loss
+  `1`; B prevê 104 → loss `16`. A "vence" *t* porque `1 < 16`. Repete-se em todos os
+  timestamps comuns; a fração de vitórias de A é o win-rate de A contra B.
+- **O que esperar no código:** `left_wins = (comp["l"] < comp["r"]).sum()` sobre as losses
+  pareadas, onde `l`/`r` vêm da `squared_error` de `_pairwise_preprocess`.
+- **Ref do doc → código:** [`pairwise.py:280`](../../../../src/domain/services/gold_builders/pairwise.py#L280) (loss) + [`pairwise.py:415-416`](../../../../src/domain/services/gold_builders/pairwise.py#L415) (comparação). ✅ **Confere:** L280 `df["squared_error"] = (df["y_pred"] - df["y_true"]) ** 2`; L415 `left_wins = int((comp["l"] < comp["r"]).sum())` e L416 `right_wins = int((comp["r"] < comp["l"]).sum())`. Confirmei lendo a função inteira: `l`/`r` são as colunas da `loss_matrix` (squared_error pivotada).
+- ⚠️ **Ponto de atenção — loss desalinhada do claim *e* win-rate "achata" a magnitude**
+  São dois problemas empilhados.
+
+  **(a) Mesma loss dos itens #1/#2/#4.** `squared_error` mede acurácia **pontual**, não
+  qualidade distribucional. Win-rate em squared_error embasa só claim **pontual** ("A acerta
+  mais o valor central que B mais vezes"), não o claim **probabilístico** do TCC (a Phase B
+  usa pinball). É herança do mesmo `_pairwise_preprocess` que alimenta DM e MCS.
+
+  **(b) Específico do win-rate: só o sinal sobrevive.** A comparação `l < r` guarda apenas
+  **quem** é menor, não **por quanto**. Isso permite a contradição clássica:
+
+  | Timestamps | Margem quando A vence | Margem quando A perde | Win-rate de A | Loss média |
+  |---|---|---|---|---|
+  | 51 em 100 | +0,01 cada | — | — | — |
+  | 49 em 100 | — | −100 cada | **51%** (A "ganha") | A é **muito pior** |
+
+  A ganha 51% das vezes por margens minúsculas e perde 49% por margens enormes: win-rate
+  > 50%, mas loss média **muito pior**. Por isso o próprio builder emite, ao lado das taxas,
+  `left_mean_loss`/`right_mean_loss`/`left_minus_right_mean_loss`
+  ([`pairwise.py:438-442`](../../../../src/domain/services/gold_builders/pairwise.py#L438)) —
+  exatamente a magnitude que o win-rate joga fora. **Quando importa:** sempre que win-rate
+  for lido como "quem é melhor". **Quando é tolerável:** como descrição de **consistência**
+  (com que frequência um modelo lidera), **reportado ao lado da loss média**, nunca isolado.
+
+**2. Alinhamento pareado: a interseção é GLOBAL (`dropna(how="any")`), não por par**
+- **O que o doc afirma:** "interseção temporal exata herdada de `_pairwise_preprocess`";
+  unidade = timestamp pareado.
+- **Como deveria funcionar (exemplo):** para comparar A e B com justiça, só valem
+  timestamps em que **ambos** previram. Com A cobrindo {t1..t50}, B cobrindo {t1..t45} → os
+  45 comuns entram. A largura `n` do placar é o nº desses timestamps comuns.
+- **O que esperar no código:** uma `loss_matrix` (timestamps × configs) com
+  `dropna(axis=0, how="any")` e, no par, `comp = DataFrame({l, r}).dropna()`.
+- **Ref do doc → código:** [`pairwise.py:402-405`](../../../../src/domain/services/gold_builders/pairwise.py#L402) (pivot + dropna) + [`pairwise.py:411`](../../../../src/domain/services/gold_builders/pairwise.py#L411) (dropna do par). ✅ **Confere:** L405 `loss_matrix = loss_matrix.dropna(axis=0, how="any")`; L411 `comp = pd.DataFrame({"l": loss_matrix[left], "r": loss_matrix[right]}).dropna()`.
+- ⚠️ **Ponto de atenção — `how="any"` torna `n` global (do pior config), não pairwise; o `.dropna()` do par é redundante**
+  O `dropna(how="any")` é aplicado **sobre a matriz inteira** (todas as colunas dos top-50),
+  então **descarta qualquer timestamp em que *algum* dos configs do grupo esteja ausente** —
+  não apenas o par sendo comparado. Consequências:
+
+  - **`n` (`aligned_timestamps`) é o mesmo para todos os pares** do grupo, governado pelo
+    config de **pior cobertura**. Se um único config raro só previu em 10 dos 500 timestamps,
+    todos os pares — inclusive os de dois configs densos — ficam restritos a esses ~10.
+  - O `comp.dropna()` da linha 411 é **redundante**: depois do `how="any"` upstream não há
+    mais NaN nas colunas, então ele nunca remove nada. O código *parece* alinhar par-a-par,
+    mas a interseção já foi forçada a ser global.
+
+  **Quando importa:** ao interpretar `aligned_timestamps` como "quantos pontos sustentam
+  *este* par" — na verdade é "quantos pontos todos os top-50 têm em comum". **Por que é
+  defensável:** é **consistente** com DM e MCS (mesmo `how="any"`), então os três operam
+  sobre o mesmo suporte temporal; a inconsistência seria pior. Apenas não se deve ler `n`
+  como cobertura pairwise.
+
+**3. Vitórias, empates e as DUAS taxas (com e sem empates)**
+- **O que o doc afirma:** calcula `left_wins`, `right_wins`, `ties`; `left_win_rate =
+  left_wins / n`; `left_win_rate_ex_ties = left_wins / non_ties`, com `non_ties = max(1,
+  left_wins + right_wins)`; coluna `ties` na saída; **`tie_rate` não é computado**.
+- **Como deveria funcionar (exemplo):** num grupo com `n=100`: A vence 55, B vence 40,
+  empatam 5. Então `left_win_rate = 55/100 = 0,55` (empates **no** denominador) e
+  `left_win_rate_ex_ties = 55/95 ≈ 0,579` (empates **fora** do denominador, `non_ties =
+  55+40 = 95`). As duas convivem: a "com empates" dilui, a "sem empates" condiciona a quem
+  não empatou.
+- **O que esperar no código:** `ties = n - left_wins - right_wins`; `non_ties = max(1,
+  left_wins + right_wins)`; quatro colunas de taxa.
+- **Ref do doc → código:** [`pairwise.py:417-418`](../../../../src/domain/services/gold_builders/pairwise.py#L417) (ties, non_ties) + [`pairwise.py:434-437`](../../../../src/domain/services/gold_builders/pairwise.py#L434) (taxas). ✅ **Confere:** L417 `ties = int(n - left_wins - right_wins)`; L418 `non_ties = max(1, left_wins + right_wins)`; L434-437 as quatro taxas; a coluna `ties` é emitida em **L433** (o dossiê diz L432 — ver cross-check). Não há coluna `tie_rate`.
+- ⚠️ **Ponto de atenção — o guard `max(1, ·)` mascara o caso "tudo empate" como `0`, não `NaN`; e `tie_rate` fica implícito**
+  Dois detalhes finos.
+
+  **O que é um empate aqui?** `ties` conta timestamps em que `squared_error_left ==
+  squared_error_right` **exatamente** (nem `l<r` nem `r<l`). Com losses contínuas isso é
+  raríssimo **a menos que os dois configs produzam previsões idênticas** (ex.: mesmo modelo
+  rotulado duas vezes, ou ambos colapsados). Logo `ties` alto é, em geral, **sinal de
+  configs degenerados/duplicados**, não de "desempenho parecido".
+
+  **O guard `non_ties = max(1, lw+rw)`** protege contra divisão por zero quando **tudo é
+  empate** (`lw+rw = 0`). Mas o efeito colateral: nesse caso `left_win_rate_ex_ties = 0/1 =
+  0` e `right_win_rate_ex_ties = 0/1 = 0` — o artefato reporta **"0% de vitória dos dois
+  lados"**, que se lê como "ninguém venceu" quando o fato real é **"100% empates"**. O mais
+  honesto seria `NaN` (indefinido) + um `tie_rate = 1,0` visível. Hoje `tie_rate` **não
+  existe** como coluna; só dá para reconstruí-lo via `ties / aligned_timestamps`.
+
+  | Situação | `lw` | `rw` | `ties` | `*_win_rate_ex_ties` reportado | Leitura honesta |
+  |---|---|---|---|---|---|
+  | disputa normal | 55 | 40 | 5 | 0,579 / 0,421 | ok |
+  | tudo empate (configs idênticos) | 0 | 0 | 100 | **0,0 / 0,0** | deveria ser `NaN` + `tie_rate=1` |
+
+  **Quando importa:** se algum consumidor ordenar/filtrar por `win_rate_ex_ties` sem olhar
+  `ties`, dois configs idênticos aparecem como "0% de vitória" em vez de "indistinguíveis".
+  **Quando é tolerável:** se `tie_rate` for sempre reportado junto (hoje não é).
+
+  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: **expor `tie_rate
+  > = ties / aligned_timestamps`** como coluna de primeira classe e **retornar `NaN`** (não
+  > `0`) para as taxas `_ex_ties` quando `left_wins + right_wins == 0` (todos empates), em
+  > vez do `max(1, ·)` que disfarça o caso degenerado como derrota mútua.
+
+**4. top-50 aplicado *antes* do cálculo (carona na inferência seletiva)**
+- **O que o doc afirma:** `_select_top_configs_for_pairwise(g, max_configs=50)` roda antes
+  de montar a `loss_matrix` (linha 396), igual a DM/MCS.
+- **Como deveria funcionar (exemplo):** de 200 configs, só as 50 de menor `squared_error`
+  médio **no próprio split de teste** entram no win-rate; o placar é relativo a esse
+  universo já filtrado pelos dados que ele vai descrever.
+- **O que esperar no código:** chamada ao filtro no início do loop de grupos do builder.
+- **Ref do doc → código:** [`pairwise.py:396`](../../../../src/domain/services/gold_builders/pairwise.py#L396). ✅ **Confere:** `g = _select_top_configs_for_pairwise(g, max_configs=50)` — mesma função e `max_configs=50` dos callsites DM (L299) e MCS (L351). É o problema de inferência seletiva detalhado no **item #4**; aqui só herda a carona.
+
+**5. Sem variância, sem p-value, sem IC: é placar, não teste**
+- **O que o doc afirma:** "não é teste estatístico; para inferência exige sign test/block
+  bootstrap com HAC"; "sem variância/IC".
+- **Como deveria funcionar (exemplo):** um win-rate de 60% sobre `n=50` e outro de 60% sobre
+  `n=5000` são **o mesmo número** na saída, mas o segundo é muito mais confiável. Para virar
+  inferência precisaria de um **sign test** (binomial: "60/100 vitórias é diferente de
+  50/50 por acaso?") ou um **block bootstrap** que respeite a autocorrelação temporal — nada
+  disso existe aqui.
+- **O que esperar no código:** ausência de qualquer cálculo de erro-padrão, p-value ou
+  intervalo nas linhas do builder.
+- **Ref do doc → código:** [`pairwise.py:409-444`](../../../../src/domain/services/gold_builders/pairwise.py#L409) (corpo do loop). ✅ **Confere:** o `rows.append({...})` só carrega contagens, taxas e médias de loss — **nenhuma** coluna de variância/p-value/IC. Confirmado por leitura da função inteira.
+- ⚠️ **Ponto de atenção — "parece evidência, mas não é"; e não há controle de multiplicidade**
+  Win-rate tem a aparência de um número "estatístico", mas é uma **proporção amostral sem
+  modelo de incerteza**. Riscos:
+
+  - **Sem IC**, não dá para dizer se 55% é "diferente de empate" ou ruído de amostra pequena.
+  - **Sem controle de multiplicidade**, comparar todos os pares dos top-50 (são `50·49/2 =
+    1225` pares por grupo) garante que alguns win-rates extremos apareçam **só por sorte** —
+    o mesmo problema que o Holm ataca no DM (item #3), aqui **sem nenhuma correção**.
+  - O sign test é, ele próprio, **conservador** (ignora magnitude — a mesma cegueira do
+    elemento 1), então mesmo a versão "inferencial" do win-rate é fraca para o claim
+    probabilístico.
+
+  **Quando importa:** se win-rate entrar como **critério** (desempate, seleção, narrativa de
+  "vencedor"). **Quando é tolerável:** como **descritivo rotulado** — "fração de timestamps
+  liderados", lado a lado com loss média e `n`. O skeleton fixa o destino: **manter
+  `DESCRIPTIVE_ONLY`**; se algum dia virar critério, exigir flag explícita + sign
+  test/IC por block bootstrap.
+
+  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: **manter win-rate
+  > como descritivo não-inferencial** e **bloquear** consumidores (plots, narrativa do
+  > paper, `gold_model_decision_final`) de tratá-lo como evidência. Só promover a critério
+  > com (a) sign test/binomial **ou** block bootstrap para IC, (b) controle de multiplicidade
+  > sobre os pares, e (c) reporte obrigatório de `tie_rate` e `n` alinhado.
+
+**6. Consumo em `confidence.py`: `win_rate_ex_ties_mean` (média NÃO ponderada; coluna passiva)**
+- **O que o doc afirma:** `gold_win_rate_pairwise_results` é consumido por
+  `_build_model_decision_final` ([`confidence.py:649-694`](../../../../src/domain/services/gold_builders/confidence.py#L649)) só para gerar `win_rate_ex_ties_mean`; a ordenação final é por `rank_rmse, rank_mae`; `academic_decision_ready` **não** depende de win-rate.
+- **Como deveria funcionar (exemplo):** o config X aparece em vários pares — como `left` em
+  (X vs A), (X vs B) e como `right` em (C vs X). O consumidor coleta o `*_win_rate_ex_ties`
+  de X em **cada** par e tira a média. Se X tem `[0,60, 0,40, 0,55]`, então
+  `win_rate_ex_ties_mean(X) = 0,517` — a "taxa de vitória média de X contra o campo".
+- **O que esperar no código:** um dicionário `recs` por `(asset, parent_sweep_id, split,
+  horizon, config_label)` acumulando os `_ex_ties`, e `np.mean(vals)` no fim; depois merge
+  em `out` e nenhuma entrada na chave de ordenação.
+- **Ref do doc → código:** construção em [`confidence.py:660-693`](../../../../src/domain/services/gold_builders/confidence.py#L660) (`win_rate_ex_ties_mean = float(np.mean(vals))` em L691); merge em [`confidence.py:717-727`](../../../../src/domain/services/gold_builders/confidence.py#L717); ordenação em [`confidence.py:815-818`](../../../../src/domain/services/gold_builders/confidence.py#L815); `academic_decision_ready` em [`confidence.py:809-813`](../../../../src/domain/services/gold_builders/confidence.py#L809). ✅ **Confere:** L691 calcula a média; L815-818 ordena por `["asset", "parent_sweep_id", "horizon", "rank_rmse", "rank_mae"]` (win-rate **não** entra); L809-813 define `academic_decision_ready` só a partir de `pairwise_ready_dm & pairwise_ready_mcs & target_exact_alignment`. Wiring confirmado: `win_rate_results=ctx.gold_outputs["gold_win_rate_pairwise_results"]` ([`confidence.py:841`](../../../../src/domain/services/gold_builders/confidence.py#L841)).
+- ⚠️ **Ponto de atenção — a média é NÃO ponderada por `n` e funde `split_signature` (silenciosamente)**
+  A chave de agregação do consumidor é `(asset, parent_sweep_id, split, horizon,
+  config_label)` ([`confidence.py:662-668`](../../../../src/domain/services/gold_builders/confidence.py#L662)) — **sem `split_signature`** e **sem peso por `aligned_timestamps`**. Dois efeitos:
+
+  - **Não ponderado por `n`:** um par com `n=5` (placar ruidoso) contribui **igual** a um par
+    com `n=500` no `np.mean`. Um `_ex_ties` instável de poucos timestamps puxa a média do
+    config tanto quanto um sólido de muitos. O honesto seria média **ponderada por
+    `aligned_timestamps`** (ou por `non_ties`).
+  - **`split_signature` fundido por média:** se um config tem dois `split_signature`
+    (ex.: dois folds de walk-forward), as taxas de ambos caem na **mesma** lista `vals` e são
+    **promediadas**. Isso é uma agregação **implícita** — diferente do MCS (item #2), que
+    descarta `split_signature` via `drop_duplicates` e escolhe **arbitrariamente** uma linha.
+    Aqui ao menos é **determinístico** (a média independe da ordem), o que é *melhor* que o
+    MCS; mas continua **escondendo** a granularidade por desenho experimental.
+
+  | Métrica | Como funde `split_signature` no `decision_final` | Determinístico? |
+  |---|---|---|
+  | MCS (item #2) | `drop_duplicates(merge_cols)` → escolhe **uma** linha | ❌ depende da ordem |
+  | win-rate (este) | `np.mean` sobre todas as taxas do config | ✅ média é order-independent |
+
+  **Quando importa:** ao ler `win_rate_ex_ties_mean` como "taxa de vitória **deste** desenho"
+  — na verdade é a média sobre **todos** os oponentes **e** todos os `split_signature`,
+  igualmente pesados. **Quando é tolerável:** como **perfil grosso** de consistência, dado
+  que a coluna é **passiva** (não ordena, não entra em `academic_decision_ready`) — o risco
+  real é narrativa/plot tratá-la como evidência (mesmo risco do elemento 5).
+
+  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: se a coluna for
+  > mantida, **ponderar a média por `aligned_timestamps`** (ou `non_ties`) e **preservar
+  > `split_signature`** na chave de agregação (ou agregar com regra explícita), em vez do
+  > `np.mean` não ponderado que funde desenhos. Mantê-la marcada como **diagnóstica
+  > não-inferencial** no artefato final.
+
+### Cross-check — o que NÃO está corretamente indicado/referenciado
+
+Li o `WinRatePairwiseResultsGoldBuilder` inteiro (L381-445), o filtro top-50 (L43-64), o
+`_pairwise_preprocess` (loss em L280) e os dois consumidores em `confidence.py`
+(`_build_model_decision_final` 463-818 e `QualityStatisticsReportGoldBuilder` 847-964). As
+referências **substantivas** conferem; há duas imprecisões de linha e uma omissão de alcance:
+
+1. **Coluna `ties`: linha real é 433, não 432.** O dossiê diz "Coluna `ties` presente na
+   saída (linha 432)"; em [`pairwise.py:433`](../../../../src/domain/services/gold_builders/pairwise.py#L433) é `"ties": ties,` (L432 é `"right_wins": right_wins,`). Off-by-one ⚠️, não quebra nada.
+
+2. **`split_signature` propagada: linha real é 423, não 422.** O dossiê diz "split_signature
+   propagada condicionalmente (linha 422)"; em [`pairwise.py:423`](../../../../src/domain/services/gold_builders/pairwise.py#L423) é `"split_signature": keys[2] if "split_signature" in group_cols else None,` (L422 é `"parent_sweep_id": keys[1],`). Off-by-one ⚠️.
+
+3. **"Uso atual" omite o segundo consumidor: `gold_quality_statistics_report`.** O dossiê
+   lista só o merge em `decision_final`. Mas `gold_win_rate_pairwise_results` também alimenta
+   `QualityStatisticsReportGoldBuilder` ([`confidence.py:918-926`](../../../../src/domain/services/gold_builders/confidence.py#L918)), que dele extrai `win_rate_pairs` e `aligned_timestamps_win_rate` e deriva `win_rate_available` (L958). **Tranquilizador:** ali win-rate é puramente **contagem** e **não** entra em `statistics_ready` (L959-961 = `quality_passed_all & dm_available & mcs_available`), reforçando o caráter descritivo. Mesmo assim é uma referência cross-file que o dossiê não menciona.
+
+4. **Referências confirmadas exatas:** loss `squared_error` (L280) ✅; top-50 (L396) ✅;
+   comparação `l < r` (L415-416) ✅; `non_ties = max(1, ·)` (L418) ✅; quatro taxas
+   (L434-437) ✅; `dropna(how="any")` global (L405) ✅; ausência de `tie_rate`/variância/IC ✅;
+   `win_rate_ex_ties_mean = np.mean(vals)` (L691) ✅; ordenação `rank_rmse, rank_mae`
+   (L815-818) ✅; `academic_decision_ready` sem win-rate (L809-813) ✅; wiring (L841) ✅.
+
+5. **Pontos residuais metodológicos já capturados pelo dossiê.** "Sem variância/IC",
+   "tratamento implícito de empates (sem `tie_rate` visível)", "carona em top-50 e loss
+   squared_error" e "`win_rate_ex_ties_mean` sem disclaimer em `gold_model_decision_final`"
+   constam dos "Riscos conhecidos". Os aprofundamentos acima detalham o mecanismo (placar
+   cego à magnitude, `n` global, guard `max(1, ·)` mascarando o caso tudo-empate, média não
+   ponderada e fusão de `split_signature` no consumidor).
+
+### Veredito do item #8
+
+🟡 **Ressalvas.** O win-rate é calculado **exatamente** como o dossiê afirma (proporção de
+timestamps com `squared_error_left < squared_error_right`, sobre o suporte alinhado dos
+top-50), e a maioria das âncoras de linha confere. As ressalvas são (a) **de
+precisão/completude do dossiê** — duas linhas off-by-one (`ties` em L433, `split_signature`
+em L423) e a omissão do segundo consumidor (`gold_quality_statistics_report`); e (b)
+**metodológicas** — win-rate é um **placar descritivo cego à magnitude e à incerteza** (sem
+variância/p-value/IC, sem controle de multiplicidade), o `n` reportado é a interseção
+**global** (não pairwise), o guard `max(1, ·)` mascara o caso "tudo empate" como derrota
+mútua (`0` em vez de `NaN`), e o consumidor faz uma média **não ponderada** que ainda funde
+`split_signature`. Nenhum defeito de localização; a coluna é **passiva** no artefato final
+(não ordena, não entra em `academic_decision_ready`), então o risco real é leitura indevida
+downstream. As decisões (expor `tie_rate`, `NaN` no tudo-empate, média ponderada + preservar
+`split_signature`, manter `DESCRIPTIVE_ONLY` com bloqueio de uso confirmatório) são de
+C.0.2/C.0.3. Decisões recomendadas registradas nos elementos 3, 5 e 6 — pendentes de
+confirmação com a pesquisa acadêmica do paper.
+
+---
+
+## #7 — Pinball loss
+
+### O que é (didático)
+
+A **pinball loss** (também chamada *quantile loss* ou *check loss*) mede o quão bom é
+um **forecast de um quantil específico**. Para o quantil `q` (digamos o percentil 90), ela
+pune o erro de forma **assimétrica**: se o valor real cai **acima** do forecast (o quantil
+ficou baixo demais), a multa é `q × erro`; se cai **abaixo**, a multa é `(1−q) × erro`.
+Essa assimetria **é** o ponto: para o percentil 90, o real deveria raramente ultrapassá-lo,
+então **ultrapassar** (real > forecast) custa `0,9/0,1 = 9×` mais do que o contrário —
+empurrando o modelo a colocar o q90 alto o suficiente.
+
+O "truque" central: a pinball é uma **regra de pontuação própria** (*proper scoring rule*,
+Koenker-Bassett 1978; Gneiting 2011) — o modelo só minimiza a pinball esperada **dizendo a
+verdade** sobre seus quantis; não dá para "trapacear" o score. Média da pinball sobre os
+timestamps e sobre os 3 quantis (q10/q50/q90) dá um resumo único de **quão bem a
+distribuição prevista bate com a realidade**. Menor = melhor. É **a** loss para claims
+probabilísticos — ao contrário do `squared_error` (item #1/#2), que só nota o **ponto**
+central.
+
+### Elementos
+
+**1. Fórmula `_pinball_loss` — `max(q·diff, (q−1)·diff)` com `diff = y_true − y_pred_q`**
+- **O que o doc afirma:** `diff = y_true - y_pred_q; return np.maximum(q * diff, (q - 1.0) * diff)`
+  ([`quantile.py:79-82`](../../../../src/domain/services/gold_builders/quantile.py#L79)) — equivale à pinball canônica.
+- **Como deveria funcionar (exemplo):** para `q=0,9`:
+  - `y_true=120`, `q90=110` → `diff=+10` → `max(0,9·10; −0,1·10) = max(9; −1) = 9`. O real
+    **ultrapassou** o percentil 90 (limite superior baixo demais) → multa pesada **9**.
+  - `y_true=100`, `q90=110` → `diff=−10` → `max(0,9·(−10); −0,1·(−10)) = max(−9; 1) = 1`. O
+    real ficou **abaixo** do q90 (esperado ~90% das vezes) → multa leve **1**.
+
+  A razão 9:1 é exatamente a assimetria `q:(1−q)`. Para `q=0,5` (mediana) a fórmula vira
+  `max(0,5·diff; −0,5·diff) = 0,5·|diff|` → **metade do erro absoluto** (simétrico).
+- **O que esperar no código:** uma função pura que recebe `(y_true, y_pred_q, quantile)` e
+  devolve `np.maximum(q*diff, (q-1)*diff)`, sem clip nem dropna internos.
+- **Ref do doc → código:** [`quantile.py:79-82`](../../../../src/domain/services/gold_builders/quantile.py#L79).
+  ✅ **Confere** (li a função inteira): `q = float(quantile); diff = y_true - y_pred_q;
+  return np.maximum(q * diff, (q - 1.0) * diff)`. Verifiquei o sinal nos dois ramos: com
+  `diff>0` vence `q·diff` (>0); com `diff<0` vence `(q−1)·diff` (>0, pois `q−1<0`). É a
+  pinball canônica, idêntica à fórmula de livro-texto. **Sem `abs()`, sem clip, sem dropna**
+  — a função é puramente vetorial.
+
+**2. Quantis aplicados q=0,1 / 0,5 / 0,9 — hard-coded**
+- **O que o doc afirma:** aplicada para q=0,1, q=0,5, q=0,9
+  ([`quantile.py:188-190`](../../../../src/domain/services/gold_builders/quantile.py#L188)).
+- **Como deveria funcionar (exemplo):** o código chama `_pinball_loss(y_true, q10_col, 0.1)`,
+  `(..., q50_col, 0.5)`, `(..., q90_col, 0.9)`. O **nível** passado (0,1) e a **coluna**
+  lida (`q10_col`) precisam casar: a coluna `q10_col` tem de conter de fato o percentil 10.
+- **O que esperar no código:** três literais `0.1/0.5/0.9` passados ao `_pinball_loss`, com
+  as colunas `q10_col/q50_col/q90_col` vindas de `quantile_columns` (raw **ou**
+  post-guardrail — a função roda duas vezes, L305/L381).
+- **Ref do doc → código:** [`quantile.py:188-190`](../../../../src/domain/services/gold_builders/quantile.py#L188).
+  ✅ **Confere:** `valid["pinball_q10_row"] = _pinball_loss(valid["y_true"], valid[q10_col],
+  0.1)`; idem `0.5` (L189) e `0.9` (L190). Os níveis são **literais**, não lidos de
+  `quantile_levels`.
+- ⚠️ **Ponto de atenção — quantis "duplamente" hard-coded: nível E coluna**
+  É a mesma fragilidade de drift de nível já vista no PICP (item #5, elemento 4) e no MPIW
+  (item #6), mas aqui ela é **dupla**: a pinball depende (a) do **valor** `q` passado e (b)
+  da **suposição** de que `q10_col` guarda o percentil 10. Se um sweep futuro emitir, por
+  exemplo, percentis {0,05; 0,5; 0,95} **mantendo os nomes de coluna `quantile_p10/p90`**, o
+  código calcularia `_pinball_loss(..., 0.1)` sobre um valor que na verdade é o percentil 5
+  → **pinball sistematicamente errada** (peso de quantil desalinhado do quantil real), e de
+  forma **silenciosa** (nenhum erro é levantado).
+
+  | Cenário do sweep | O que acontece | Risco |
+  |---|---|---|
+  | quantis = {0,1; 0,5; 0,9} (atual) | nível passado == quantil real | ✅ nenhum |
+  | quantis = {0,05; 0,5; 0,95} mas colunas ainda `p10/p90` | pinball usa peso 0,1 sobre o percentil 5 | 🔴 pinball viesada, sem aviso |
+  | colunas de quantil ausentes/renomeadas | guard de colunas faltantes ([`quantile.py:133-135`](../../../../src/domain/services/gold_builders/quantile.py#L133)) devolve DataFrame vazio | ⚠️ métrica some sem aviso explícito |
+
+  **Quando importa:** qualquer sweep com níveis ≠ {0,1; 0,5; 0,9}, ou promoção a
+  confirmatório onde os níveis precisam ser **provadamente** os do contrato. **Quando é
+  tolerável:** o escopo atual fixa 10/50/90 — hoje os literais estão "certos por coincidência
+  de configuração"; o risco é **drift silencioso** se a config mudar. É o mesmo risco que o
+  skeleton lista ("quantis hard-coded podem não bater com `quantile_levels`").
+
+  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: ler os níveis de
+  > quantil de `quantile_levels` reais do contrato e passar `(coluna, nível)` casados ao
+  > `_pinball_loss`, em vez dos literais `0.1/0.5/0.9`; validar por contrato que os nomes de
+  > coluna (`p10/p50/p90`) correspondem aos níveis reais. Decisão **gêmea** da do
+  > `coverage_nominal` dinâmico no PICP (item #5, elemento 4) — resolver juntas.
+
+**3. `mean_pinball` = média simples dos 3 quantis `(q10+q50+q90)/3` — pesos uniformes**
+- **O que o doc afirma:** `pinball_mean_row = (q10 + q50 + q90) / 3.0` — média simples com
+  pesos iguais ([`quantile.py:191-193`](../../../../src/domain/services/gold_builders/quantile.py#L191)).
+- **Como deveria funcionar (exemplo):** numa linha com `pinball_q10=2`, `pinball_q50=1`,
+  `pinball_q90=3` → `pinball_mean_row = (2+1+3)/3 = 2`. Os três quantis pesam **igual**;
+  nenhum (nem a mediana, nem as caudas) recebe mais importância.
+- **O que esperar no código:** soma dos três `_row` dividida por `3.0`, sem pesos.
+- **Ref do doc → código:** [`quantile.py:191-193`](../../../../src/domain/services/gold_builders/quantile.py#L191).
+  ✅ **Confere** exatamente: `valid["pinball_mean_row"] = (valid["pinball_q10_row"] +
+  valid["pinball_q50_row"] + valid["pinball_q90_row"]) / 3.0`.
+- ⚠️ **Ponto de atenção — média uniforme ≠ WIS/CRPS; é uma aproximação, não o score *principled***
+  A média simples dos 3 quantis é um resumo razoável, mas **não é** a forma canônica de
+  agregar uma previsão por quantis num número só. As alternativas da literatura **pesam**
+  diferente:
+
+  | Agregação | Como pesa os quantis | Quando é a escolha certa |
+  |---|---|---|
+  | média uniforme `(q10+q50+q90)/3` (atual) | iguais | resumo descritivo rápido; OK com poucos quantis |
+  | **WIS** (Weighted Interval Score, Bracher 2021) | mediana com peso `1/2`; cada intervalo `(1−α)` com peso `α/2`, normalizado | claim probabilístico comparável a forecasting hubs |
+  | **CRPS** (aproximação por quantis) | integra sobre **muitos** níveis; 3 quantis é grosseiro | distribuição preditiva completa |
+
+  Com apenas 3 níveis fixos, a média uniforme é uma **aproximação grosseira** do CRPS, e
+  difere do WIS (que dá metade do peso à mediana). **Quando importa:** se `mean_pinball` for
+  usado para **comparar/eleger** modelos como métrica primária do claim — aí o esquema de
+  pesos vira uma decisão metodológica que precisa ser declarada e justificada (a §4 do
+  skeleton já anota "pesos uniformes implícitos em `mean_pinball`"). **Quando é tolerável:**
+  como resumo descritivo reportado ao lado dos três `pinball_q10/q50/q90` individuais (que o
+  código também persiste), a média uniforme é transparente e auditável.
+
+  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: para qualquer uso
+  > comparativo/seletivo, preferir um score com pesos *principled* (**WIS** ou CRPS por
+  > quantis) ou **documentar explicitamente** a escolha de pesos uniformes como convenção do
+  > projeto; em ambos os casos, sempre reportar os três quantis individuais ao lado do
+  > agregado.
+
+**4. Agregação por grupo: `mean_pinball` e os 3 quantis individuais**
+- **O que o doc afirma:** agg `mean_pinball=("pinball_mean_row", "mean")`
+  ([`quantile.py:243`](../../../../src/domain/services/gold_builders/quantile.py#L243)); o
+  mesmo agg emite `pinball_q10/q50/q90` (médias das `_row` correspondentes).
+- **Como deveria funcionar (exemplo):** num grupo com 3 linhas elegíveis de `pinball_mean_row`
+  {2,0; 1,5; 2,5} → `mean_pinball = 6/3 = 2,0`. Como todas as três `_row` (q10/q50/q90) são
+  mascaradas **juntas** (elemento 5), vale a identidade: no nível do grupo
+  `mean_pinball == (pinball_q10 + pinball_q50 + pinball_q90)/3` — a ordem das médias não
+  altera o resultado (tudo é média linear sobre o **mesmo** conjunto de linhas). Agrupa por
+  `(run_id, asset, feature_set_name, config_signature, split, fold, seed, horizon)`.
+- **O que esperar no código:** quatro entradas no `.agg(...)` — `pinball_q10/q50/q90` e
+  `mean_pinball` — todas com `"mean"`, e o groupby pelos campos de run/split/horizon.
+- **Ref do doc → código:** [`quantile.py:240-243`](../../../../src/domain/services/gold_builders/quantile.py#L240)
+  (aggs) + [`quantile.py:214-227`](../../../../src/domain/services/gold_builders/quantile.py#L214)
+  (group_cols). ✅ **Confere:** `pinball_q10=("pinball_q10_row","mean")` (L240),
+  `pinball_q50` (L241), `pinball_q90` (L242), `mean_pinball=("pinball_mean_row","mean")`
+  (L243); group_cols nas L214-227.
+
+**5. Filtro Cat C — pinball mascarada a NaN para linhas não-elegíveis (elegibilidade julgada nos quantis CRUS)**
+- **O que o doc afirma:** a pinball é calculada para **todas** as linhas elegíveis; o Cat C
+  filter aplica máscara NaN para não-elegíveis **antes** do agg
+  ([`quantile.py:201-212`](../../../../src/domain/services/gold_builders/quantile.py#L201)).
+- **Como deveria funcionar (exemplo):** uma run de **previsão pontual**
+  (`prediction_mode != "quantile"`) ou de quantis **colapsados na origem** (`q10_raw == q90_raw`)
+  → não-elegível → suas `pinball_q10/q50/q90_row` e `pinball_mean_row` viram **NaN** → o
+  `.mean()` as ignora. Se a run for **toda** degenerada, `n_probabilistic_samples=0` e o
+  `mean_pinball` do grupo vira **NaN** (não um número enganoso).
+- **O que esperar no código:** `pinball_q10_row`, `pinball_q50_row`, `pinball_q90_row`,
+  `pinball_mean_row` todos na tupla `prob_row_cols`, e o loop que põe NaN onde
+  `~prob_eligible_mask`.
+- **Ref do doc → código:** [`quantile.py:201-212`](../../../../src/domain/services/gold_builders/quantile.py#L201)
+  (máscara) + [`quantile.py:162-171`](../../../../src/domain/services/gold_builders/quantile.py#L162)
+  (elegibilidade). ✅ **Confere:** os quatro `pinball_*_row` são os itens 1-4 de
+  `prob_row_cols` (L202-205); o loop `valid.loc[~prob_eligible_mask, col] = np.nan`
+  (L210-212) os mascara; a elegibilidade vem de `is_non_degenerate = (p10_raw != p90_raw) &
+  ...` sobre `RAW_QUANTILE_COLUMNS` (L162-166) e `is_quantile_mode` (L169).
+- ⚠️ **Ponto de atenção — "triplet degenerado tem pinball finito mas sem semântica" está mitigado; mas a mediana é mascarada junto, e a elegibilidade é crua**
+  O risco listado no dossiê ("triplet degenerado tem pinball finito mas sem semântica
+  probabilística") **já está mitigado**: uma linha degenerada não entra nas médias de pinball
+  (vira NaN). Sem o filtro, um triplet colapsado teria pinball finita porém sem significado
+  distribucional, contaminando o agregado — o Cat C evita isso, exatamente como no PICP e no
+  MPIW.
+
+  Há **duas sutilezas** que o dossiê não menciona:
+
+  1. **A pinball da mediana (q50) é mascarada junto com q10/q90.** Como `pinball_q50 = 0,5·|y_true−q50|`
+     (metade do erro absoluto da mediana), ela é uma medida **válida do ponto central mesmo
+     sem intervalo genuíno**. Ao mascarar toda linha degenerada, uma run que colapsou o
+     intervalo mas tem boa mediana **não registra** `pinball_q50`. **Por que é defensável:** a
+     run está sendo tratada como **não-probabilística**, e a acurácia da mediana já é coberta
+     pelo `mae`/`rmse` (colunas pontuais, que **não** são mascaradas — L198-200) → não há perda
+     real de informação, só de redundância.
+  2. **Elegibilidade julgada nos quantis CRUS mesmo para a `pinball_*_post_guardrail`**
+     (`RAW_QUANTILE_COLUMNS`, L162-166), idêntico ao que foi detalhado no PICP (item #5,
+     elemento 2) e no MPIW (item #6, elemento 2). Quem decide se uma linha conta para a pinball
+     post-guardrail é a **degeneração crua** (o que o modelo emitiu), não o estado pós-guardrail.
+
+  **Quando importa:** ao reportar `mean_pinball`, vale declarar que a base elegível é fixada
+  pelos quantis **crus** e citar `n_probabilistic_samples` ao lado (duas runs com o mesmo
+  `mean_pinball` podem ter denominadores diferentes).
+
+**6. Consumo cross-file: `gold_prediction_calibration` + `gold_model_decision_final` (`mean_mean_pinball`)**
+- **O que o doc afirma:** colunas `pinball_q10/q50/q90`, `mean_pinball` em
+  `gold_prediction_metrics_*`; Phase B usa `pinball_loss_post_guardrail` em
+  `phase_b_dm_family_6.parquet`.
+- **Como deveria funcionar (exemplo):** como toda métrica probabilística, o `mean_pinball`
+  (e os três quantis) "nu" do agg é **renomeado** pelo builder para `*_raw` e
+  `*_post_guardrail` (padrão dois-contratos) — **não existe coluna `pinball`/`mean_pinball`
+  nua** no parquet. A média por config prefixa `mean_` a cada métrica → `mean_pinball_raw`
+  vira `mean_mean_pinball_raw` (duplo "mean"); o `decision_final` escolhe o contrato
+  **post_guardrail** (default) e renomeia para `mean_mean_pinball` / `mean_pinball_q10/q50/q90`.
+- **O que esperar no código:** rename `{m: f"{m}_raw"}`/`{m: f"{m}_post_guardrail"}` no
+  builder; pinball em `gold_prediction_calibration`; `mean_<m>` na agg por config; mapeamento
+  `*_{post_guardrail} → *` no `decision_final`.
+- **Ref do doc → código:** rename em
+  [`quantile.py:335-337`](../../../../src/domain/services/gold_builders/quantile.py#L335)
+  e [`:391-393`](../../../../src/domain/services/gold_builders/quantile.py#L391) (pinball
+  está em `PROBABILISTIC_METRIC_COLUMNS`, [`quantile.py:39-42`](../../../../src/domain/services/gold_builders/quantile.py#L39));
+  pinball em `gold_prediction_calibration` ([`descriptive.py:390-393`](../../../../src/domain/services/gold_builders/descriptive.py#L390)
+  raw e [`:399-402`](../../../../src/domain/services/gold_builders/descriptive.py#L399)
+  post-guardrail); média por config `mean_<m>` em
+  [`quantile.py:651-657`](../../../../src/domain/services/gold_builders/quantile.py#L651);
+  `primary_metric_map` em [`confidence.py:492-499`](../../../../src/domain/services/gold_builders/confidence.py#L492)
+  (`mean_pinball_q10/q50/q90`, `mean_mean_pinball`) + gap em
+  [`confidence.py:563`](../../../../src/domain/services/gold_builders/confidence.py#L563).
+  ✅ **Confere:** `gold_prediction_calibration` carrega `pinball_q10/q50/q90_raw`,
+  `mean_pinball_raw` (L390-393) e os post-guardrail (L399-402); o `decision_final` mapeia
+  `mean_pinball_q10_{contract} → mean_pinball_q10` … `mean_mean_pinball_{contract} →
+  mean_mean_pinball` (L493-496) e `gap_mean_pinball_{contract}_test_minus_val →
+  gap_mean_pinball_test_minus_val` (L563). A ordenação final continua por `rank_rmse,
+  rank_mae` ([`confidence.py:815-818`](../../../../src/domain/services/gold_builders/confidence.py#L815)),
+  e `academic_decision_ready` depende só de DM/MCS/alinhamento
+  ([`confidence.py:809-813`](../../../../src/domain/services/gold_builders/confidence.py#L809))
+  → `mean_mean_pinball` é **coluna passiva** (não é chave de ordenação nem entra no gate).
+- ⚠️ **Ponto de atenção — "Uso atual" subdimensiona o alcance; e o nome `mean_mean_pinball` (duplo "mean")**
+  O campo "Uso atual no projeto" lista só `gold_prediction_metrics_*` e Phase B. Na prática a
+  pinball vai **mais longe**:
+  - chega ao **`gold_prediction_calibration`** (`pinball_q10/q50/q90`, `mean_pinball`, raw e
+    post-guardrail, [`descriptive.py:390-402`](../../../../src/domain/services/gold_builders/descriptive.py#L390));
+  - chega ao **`gold_model_decision_final`** como `mean_pinball_q10/q50/q90`,
+    **`mean_mean_pinball`** e `gap_mean_pinball_test_minus_val`
+    ([`confidence.py:492-499`](../../../../src/domain/services/gold_builders/confidence.py#L492)/[`:563`](../../../../src/domain/services/gold_builders/confidence.py#L563))
+    — coluna passiva, mas presente no artefato final.
+
+  O nome **`mean_mean_pinball`** (duplo "mean") não é erro: o prefixo `mean_` vem da agg por
+  config aplicada à métrica que já se chama `mean_pinball`. **Quando importa:** ao rastrear
+  "onde a pinball influencia decisões", a leitura do dossiê subdimensiona o alcance; e um
+  leitor do parquet pode estranhar `mean_mean_pinball` ou supor que `mean_pinball_q10` e
+  `mean_mean_pinball` são coisas não-relacionadas (a primeira é a média do pinball do q10; a
+  segunda é a média da média dos 3 quantis). Mesma natureza do achado do MPIW (item #6,
+  elemento 4) — completude, não referência quebrada.
+
+**7. Alinhamento com o claim: a pinball é a loss "certa", mas no gold legacy ela é descritiva**
+- **O que o doc afirma:** "Phase B confirmatória; gold legacy descritivo enquanto DM gold
+  roda squared_error"; a §5.1 nomeia `pinball_loss_post_guardrail` como **métrica primária
+  candidata** do claim ([skeleton §5.1](C0_statistical_methods_hardening.md), linhas 179-181).
+- **Como deveria funcionar (exemplo):** o claim do TCC é probabilístico ("TFT melhor
+  probabilisticamente"). A loss coerente com esse claim é a **pinball** (regra própria para
+  quantis) — não o `squared_error`, que mede só o ponto. Logo a pinball **deveria** alimentar
+  o DM/MCS gold e/ou ser o critério de eleição do vencedor.
+- **O que esperar no código:** ou a pinball alimentando o DM gold, ou a ordenação do
+  `decision_final` por uma métrica de pinball.
+- **Ref do doc → código:** DM/MCS gold rodam `squared_error` (item #1, elemento 1 — [`pairwise.py:280`](../../../../src/domain/services/gold_builders/pairwise.py#L280));
+  ordenação do `decision_final` por `rank_rmse, rank_mae`
+  ([`confidence.py:815-818`](../../../../src/domain/services/gold_builders/confidence.py#L815)).
+  ✅ **Confere:** a pinball é computada corretamente, mas **não** alimenta o DM/MCS gold (que
+  usam `squared_error`) **nem** a ordenação final (pontual). É **coluna passiva** no artefato.
+- ⚠️ **Ponto de atenção — métrica correta, subutilizada: o descasamento é do *consumidor*, não da pinball**
+  Este é o ponto-espelho do item #1 (elemento 1) e do item #2 (elemento 1): lá o problema é
+  que o DM/MCS gold usam `squared_error` (loss **pontual**) para um claim **probabilístico**.
+  Aqui o achado é o complemento: a pinball — a loss **certa** para o claim — **existe e está
+  correta**, mas no gold legacy é **descritiva**:
+
+  | Onde a loss probabilística deveria entrar | O que o gold legacy faz | Consequência |
+  |---|---|---|
+  | DM gold (teste de acurácia) | usa `squared_error` (item #1) | DM sustenta claim **pontual**, não probabilístico |
+  | MCS gold (confidence set) | usa `squared_error` (item #2) | confidence set é pontual |
+  | ordenação do `decision_final` | `rank_rmse, rank_mae` (pontual) | vencedor escolhido por métrica pontual |
+  | Phase B (`phase_b_dm_family_6`) | usa `pinball_loss_post_guardrail` | claim probabilístico **já coberto** lá |
+
+  **Quando importa:** se o gold legacy for usado para **sustentar** o claim probabilístico —
+  aí a pinball precisa deixar de ser passiva e virar a loss do DM/MCS e/ou o critério de
+  eleição (como a §5.1 já recomenda). **Quando é tolerável:** enquanto o claim probabilístico
+  confirmatório vier da Phase B, a pinball gold como descritiva (lado a lado com o perfil
+  comparativo) é coerente. **Não é defeito da pinball** — é uma decisão sobre **qual loss o
+  consumidor usa**, herdada do item #1.
+
+  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: **herdar a decisão
+  > do item #1 (elemento 1)** — adotar a **pinball** (`pinball_loss_post_guardrail`, na linha
+  > da §5.1) como loss primária do DM/MCS gold corrigido e/ou como critério de eleição do
+  > vencedor, em vez do `squared_error`/`rank_rmse`. Assim o gold legacy passa a sustentar o
+  > claim **probabilístico**, alinhando-se à Phase B. Não é decisão própria da pinball: ela
+  > já está correta; muda **quem a consome**.
+
+### Cross-check — o que NÃO está corretamente indicado/referenciado
+
+Todas as referências de "Implementação atual localizada" do dossiê de pinball **conferem**
+com o código (li a função `_pinball_loss` 79-82 inteira e `_build_metrics_single_contract`
+102-285, mais o builder run/split/horizon 288-404, `gold_prediction_calibration` em
+descriptive.py 363-419, o agg por config em quantile.py 615-667 e o rollup em confidence.py
+463-818). Pontos a registrar:
+
+1. **Nenhuma referência quebrada.** Linhas-âncora **exatas**: fórmula em L79-82 ✅ (idêntica
+   à canônica); aplicação q=0,1/0,5/0,9 em L188-190 ✅; `pinball_mean_row=(...)/3.0` em
+   L191-193 ✅; aggs `pinball_q10/q50/q90` em L240-242 e `mean_pinball` em L243 ✅; máscara
+   Cat C (pinball em `prob_row_cols`) em L202-205 + L210-212 ✅. As **correções do C.0.1**
+   (skeleton só citava L79; o log adicionou L188-190, L191-193, L243) estão **corretas**.
+
+2. **"Uso atual" subdimensiona o alcance da pinball.** O dossiê lista só
+   `gold_prediction_metrics_*` e Phase B, mas a pinball também: (a) está em
+   **`gold_prediction_calibration`** (`pinball_q10/q50/q90`, `mean_pinball`, raw e
+   post-guardrail, [`descriptive.py:390-402`](../../../../src/domain/services/gold_builders/descriptive.py#L390));
+   (b) chega ao **`gold_model_decision_final`** como `mean_pinball_q10/q50/q90`,
+   `mean_mean_pinball` e `gap_mean_pinball_test_minus_val`
+   ([`confidence.py:492-499`](../../../../src/domain/services/gold_builders/confidence.py#L492)/[`:563`](../../../../src/domain/services/gold_builders/confidence.py#L563)).
+   É coluna passiva (ordenação por `rank_rmse, rank_mae`), mas presente no artefato final.
+   Mesmo padrão do achado do MPIW (item #6).
+
+3. **Não existe coluna `pinball`/`mean_pinball` nua no parquet.** Como toda métrica
+   probabilística, ela é sufixada pelo contrato (`*_raw`/`*_post_guardrail`); no
+   `gold_model_decision_final` aparece como `mean_mean_pinball` (duplo "mean" — agg por config
+   sobre `mean_pinball`). Quem busca `pinball`/`mean_pinball` nu não encontra. Imprecisão de
+   nomenclatura, não referência quebrada (registrado no elemento 6).
+
+4. **Risco "triplet degenerado tem pinball finito mas sem semântica" está mitigado.** O Cat C
+   filter mascara linhas cruamente degeneradas (q10_raw == q90_raw) a NaN antes do agg — o
+   resultado de uma run toda degenerada é **NaN**, não um número enganoso. O dossiê lista o
+   risco como não-tratado; o filtro já o contém (elemento 5). Sutilezas residuais: a pinball
+   da **mediana** (q50, = ½·|erro|) é mascarada junto (defensável — coberta por mae/rmse), e a
+   elegibilidade é julgada nos quantis **crus** mesmo para a `pinball_*_post_guardrail`.
+
+5. **"Pesos uniformes" em `mean_pinball` não consta dos "Riscos conhecidos" do dossiê §6**
+   (embora a §4 do skeleton anote "pesos uniformes implícitos em `mean_pinball`"). A média
+   simples dos 3 quantis difere de WIS (mediana com peso ½) e é aproximação grosseira do CRPS
+   — relevante se `mean_pinball` virar métrica primária do claim (elemento 3).
+
+6. **Pontos residuais metodológicos centrais.** "Quantis hard-coded" consta dos "Riscos
+   conhecidos"; o aprofundamento acima detalha o mecanismo (hard-code **duplo**: nível +
+   coluna, drift silencioso) e a decisão gêmea do `coverage_nominal` do PICP. O alinhamento
+   loss↔claim (pinball correta porém descritiva no gold legacy) é o ponto-espelho dos itens
+   #1/#2 e está capturado no elemento 7.
+
+### Veredito do item #7
+
+🟢 **Íntegro (com ressalvas de completude do dossiê e decisões metodológicas).**
+Referências **intactas** e evidência fiel ao código — a pinball é calculada **exatamente**
+como o dossiê afirma e a fórmula é **idêntica à canônica** (Koenker-Bassett); as correções
+de linha do C.0.1 (L188-190, L191-193, L243) conferem. As ressalvas são (a) **metodológicas**
+— quantis **duplamente hard-coded** (nível + coluna; drift silencioso se a config mudar),
+**pesos uniformes** em `mean_pinball` (≠ WIS/CRPS) e, sobretudo, o **descasamento de uso**: a
+pinball é a loss **certa** para o claim probabilístico mas no gold legacy é **descritiva** (o
+DM/MCS gold e a ordenação usam métricas pontuais — ponto-espelho dos itens #1/#2); e (b) **de
+completude do dossiê** — "Uso atual" subdimensiona o alcance (a pinball chega ao
+`gold_prediction_calibration` e ao `gold_model_decision_final` como `mean_mean_pinball`), não
+existe coluna `pinball` nua, e o risco "triplet degenerado" está **mitigado** pelo Cat C
+filter (→ NaN, não número enganoso), com a elegibilidade julgada nos quantis **crus** mesmo
+para o contrato post-guardrail. Não há defeito de localização; as decisões (níveis dinâmicos,
+WIS/CRPS, pinball como loss do DM gold) são de C.0.2/C.0.3. Decisões recomendadas registradas
+nos elementos 2, 3 e 7 — pendentes de confirmação com a pesquisa acadêmica do paper.
 
 ---
 
