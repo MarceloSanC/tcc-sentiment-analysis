@@ -57,12 +57,12 @@ update_when:
 - [x] #5 — PICP
 - [x] #6 — MPIW
 - [ ] #7 — Pinball loss
-- [ ] #8 — Win-rate gold
+- [x] #8 — Win-rate gold
 - [ ] #9 — prob_up
 - [ ] #10 — confidence_calibrated
-- [ ] #11 — VaR / ES gold
+- [x] #11 — VaR / ES gold
 - [ ] #12 — gold_model_decision_final
-- [ ] #13 — Phase B DM family-6 (referencia)
+- [x] #13 — Phase B DM family-6 (referencia)
 
 ---
 
@@ -1645,6 +1645,117 @@ não é mencionada. Não há defeito de localização; as decisões (interval/Wi
 normalizado, tratamento de cruzamento) são de C.0.2/C.0.3. Decisões recomendadas
 registradas nos elementos 1, 3 e 4 — pendentes de confirmação com a pesquisa acadêmica do
 paper.
+
+---
+
+## #13 — Phase B DM family-6 (referência)
+
+> **Natureza deste item — leia primeiro.** Este é um item de **referência, não de
+> auditoria**. O sidecar Phase B DM family-6 já está **pré-registrado e fechado**
+> (`PROMOTED_CONFIRMATORY`, escopo Phase B), e o escopo de C.0 **não reabre** sua
+> metodologia. Esta seção faz só duas coisas: (1) confirma que os **três caminhos de
+> código** existem (a tarefa literal da C.0.1 para este item) e (2) confirma que cada
+> **característica que o distingue do gold legacy** — pinball post-guardrail, lag `h−1`,
+> HLN, one-sided, família-6 declarada, sem top-50, dedup por `target_timestamp_utc` — está
+> de fato presente no código. **Não** se avalia se essas escolhas estão "certas": Phase B
+> está fechada. O objetivo é deixar a âncora de contraste à prova de drift, para que
+> ninguém confunda `gold_dm_pairwise_results` (gold legacy, item #1) com
+> `phase_b_dm_family_6.parquet` (este sidecar) durante o hardening.
+
+### O que é (didático)
+
+O **Phase B DM family-6** é o artefato **confirmatório** que respondeu às hipóteses
+**H2a/H2b** ("o TFT é melhor que os baselines em perda probabilística"). É a *mesma
+maquinaria* do DM do item #1 — diferença de perdas por período, variância robusta a
+autocorrelação, estatística e p-value — mas montada do jeito **defensável**: perda alinhada
+ao claim (pinball), teste **direcional** (one-sided), correção de **amostra pequena** (HLN),
+lag de previsão teórico (`h−1`), **família declarada antes** de ver os dados (6 testes) e
+**sem** filtro top-50. Por isso ele aparece na §6: como **âncora de contraste** que mostra,
+elemento a elemento, o que o gold legacy faz de diferente — e como **lembrete** de não
+sobrescrever nem confundir os dois durante C.0.
+
+### Elementos
+
+**1. Os três caminhos de código existem e contêm os símbolos do pipeline confirmatório**
+- **O que o doc afirma:** a implementação vive em [`dm_tft_vs_baseline.py`](../../../../src/domain/services/dm_tft_vs_baseline.py), [`holm_family_6.py`](../../../../src/domain/services/holm_family_6.py) e [`compute_phase_b_tier_metrics_use_case.py`](../../../../src/use_cases/compute_phase_b_tier_metrics_use_case.py) (skeleton §6 "caminhos confirmados por `ls` em 2026-05-28").
+- **Como deveria funcionar (exemplo):** uma referência só é sólida se os arquivos existem **e** contêm as funções que o fluxo confirmatório realmente chama. Confirmar por `ls` prova só o arquivo; confirmar por leitura prova que `compute_dm_family`, `apply_holm_one_sided` e o use case que os orquestra estão lá.
+- **O que esperar no código:** `compute_dm_family`/`compute_dm_hln_hac` no service de DM; `apply_holm_one_sided` no service de Holm; o use case importando ambos e escrevendo o sidecar.
+- **Ref do doc → código:** [`dm_tft_vs_baseline.py:277`](../../../../src/domain/services/dm_tft_vs_baseline.py#L277) (`compute_dm_family`) e [`:224`](../../../../src/domain/services/dm_tft_vs_baseline.py#L224) (`compute_dm_hln_hac`); [`holm_family_6.py:7`](../../../../src/domain/services/holm_family_6.py#L7) (`apply_holm_one_sided`); [`compute_phase_b_tier_metrics_use_case.py:11-16`](../../../../src/use_cases/compute_phase_b_tier_metrics_use_case.py#L11) (imports). ✅ **Confere:** li os três arquivos inteiros — todos existem e expõem exatamente esses símbolos. Confirmação por **leitura direta** (mais forte que o `ls` do skeleton).
+
+**2. Perda = pinball post-guardrail (gold legacy usa squared_error)**
+- **O que o doc afirma:** §7 (tabela de contraste) — loss do sidecar = `pinball_loss_post_guardrail`; do gold = `squared_error`.
+- **Como deveria funcionar (exemplo):** com `y_true=100`, `q10=95, q50=101, q90=108`: pinball_q50 = `max(0.5·(100−101), −0.5·(100−101)) = max(−0.5, 0.5) = 0.5`; pinball_q10 = `max(0.1·5, −0.9·5) = 0.5`; pinball_q90 = `max(0.9·(−8), −0.1·(−8)) = 0.8`; perda = `(0.5+0.5+0.8)/3 ≈ 0.6`. Mede a **qualidade da distribuição** (q10/q50/q90), não o erro do ponto. O gold legacy, para a mesma linha, usaria `(y_pred − 100)²` — pergunta **pontual**, não probabilística (ver item #1, elemento 1).
+- **O que esperar no código:** uma função de pinball média sobre as três colunas `quantile_p{10,50,90}_post_guardrail`.
+- **Ref do doc → código:** [`dm_tft_vs_baseline.py:49-54`](../../../../src/domain/services/dm_tft_vs_baseline.py#L49) (`mean_pinball_post_guardrail`) e [`:44-46`](../../../../src/domain/services/dm_tft_vs_baseline.py#L44) (`_pinball`). ✅ **Confere:** `(_pinball(y,q10,0.1)+_pinball(y,q50,0.5)+_pinball(y,q90,0.9))/3.0` sobre as colunas `quantile_p10/p50/p90_post_guardrail`; alimentada como `df["loss"]` em [`:147`](../../../../src/domain/services/dm_tft_vs_baseline.py#L147).
+
+**3. HAC Newey-West com lag = `max(h−1, 1)` (gold usa `min(max(1, n^{1/3}), 10)`)**
+- **O que o doc afirma:** §7 — HAC do sidecar = "Newey-West, lag `max(h−1, 1)`"; do gold = "Bartlett, lag `min(max(1, n^{1/3}), 10)`".
+- **Como deveria funcionar (exemplo):** erros de previsão *h*-passos seguem MA(*h−1*), então o lag canônico é `h−1`. Para `h=7` → lag `max(6,1)=6`; para `h=1` → lag `max(0,1)=1`. O gold legacy, para `n≈1000`, escolheria lag 10 (o teto) — **ignorando** o horizonte. Mesmo kernel de Bartlett (peso `1 − k/(lag+1)`), bandwidth diferente (ver item #1, elemento 4).
+- **O que esperar no código:** `lag = max(h−1, 1)` e o loop HAC com peso de Bartlett.
+- **Ref do doc → código:** [`dm_tft_vs_baseline.py:233`](../../../../src/domain/services/dm_tft_vs_baseline.py#L233) (`lag = max(int(horizon) - 1, 1)`) e [`:243`](../../../../src/domain/services/dm_tft_vs_baseline.py#L243) (`weight = 1.0 - (k / (lag + 1.0))`). ✅ **Confere** exatamente; o lag usado é exportado em `hac_lag_used` ([`:315`](../../../../src/domain/services/dm_tft_vs_baseline.py#L315)).
+
+**4. Correção HLN de amostra pequena aplicada (gold não tem)**
+- **O que o doc afirma:** §7 — small-sample do sidecar = "HLN aplicado"; do gold = "Sem HLN".
+- **Como deveria funcionar (exemplo):** HLN encolhe a estatística por `sqrt[(n + 1 − 2h + h(h−1)/n)/n]` (ver item #1, elemento 5). Para `n≈937, h=7`: fator `= (937 + 1 − 14 + 42/937)/937 ≈ 0,986` → `sqrt ≈ 0,993` → encolhe a estatística ~0,7% (efeito pequeno por `n` ser grande). Em coortes pequenas o efeito é maior; por isso a prática é **sempre aplicar**, como Phase B faz e o gold legacy **não**.
+- **O que esperar no código:** cálculo do fator HLN, multiplicação da estatística e uma flag `hln_applied`.
+- **Ref do doc → código:** [`dm_tft_vs_baseline.py:255`](../../../../src/domain/services/dm_tft_vs_baseline.py#L255) (`hln_factor`), [`:259`](../../../../src/domain/services/dm_tft_vs_baseline.py#L259) (`dm_hln = dm_stat * sqrt(hln_factor)`) e [`:272`](../../../../src/domain/services/dm_tft_vs_baseline.py#L272) (`hln_applied=True`). ✅ **Confere:** a estatística reportada em `DMResult.dm_stat` **já é a corrigida** (`dm_hln`, [`:268`](../../../../src/domain/services/dm_tft_vs_baseline.py#L268)).
+
+**5. Teste one-sided `H_A: TFT < baseline`, e o Holm corrige o p-value one-sided (gold é two-sided)**
+- **O que o doc afirma:** §7 — tail do sidecar = "One-sided `H_A: TFT < baseline`"; do gold = "Two-sided". E o Holm da família corrige o **one-sided** (cf. item #3, elemento 1, que ancorou em `holm_family_6.py:16`).
+- **Como deveria funcionar (exemplo):** a série é `d_t = loss_TFT − loss_baseline`; negativo = TFT melhor. Se `dm_hln = −1,9`: one-sided-less `p = Φ(−1,9) ≈ 0,029` (significativo a 5%); two-sided `= 2·(1−Φ(1,9)) ≈ 0,057` (não significativo). Mesma evidência, veredicto diferente — o one-sided "ganha poder" para o claim direcional, e é **esse** `0,029` que entra no Holm.
+- **O que esperar no código:** `pvalue_one_sided_less = Φ(dm_hln)`; e o use case passando essa coluna ao Holm.
+- **Ref do doc → código:** [`dm_tft_vs_baseline.py:266`](../../../../src/domain/services/dm_tft_vs_baseline.py#L266) (`p_less = float(_norm_cdf(dm_hln))`; two-sided fica em [`:265`](../../../../src/domain/services/dm_tft_vs_baseline.py#L265)) e [`compute_phase_b_tier_metrics_use_case.py:244`](../../../../src/use_cases/compute_phase_b_tier_metrics_use_case.py#L244) (`apply_holm_one_sided(dm["pvalue_one_sided_less"])`). ✅ **Confere:** o Holm da família recebe **o one-sided**, não o two-sided (espelho exato do gap apontado no gold legacy, item #3).
+
+**6. Família declarada ex-ante = 6 testes (3 baselines × 2 horizontes)**
+- **O que o doc afirma:** §6 e §7 — "6 testes … Holm sobre família 6 (3 baselines × 2 horizontes), declarada ex-ante"; o gold legacy, ao contrário, usa um groupby administrativo `(asset, parent_sweep_id, split, horizon)` sem `split_signature` (item #3).
+- **Como deveria funcionar (exemplo):** a família é o **produto cartesiano declarado na política**: `confirmatory_horizons = (1, 7)` × 3 `baseline_model_versions` = 6 linhas → o Holm corrige com `m = 6`. Não é "o que sobrou de um groupby"; é o conjunto fixado antes de ver os p-values.
+- **O que esperar no código:** `compute_dm_family` iterando horizontes × baselines, e o use case montando a família-6 + Holm com `analysis_role="primary_family_6"`.
+- **Ref do doc → código:** [`dm_tft_vs_baseline.py:287-290`](../../../../src/domain/services/dm_tft_vs_baseline.py#L287) (loop `horizon` × `baseline_model_version`); [`compute_phase_b_tier_metrics_use_case.py:227-248`](../../../../src/use_cases/compute_phase_b_tier_metrics_use_case.py#L227) (`_dm_family_6`, `analysis_role="primary_family_6"` em [`:247`](../../../../src/use_cases/compute_phase_b_tier_metrics_use_case.py#L247)); contagem em [`phase_b_tier_policy.py:23-28`](../../../../src/domain/services/phase_b_tier_policy.py#L23) (`confirmatory_horizons=(1,7)`; `baseline_model_versions` com **3** nomes). ✅ **Confere:** 3 × 2 = 6, declarados na política congelada — família **ex-ante**, ao contrário do groupby do gold.
+
+**7. Sem top-50; coorte pré-declarada (gold aplica top-50 por default)**
+- **O que o doc afirma:** §7 — top-50 do sidecar = "N/A — coorte pré-declarada (15 TFT + 45 baseline)"; do gold = "Aplicado por default". O item #4 mostra que o top-50 do gold **invalida** o universo pré-definido.
+- **Como deveria funcionar (exemplo):** o sidecar separa os runs por `feature_set_name` (TFT vs `"baseline"`) e os baselines por `model_version` segundo a política — **todos** os runs da coorte entram, sem rankear por `squared_error` e cortar nos 50 melhores. O universo é o que foi declarado, não o que "venceu no test split".
+- **O que esperar no código:** `_run_groups` montando TFT/baselines a partir do `dim_run` escopado, **sem** nenhuma chamada a `_select_top_configs_for_pairwise`/`head(50)`.
+- **Ref do doc → código:** [`compute_phase_b_tier_metrics_use_case.py:212-225`](../../../../src/use_cases/compute_phase_b_tier_metrics_use_case.py#L212) (`_run_groups`; baselines vindos de `self.policy.baseline_model_versions` em [`:219`](../../../../src/use_cases/compute_phase_b_tier_metrics_use_case.py#L219)). ✅ **Confere a ausência de top-50:** não há filtro top-N em nenhum ponto do fluxo confirmatório (li `dm_tft_vs_baseline.py` e o use case inteiros). ⚠️ **Ressalva de escopo:** a contagem **"15 TFT + 45 baseline"** é um número **de dados** (depende da coorte materializada), **não derivável do código** — o código consome quaisquer runs presentes no `dim_run` escopado por `asset`+`parent_sweep_id`. Registro como não-verificável aqui (não contradito).
+
+**8. Unidade estatística = `target_timestamp_utc` com dedup operationally-latest cross-fold (gold faz pivot wide + `dropna(how="any")`)**
+- **O que o doc afirma:** §6 ("unidade `target_timestamp_utc` com dedup operationally-latest cross-fold") e §7 (mesma frase vs. gold = "pivot wide com `dropna(how="any")`").
+- **Como deveria funcionar (exemplo):** o mesmo `target_timestamp_utc` pode ter sido previsto por vários folds (janelas walk-forward que se sobrepõem). Em vez de contá-lo várias vezes, o sidecar escolhe **um** fold por timestamp — o "operationally latest" (a janela mais recente cujo treino terminou antes de prever aquele ponto). A série `d_t` usa só os timestamps **comuns** a TFT e baseline. O gold legacy não faz dedup por fold: ele pivota a matriz de losses (timestamps × configs) e descarta linhas com qualquer buraco — unidade estatística **diferente**.
+- **O que esperar no código:** uso de `select_operationally_latest_fold` por timestamp e interseção `common_ts`.
+- **Ref do doc → código:** [`dm_tft_vs_baseline.py:198-207`](../../../../src/domain/services/dm_tft_vs_baseline.py#L198) (`select_operationally_latest_fold` para TFT e baseline), [`:182`](../../../../src/domain/services/dm_tft_vs_baseline.py#L182) (`common_ts = intersection`) e a tag [`:319`](../../../../src/domain/services/dm_tft_vs_baseline.py#L319) (`"dedup_rule": "operationally_latest_fold"`). ✅ **Confere:** o resolvedor é importado de `fold_dedup_resolver` ([`:11-15`](../../../../src/domain/services/dm_tft_vs_baseline.py#L11)) e aplicado por timestamp antes de formar `d_t`.
+
+**9. Saída e escopo: `phase_b_dm_family_6.parquet` sustenta só H2a/H2b; H1 vive em outro sidecar**
+- **O que o doc afirma:** §6 — "Evidência confirmatória primária **para H2a/H2b apenas**. H1 (calibração) vem de `phase_b_marginal_coverage.parquet` e `phase_b_tier_verdict.parquet`; o sidecar DM family-6 **não** sustenta H1."
+- **Como deveria funcionar (exemplo):** o use case calcula coisas distintas para hipóteses distintas: H1 (cobertura/calibração) sai de `compute_marginal_coverage`; H2a/H2b (superioridade probabilística) saem da família-6 DM + delta de pinball. Cada uma vai para o seu sidecar. Ler `gold_dm_pairwise_results` (ou mesmo o family-6) como evidência de **calibração** seria um erro de mapeamento de hipótese.
+- **O que esperar no código:** `write_dm_family_6` para o sidecar DM; `compute_marginal_coverage` + `write_marginal_coverage` para o caminho de H1.
+- **Ref do doc → código:** [`compute_phase_b_tier_metrics_use_case.py:492`](../../../../src/use_cases/compute_phase_b_tier_metrics_use_case.py#L492) (`write_dm_family_6`) e [`:457`](../../../../src/use_cases/compute_phase_b_tier_metrics_use_case.py#L457)/[`:488`](../../../../src/use_cases/compute_phase_b_tier_metrics_use_case.py#L488) (`compute_marginal_coverage` → `write_marginal_coverage`). ✅ **Confere:** o family-6 não carrega H1; o caminho de calibração é separado.
+- ⚠️ **Ponto de atenção — o risco real deste item é confusão, não metodologia**
+  O único "risco C.0" deste item (skeleton §6: "listado aqui para evitar contaminação acidental") é **interpretativo/operacional**, não estatístico. Três armadilhas a carregar para C.0.2/C.0.3:
+  - **Confundir artefatos:** `gold_dm_pairwise_results` (gold legacy, item #1 — squared_error, two-sided, sem HLN, lag `n^{1/3}`, top-50, Holm sobre family administrativa) **≠** `phase_b_dm_family_6.parquet` (este — pinball, one-sided, HLN, lag `h−1`, sem top-50, Holm sobre família-6 declarada). São DMs com **decisões opostas em cada eixo**; só o nome "DM" é comum. Qualquer doc canônico deve dizer isso explicitamente (regra §7.5 do skeleton).
+  - **Existe um irmão de sensibilidade:** o mesmo use case também produz uma **família-18 conservadora** ([`compute_phase_b_tier_metrics_use_case.py:250-290`](../../../../src/use_cases/compute_phase_b_tier_metrics_use_case.py#L250), `analysis_role="sensitivity_conservative"`) — DM por fold, **não** o confirmatório primário. Não confundir o sidecar de sensibilidade com o family-6.
+  - **Não sobrescrever:** correções no gold legacy não devem tocar este sidecar (skeleton §7.4: `analytics_archive_phase_b_*` é read-only). **Quando importa:** sempre que C.0 mexer em `pairwise.py`/`confidence.py` — o family-6 vive em `data/analytics/reports/phase_b/...`, fora do gold, e deve continuar intocado.
+
+### Cross-check — o que NÃO está corretamente indicado/referenciado
+
+Para o item #13, **as referências do skeleton conferem** e foram **fortalecidas** (de `ls` para leitura direta). Pontos a registrar:
+
+1. **Nenhuma referência quebrada.** Os três arquivos existem e contêm os símbolos citados (`compute_dm_family`, `compute_dm_hln_hac`, `apply_holm_one_sided`, `_dm_family_6`). O skeleton confirmara só por `ls`; aqui confirmei por leitura do corpo inteiro de cada função.
+2. **Todos os contrastes da tabela §7 batem com o código** — pinball post-guardrail, lag `h−1`, HLN, one-sided (com Holm sobre o one-sided), família-6 declarada (3×2 na política), ausência de top-50 e dedup `operationally_latest_fold`. A âncora de contraste está **íntegra**.
+3. **Dois números são de dados, não de código, e ficam não-verificáveis aqui:** "**15 TFT + 45 baseline**" (§7) e "**~937 timestamps dedupados em h=7**" (§6, "Riscos conhecidos"). Dependem da coorte materializada; o código apenas consome os runs presentes no `dim_run` escopado. Não contraditos — apenas fora do alcance de uma verificação por leitura de código.
+4. **Contexto adicional não mencionado na §6 (não é discrepância):** o use case também emite uma **família-18 de sensibilidade** (`analysis_role="sensitivity_conservative"`) e roda um **gate de integridade pré-escrita** (`_validate_pre_write_integrity`, [`:419-447`](../../../../src/use_cases/compute_phase_b_tier_metrics_use_case.py#L419)) que falha se o family-6/18 vier vazio ou com estatística NaN. Ambos **reforçam** a solidez da referência; registro como contexto, não como falha do dossiê.
+5. **Escopo respeitado:** o skeleton declara "metodologia NÃO auditada (escopo Phase B fechado)" e esta seção **não** a reabriu — só confirmou existência de caminhos e presença das características de contraste.
+
+### Veredito do item #13
+
+🟢 **Íntegro (referência).** Os três caminhos existem e foram confirmados por **leitura
+direta** (mais forte que o `ls` do skeleton); **cada** característica que distingue o sidecar
+do gold legacy — pinball post-guardrail, lag `h−1`, HLN, one-sided com Holm sobre o
+one-sided, família-6 declarada (3×2), sem top-50, dedup `operationally_latest_fold` — está
+de fato no código, tornando a âncora de contraste da §7 fiel. Metodologia **não** reauditada,
+por escopo (Phase B fechada). Único resíduo: dois números de **dados** ("15 TFT + 45
+baseline"; "~937 timestamps em h=7") não são verificáveis por leitura de código — registrados,
+não contraditos. O risco prático do item é **interpretativo** (não confundir/sobrescrever),
+não estatístico (elemento 9 ⚠️).
 
 ---
 
