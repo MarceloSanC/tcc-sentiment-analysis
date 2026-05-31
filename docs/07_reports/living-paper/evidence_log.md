@@ -532,3 +532,111 @@ Hipoteses levantadas para explicar a causa raiz:
 - `src/use_cases/refresh_analytics_store_use_case.py` (colunas `*_raw`/`*_post_guardrail`/`delta_*_post_minus_raw`)
 
 **Uso no texto (TCC/Artigo/Ambos):** Ambos. Capítulo 4 (Método) e Capítulo 5 (Resultados — Gate B).
+
+## 2026-05-25 — Phase B confirmatoria: fechamento da cohort `phase_b_confirmatorio_20260524`
+
+**Escopo:** rodada confirmatoria da Phase B (TFT all-features sealed vs 3
+baselines pre-declarados, AAPL, h=1 e h=7), protocolo sealed do pre-registro
+F.2 com Emendas E1-E1.8.
+
+**Configuracao-chave:**
+- `parent_sweep_id = phase_b_confirmatorio_20260524`
+- Config sealed sha256 `fc83b56d7605bf60479b4d1ed4c745c1679702e5e5116f642f3c33061d795bd4`
+- Dataset sha256 (AAPL) `aee6b3ed7d931ff278353d647656effe4f338782292c801d35581f541c6c1298`
+- Commit selo pre-registro F.2: `067cb32`
+- 15 runs TFT (3 folds x 5 seeds) + 45 runs baseline (15 por baseline)
+- Baselines: `zero_return`, `historical_mean_rolling` (w=30), `historical_quantiles_rolling` (w=252)
+- N alinhado test split (dedup operationally-latest cross-fold): 937 timestamps
+- Perda primaria: `pinball_loss_post_guardrail`
+- DM family-6: HAC Newey-West com `lag = max(h-1, 1)`, HLN, one-sided, Holm-6
+
+**Resultado observado (tier verdict mecanico, sidecar `phase_b_tier_verdict.parquet`):**
+
+| Hipotese | h=1 | h=7 |
+|---|---|---|
+| H1 (calibracao) | tier_2 (PICP error 2,02%) | tier_1 (PICP error 0,23%) |
+| H2a (vs `zero_return`) | tier_1 (p_adj_holm=0,000; Δrel=+29,9%) | tier_1 (p_adj_holm=0,000; Δrel=+28,8%) |
+| H2b (vs todos baselines) | refutada (p_adj_holm vs hist_q = 0,465; Δrel=−0,56%) | refutada (p_adj_holm vs hist_q = 0,685; Δrel=−1,88%) |
+
+Gate de degeneracao quantilica: `p10_eq_p90_rate = 0,000` em todos os grupos
+TFT quantilicos (test, val, train; h=1 e h=7); zero runs excluidos.
+
+**Interpretacao:**
+- No protocolo Phase B, o candidato TFT all-features sealed entrega evidencia
+  confirmatoria primaria (Tier 1) para calibracao em h=7 e para dominancia
+  sobre `zero_return` em ambos horizontes; evidencia secundaria (Tier 2) para
+  calibracao em h=1.
+- H2b refutada por empate estatistico com `historical_quantiles_rolling`:
+  resultado consistente com [`STRATEGIC_DIRECTION.md`](../../00_overview/STRATEGIC_DIRECTION.md)
+  §3 e §4.4 (baselines quantilicos rolling near-optimal em retornos
+  near-random-walk de ativos liquidos). Confirma um limite empirico
+  declarado ex-ante, **nao** prova o limite final do TFT em forecasting
+  financeiro.
+- O resultado **fecha o ciclo confirmatorio para a cohort sealed** (ativo
+  AAPL, h=1 e h=7, candidato sealed, baselines pre-declarados, protocolo
+  Holm-6). Outras configuracoes de TFT, outros feature sets, outros ativos
+  ou outros horizontes podem produzir resultados diferentes em rodadas
+  futuras com pre-registro proprio.
+- H3 (contribuicao de familias de features) e Phase C **nao** sao tocadas
+  por esta rodada.
+
+**Conclusao:**
+- Status: H1 suportada (h=7 primaria, h=1 secundaria); H2a suportada em h=1
+  e h=7; H2b refutada em h=1 e h=7 (no escopo do protocolo). Veredito final
+  e mecanico, sem reframing pos-observacao.
+
+**Artefatos (paths):**
+- `docs/07_reports/phase-gates/phase-b/B_confirmatory_2026-05-25.md` (relatorio
+  primario, 420 LOC, cobre parametros, tier_verdict, DM family-6, MCS
+  within-family, gate degeneracao, robustez, limitacoes, conclusao, apendice
+  DM-18 sensibilidade e apendice decisoes autonomas Sessao-B).
+- `docs/06_pre_registration/phase-b/preregistration_phase_b.md` (pre-registro
+  F.2 + Emendas E1 a E6).
+- `data/analytics/reports/phase_b/cohort=phase_b_confirmatorio_20260524/phase_b_marginal_coverage.parquet`
+- `data/analytics/reports/phase_b/cohort=phase_b_confirmatorio_20260524/phase_b_dm_family_6.parquet`
+- `data/analytics/reports/phase_b/cohort=phase_b_confirmatorio_20260524/phase_b_dm_family_18_sensitivity.parquet`
+- `data/analytics/reports/phase_b/cohort=phase_b_confirmatorio_20260524/phase_b_delta_pinball.parquet`
+- `data/analytics/reports/phase_b/cohort=phase_b_confirmatorio_20260524/phase_b_tier_verdict.parquet`
+- Archive read-only: `data/analytics_archive_phase_b_20260524/`.
+
+**Uso no texto (TCC/Artigo/Ambos):** Ambos. Capitulo 5 (Resultados §5.2-§5.5)
+e Capitulo 6 (Conclusoes §6.1, §6.3). Reportar somente os claims permitidos
+no escopo da cohort; nao generalizar para outros ativos, outros horizontes,
+outros feature sets ou outras configuracoes.
+
+## 2026-05-25 — Decisao C.0: gold legacy DM/MCS/Holm/top-50/VaR-ES como hardening pendente
+
+**Escopo:** delimitar uso editorial de `gold_dm_pairwise_results`,
+`gold_mcs_results`, `gold_win_rate_pairwise_results`,
+`gold_model_decision_final`, `gold_prediction_risk` no texto.
+
+**Evidencia:** auditoria metodologica externa
+([`auditoria_metodologica_forecasting_financeiro.md`](../external-reviews/auditoria_metodologica_forecasting_financeiro.md))
++ inventario C.0
+([`C0_statistical_methods_hardening.md`](../phase-gates/phase-c/C0_statistical_methods_hardening.md))
+confirmam que DM/MCS gold operam sobre `squared_error` em vez da perda
+primaria pinball; top-50 cap silencioso antes do pairwise gera inferencia
+pos-selecao; Holm gold nao preserva `split_signature`; MCS hard-codeia
+`B=300, block_len=5`; `prob_up`, `confidence_calibrated` sao heuristicas
+nao canonicas; VaR/ES operam sobre quantis post-guardrail sem backtesting
+de excedencias.
+
+**Interpretacao:** essas tabelas permanecem disponiveis para diagnostico
+exploratorio dentro de uma cohort, mas **nao** sustentam claim
+confirmatorio. A Phase B substitui inferencialmente esses artefatos por
+sidecars dedicados; Phase C / C.0 conduzira o hardening antes de qualquer
+reuso confirmatorio.
+
+**Conclusao:** o Capitulo 5 do TCC nao deve apresentar
+`gold_model_decision_final`, `gold_dm_pairwise_results`,
+`gold_mcs_results`, `prob_up`, `confidence_calibrated`, `var_10`,
+`es_10_approx` ou `win_rate_ex_ties_mean` como evidencia confirmatoria.
+Esses artefatos podem ser referenciados como diagnostico ou descritivo,
+sempre rotulados como tal.
+
+**Artefatos (paths):**
+- `docs/07_reports/phase-gates/phase-c/C0_statistical_methods_hardening.md`
+- `docs/07_reports/external-reviews/auditoria_metodologica_forecasting_financeiro.md`
+
+**Uso no texto (TCC/Artigo/Ambos):** Ambos. Aplica-se a todo Capitulo 5 que
+toque essas tabelas, e ao Capitulo 6 §6.4 (trabalhos futuros).
