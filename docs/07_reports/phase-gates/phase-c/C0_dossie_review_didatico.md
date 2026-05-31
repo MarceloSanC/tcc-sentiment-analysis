@@ -1759,3 +1759,257 @@ não estatístico (elemento 9 ⚠️).
 
 ---
 
+## #11 — VaR / ES gold
+
+### O que é (didático)
+
+**VaR (Value-at-Risk)** e **ES (Expected Shortfall)** são duas formas de resumir o
+"quão ruim pode ficar" em um nível de probabilidade. Imagine que o modelo prevê uma
+**distribuição** para o retorno do próximo período (não só um número, mas "qual a cara
+da incerteza"). Então:
+
+- **VaR a 10%** = o **quantil 10%** dessa distribuição prevista. Em palavras: "há 10% de
+  chance de o retorno ficar **igual ou pior** do que esse valor". É a fronteira da cauda.
+- **ES a 10%** = a **média** da distribuição **dentro** dessa cauda de 10% (o "quão fundo"
+  costuma ir quando passa da fronteira). Por construção o ES é **pelo menos tão extremo
+  quanto** o VaR — olha mais para o fundo da cauda.
+
+O "truque" do builder: ele **não estima** essas quantidades a partir de erros realizados
+nem faz backtesting. Ele simplesmente **lê os quantis preditos** (`q10`, `q50`
+post-guardrail), define `var_10 = q10` diretamente, aproxima o `es_10` por uma **fórmula
+linear** sobre `q10` e `q50`, e tira a **média** por grupo de runs. É, portanto, um resumo
+**descritivo do que o modelo prevê** como cauda — não uma medida de risco financeiro
+validada contra a realidade.
+
+### Elementos
+
+**1. Variável-base = quantis preditos *post-guardrail* (não `error`, não retorno-perda)**
+- **O que o doc afirma:** as variáveis-base são `post_q10 = "quantile_p10_post_guardrail"` e `post_q50 = "quantile_p50_post_guardrail"`; o uso de `error = y_pred − y_true` e a coluna `max_drawdown` (citados pela auditoria externa) **não** existem no builder atual.
+- **Como deveria funcionar (exemplo):** para uma linha OOS o modelo prevê `q10_post = −0,032` (retorno de −3,2%) e `q50_post = +0,004`. São os quantis **da distribuição preditiva do alvo**, já passados pelo guardrail de monotonicidade. O VaR/ES é montado **sobre esses quantis preditos**, não sobre o erro de previsão.
+- **O que esperar no código:** leitura das duas colunas `*_post_guardrail`, conversão numérica, e — se ausentes — `var_10_row`/`es_10_approx_row` = `NaN` com warning (sem `error`, sem `max_drawdown`).
+- **Ref do doc → código:** [`confidence.py:65-66`](../../../../src/domain/services/gold_builders/confidence.py#L65) (nomes das colunas) e [`:67-72`](../../../../src/domain/services/gold_builders/confidence.py#L67) (ramo que as usa); ramo `else` em [`:73-85`](../../../../src/domain/services/gold_builders/confidence.py#L73) (NaN + warning). ✅ **Confere:** `post_q10 = "quantile_p10_post_guardrail"`, `post_q50 = "quantile_p50_post_guardrail"`; `df["var_10_row"] = df[post_q10]`; e no `else`, `df["var_10_row"] = np.nan` / `df["es_10_approx_row"] = np.nan`. **Não há** `y_pred − y_true` nem `max_drawdown` na função inteira (li 39-130). A discrepância da auditoria externa está **resolvida** pelo código real.
+- ⚠️ **Ponto de atenção — "VaR sobre quantil predito" não é o VaR do risk-management**
+  Há **duas coisas diferentes** chamadas "VaR":
+
+  | "VaR" | Como se obtém | O que valida |
+  |---|---|---|
+  | **VaR predito** (atual) | lê o `q10` que o modelo **previu** | nada — é a saída do modelo, não confrontada com a realidade |
+  | **VaR backtested** (risk-management) | conta quantas vezes a perda **realizada** furou o `q10` previsto (≈10%?) | a cobertura empírica via Kupiec/Christoffersen |
+
+  O builder faz o primeiro. Isso é legítimo como **descrição do que o modelo acha da cauda**,
+  mas **não** sustenta um claim de risco financeiro: um modelo pode prever `q10 = −3,2%`
+  e, na prática, furar esse limite em 30% dos casos (cauda mal calibrada) — e o
+  `gold_prediction_risk` jamais perceberia, porque nunca olha o realizado. **Quando é
+  tolerável:** uso puramente descritivo ("nível de downside que o modelo tipicamente
+  projeta"). **Quando não é:** qualquer afirmação de que "o modelo controla risco a 10%" —
+  isso exige backtesting de excedências (ver elemento 5). A própria auditoria externa
+  recomenda **renomear para erro/cauda descritiva** enquanto não houver backtesting com
+  sinal, nível e excedências.
+
+  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: manter o cálculo
+  > **descritivo** sobre quantis preditos, mas **declarar explicitamente a variável-alvo**
+  > (retorno do alvo, sinal "menor = pior") e tratar a coluna como **cauda predita
+  > descritiva** — não como VaR financeiro — até existir backtesting de cobertura
+  > (elemento 5). Alinha-se à recomendação da auditoria externa.
+
+**2. VaR_10 = `q10` predito, diretamente (`var_10_row = df[post_q10]`)**
+- **O que o doc afirma:** `var_10_row = df[post_q10]` — idêntico ao `q10_post_guardrail`.
+- **Como deveria funcionar (exemplo):** se `q10_post = −0,032`, então `var_10_row = −0,032`. Não há transformação, sinal trocado nem escalonamento: o VaR a 10% **é** o décimo percentil predito do alvo. Lê-se como "10% de chance de o retorno ser ≤ −3,2%".
+- **O que esperar no código:** atribuição direta `var_10_row = q10_post`, sem `abs()`, sem `−`, sem multiplicador.
+- **Ref do doc → código:** [`confidence.py:70`](../../../../src/domain/services/gold_builders/confidence.py#L70). ✅ **Confere:** `df["var_10_row"] = df[post_q10]` (cópia direta).
+- ⚠️ **Ponto de atenção — α=10% é uma cauda "fraca", e o nível está só no nome da coluna**
+  Dois pontos práticos:
+  - **Nível de cauda.** O VaR/ES de risco financeiro costuma usar **α = 1% ou 5%** (cauda
+    severa). **α = 10%** é uma cauda **rasa** — captura o "downside típico", não eventos
+    extremos. Não é errado, mas é uma escolha **conservadora-fraca**: subdimensiona o risco
+    de eventos raros frente ao que um VaR a 1% mostraria. Para previsão a *h* passos com
+    poucos quantis preditos (só q10/q50/q90), 10% é o menor nível **realmente predito** — ir
+    a 1% exigiria extrapolar muito mais (e a fórmula do ES já extrapola; ver elemento 3).
+  - **Nível implícito no nome.** `α = 0,10` aparece só no **nome** `var_10`/`es_10_approx`,
+    não como metadado/coluna de schema. Um leitor que pegue a coluna sem ler a doc não tem
+    como saber o nível, o sinal, nem que é "sobre o quantil predito". **Quando importa:**
+    sempre que a tabela for exportada/consumida fora do contexto desta doc.
+
+  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: **declarar α no
+  > schema** (ex.: coluna/atributo `alpha = 0.10`) em vez de embutir só no nome, e avaliar
+  > **complementar com α = 5%** (e 1% se a doc aceitar a extrapolação) para que a tabela
+  > descreva também a cauda severa, não só o downside típico.
+
+**3. ES_10 ≈ `1.125·q10 − 0.125·q50` (extrapolação linear da cauda)**
+- **O que o doc afirma:** `es_10_approx_row = 1.125 * df[post_q10] - 0.125 * df[post_q50]`; é "interpolação linear assumindo forma específica de cauda; não é ES universal".
+- **Como deveria funcionar (exemplo):** com `q10 = −0,032` e `q50 = +0,004`: `es = 1,125·(−0,032) − 0,125·(0,004) = −0,036 − 0,0005 = −0,0365`. O ES (−3,65%) fica **mais fundo** que o VaR (−3,2%), como esperado — ele "olha dentro da cauda".
+- **O que esperar no código:** a combinação linear exata `1.125·q10 − 0.125·q50`.
+- **Ref do doc → código:** [`confidence.py:71`](../../../../src/domain/services/gold_builders/confidence.py#L71). ✅ **Confere** exatamente: `df["es_10_approx_row"] = 1.125 * df[post_q10] - 0.125 * df[post_q50]`.
+- ⚠️ **Ponto de atenção — de onde vêm `1.125` e `0.125`, e por que isso subdimensiona caudas gordas**
+  Os coeficientes **não são mágicos**: saem de assumir que a **função-quantil** (o inverso
+  da CDF) é uma **reta** entre o ponto `(0,50; q50)` e `(0,10; q10)` e que essa reta
+  **continua** abaixo de 10% até 0. O ES a 10% é a média da função-quantil no intervalo
+  `[0; 0,10]`:
+
+  `ES₁₀ = (1/0,10) ∫₀^0,10 q(u) du`, com `q(u) = q10 + [(q50−q10)/0,40]·(u−0,10)`.
+
+  Resolvendo a integral: `∫₀^0,10 q(u) du = 0,10·q10 − 0,0125·(q50−q10)`, então
+  `ES₁₀ = q10 − 0,125·(q50−q10) = 1,125·q10 − 0,125·q50`. **É exatamente a fórmula do
+  código** — ou seja, é uma **extrapolação linear da cauda inferior**.
+
+  **Por que isso importa:** retornos financeiros têm **caudas gordas** (leptocúrticas) — a
+  função-quantil **acelera** (fica mais íngreme) no extremo, não segue reta. A extrapolação
+  linear, por isso, **subestima** o quão fundo a cauda vai. Exemplo concreto com a **normal
+  padrão** (cauda "leve", o caso *fácil* para a aproximação): `q10 = −1,2816`, `q50 = 0`.
+  - Fórmula: `ES = 1,125·(−1,2816) − 0,125·0 = −1,442`.
+  - ES verdadeiro da normal a 10%: `−φ(z₀,₁)/0,10 = −0,1755/0,10 = −1,755`.
+  - A aproximação dá **−1,44 vs −1,76 reais → subestima a severidade da cauda em ~18%**,
+    e isso **na normal**; numa distribuição de cauda gorda o erro é **maior**.
+
+  **Quando é aceitável:** como número descritivo aproximado, ciente de que **encolhe** o ES
+  (otimista quanto à cauda). **Quando não é:** se o ES virar evidência de "controle de risco
+  de cauda" — aí o viés sistemático de subestimação engana na direção perigosa (faz o risco
+  parecer menor do que é). A própria nomenclatura `es_10_**approx**` já sinaliza honestamente
+  que é aproximação.
+
+  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: manter como
+  > `es_10_approx` **descritivo** com a ressalva documentada de que **subestima a cauda**
+  > (extrapolação linear). Se o ES for promovido a qualquer uso confirmatório, substituir a
+  > extrapolação linear por estimativa que respeite a cauda (mais quantis preditos no extremo,
+  > ou ES backtested) e avaliar o par (VaR, ES) por **proper scoring** elicitável conjuntamente
+  > (Fissler-Ziegel 2016).
+
+**4. Clip `es_10_approx = min(es_10_approx, var_10)` (garante ES ≤ VaR)**
+- **O que o doc afirma:** `es_10_approx_row = np.minimum(es_10_approx_row, var_10_row)`; o clip "pode mascarar" violação de monotonicidade.
+- **Como deveria funcionar (exemplo):** o ES de uma cauda inferior deve ser **≤** o VaR (mais fundo). O clip força isso. Quando `es` calculado já é ≤ `var` (caso normal, `q10 ≤ q50`), o clip **não faz nada**. Ele só age se `es > var`.
+- **O que esperar no código:** um `np.minimum(es, var)` logo após a fórmula do ES.
+- **Ref do doc → código:** [`confidence.py:72`](../../../../src/domain/services/gold_builders/confidence.py#L72). ✅ **Confere:** `df["es_10_approx_row"] = np.minimum(df["es_10_approx_row"], df["var_10_row"])`.
+- ⚠️ **Ponto de atenção — o clip ativa exatamente sob *crossing* (`q10 > q50`); mascara em vez de sinalizar**
+  Quando o clip realmente muda algo? `es > var` ⟺ `1,125·q10 − 0,125·q50 > q10` ⟺
+  `0,125·q10 > 0,125·q50` ⟺ **`q10 > q50`**. Ou seja, o clip só age quando há **cruzamento
+  de quantis** (o 10º percentil acima do 50º — uma violação de monotonicidade). Nesse caso
+  a fórmula daria `ES > VaR` (sem sentido), e o clip força `ES = VaR`.
+
+  **A nuance importante:** as colunas são **post-guardrail**, e o
+  [`QuantileGuardrailService.enforce_monotonic_triplet`](../../../../src/domain/services/quantile_guardrail_service.py#L18)
+  **ordena** o triplo (`sorted([p10,p50,p90])`) sempre que os três são finitos — então
+  `q10_post ≤ q50_post` é **garantido** para valores finitos e o clip vira **no-op** na
+  prática. O comentário em [`confidence.py:62-64`](../../../../src/domain/services/gold_builders/confidence.py#L62)
+  é justamente isso: "use exclusively post-guardrail columns" porque o guardrail garante a
+  monotonicidade que o VaR/ES exige (Jorion 2007; Acerbi & Tasche 2002).
+
+  **Então onde está o risco?** É de **engenharia defensiva, não de bug atual**: se algum dia
+  uma linha post-guardrail **não** estiver ordenada (guardrail não aplicado num caminho de
+  dados, valor não-finito que escapou ao `sorted`, refactor futuro), o clip **silenciaria** o
+  cruzamento (ES=VaR) em vez de **sinalizá-lo** (ex.: `NaN` + auditoria). O lugar que
+  **sinaliza** corretamente é o `gold_quantile_guardrail_audit`, que mede `crossing_after`
+  ([`quantile.py:511-514`](../../../../src/domain/services/gold_builders/quantile.py#L511)).
+  O dossiê captou isto no TODO "violação de monotonicidade → NaN (atualmente clip pode
+  mascarar)". **Quando importa:** só se a garantia do guardrail falhar upstream; hoje, com
+  o triplo ordenado, o clip não tem efeito observável.
+
+  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: como o guardrail
+  > já garante `q10 ≤ q50` para valores finitos, **manter o clip como salvaguarda**, porém
+  > **trocar "mascarar" por "sinalizar"** num eventual hardening: se `es > var` (cruzamento
+  > residual) ou se algum dos quantis for não-finito, emitir `NaN` em vez de colapsar para
+  > `var`, deixando a anomalia visível (consistente com o `crossing_after` do guardrail audit).
+
+**5. Agregação = média por 8 colunas de grupo (`var_10 = mean(q10)`)**
+- **O que o doc afirma:** agrega por `[run_id, asset, feature_set_name, config_signature, split, fold, seed, horizon]`; `var_10 = ("var_10_row", "mean")` e `es_10_approx = ("es_10_approx_row", "mean")`.
+- **Como deveria funcionar (exemplo):** três linhas OOS de um grupo com `q10 = {−0,03; −0,05; −0,02}` → `var_10 = média = −0,0333`. O número final é a **média dos quantis preditos** ao longo dos timestamps daquele grupo — um "nível de downside típico que o modelo projeta".
+- **O que esperar no código:** `df.groupby(group_cols).agg(..., var_10=("var_10_row","mean"), es_10_approx=("es_10_approx_row","mean"))`.
+- **Ref do doc → código:** [`confidence.py:87-100`](../../../../src/domain/services/gold_builders/confidence.py#L87) (as 8 colunas de grupo) e [`:102-112`](../../../../src/domain/services/gold_builders/confidence.py#L102) (a agregação; `var_10`/`es_10_approx` em [`:108-109`](../../../../src/domain/services/gold_builders/confidence.py#L108)). ✅ **Confere:** `group_cols` lista exatamente as 8 colunas (quando presentes); `var_10=("var_10_row", "mean")`, `es_10_approx=("es_10_approx_row", "mean")`.
+- ⚠️ **Ponto de atenção — média de quantis preditos ≠ VaR estimado; e o silêncio sobre excedências**
+  Duas leituras possíveis, e a diferença é o coração do "descritivo vs confirmatório":
+
+  - **O que o número É:** a **média temporal** do 10º percentil **predito**. Responde "em
+    média, qual o downside que o modelo projeta?". É uma estatística-resumo da **saída do
+    modelo**.
+  - **O que o número NÃO é:** um VaR **estimado e validado**. Um VaR de verdade seria
+    confrontado com os retornos **realizados**: contar a fração de vezes em que o realizado
+    furou o `q10` previsto e testar se ≈ 10% (**Kupiec 1995** para a taxa de excedência;
+    **Christoffersen 1998** para independência das excedências). **Nada disso existe** no
+    builder — ele nunca toca `y_true` para a parte de risco.
+
+  **Implicação concreta:** suponha que o modelo preveja consistentemente `q10 ≈ −3%`, mas
+  na realidade os retornos furem −3% em **25%** dos dias. O `var_10 = −0,03` parecerá um
+  "downside controlado", quando a cauda está **gravemente subcoberta**. Promover esse número
+  a evidência de risco sem backtesting seria afirmar cobertura que nunca foi medida.
+
+  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: classificar o item
+  > como **`DESCRIPTIVE_ONLY`** enquanto não houver **backtesting de excedências**
+  > (Kupiec 1995 / Christoffersen 1998) com nível α e sinal declarados; só então cogitar
+  > promoção a confirmatório, com avaliação do par (VaR, ES) por scoring elicitável
+  > (Fissler-Ziegel 2016). Coincide com o esboço de "Critério para promoção" do skeleton.
+
+**6. Natureza terminal da tabela + colunas-companheiras baseadas em `y_pred`**
+- **O que o doc afirma:** "Linha OOS; agregado por run"; tabela de "natureza descritiva". (O dossiê não lista consumidores downstream do `gold_prediction_risk`.)
+- **Como deveria funcionar (exemplo):** diferentemente de PICP/MPIW/pinball (que sobem para o `gold_model_decision_final`), o `gold_prediction_risk` é uma **tabela-folha**: ninguém a consome para decisão. Quem quiser usá-la lê o parquet diretamente.
+- **O que esperar no código:** nenhum builder com `requires_gold = (... "gold_prediction_risk" ...)`; o `_build_model_decision_final` **não** recebe `gold_prediction_risk` entre seus 7 inputs.
+- **Ref do doc → código:** varredura repo-wide — a **única** referência a `gold_prediction_risk` em `src/` é o próprio `output_table` em [`confidence.py:36`](../../../../src/domain/services/gold_builders/confidence.py#L36); nenhum `requires_gold` a inclui; os inputs de `_build_model_decision_final` ([`confidence.py:824-832`](../../../../src/domain/services/gold_builders/confidence.py#L824)) **não** a contemplam. ✅ **Confere: tabela terminal, sem consumidor.** A living-paper inclusive **proíbe** usá-la como evidência ([`30_results_and_analysis.md:172`](../../../07_reports/living-paper/30_results_and_analysis.md#L172), [`40_limitations_and_conclusion.md:112`](../../../07_reports/living-paper/40_limitations_and_conclusion.md#L112)).
+- ⚠️ **Ponto de atenção — a mesma tabela mistura colunas de base distinta (`y_pred` vs quantis)**
+  O `gold_prediction_risk` carrega, lado a lado:
+  - `var_10`, `es_10_approx` → base = **quantis preditos** (`q10`/`q50` post-guardrail).
+  - `expected_move = mean(|y_pred|)` e `downside_risk = mean(max(−y_pred, 0))` → base = a
+    **previsão pontual** `y_pred` ([`confidence.py:59-60`](../../../../src/domain/services/gold_builders/confidence.py#L59)).
+
+  São **duas famílias de variáveis** numa só tabela. Um leitor que assuma "a tabela toda é
+  sobre a distribuição preditiva" erra: `expected_move`/`downside_risk` ignoram a incerteza
+  (usam só o ponto central). **Quando importa:** ao citar a tabela em texto — convém dizer
+  *qual coluna* e *sobre qual base*. Não é defeito; é heterogeneidade a documentar. (O fato
+  de a tabela ser terminal e proibida como evidência **reduz** o risco prático.)
+
+### Cross-check — o que NÃO está corretamente indicado/referenciado
+
+As referências de "Implementação atual localizada" do dossiê de VaR/ES **conferem** com o
+código (li `PredictionRiskGoldBuilder.build()` inteiro, 39-130, mais o
+`QuantileGuardrailService` e a varredura de consumidores). Pontos a registrar:
+
+1. **Nenhuma referência quebrada.** Linhas-âncora **exatas**: `post_q10`/`post_q50` em
+   L65-66 ✅; `var_10_row = df[post_q10]` em L70 ✅; `es_10_approx = 1.125·q10 − 0.125·q50`
+   em L71 ✅; clip em L72 ✅; `expected_move_row`/`downside_risk_row` em L59-60 ✅; 8 colunas
+   de grupo em L87-100 ✅; `var_10`/`es_10_approx` agg em L108-109 ✅. (A faixa "62-109"
+   citada na tabela-índice da §5 do skeleton é o **miolo** VaR/ES; a função abre em L39.)
+
+2. **Discrepância da auditoria externa: confirmada como RESOLVIDA.** A
+   [`auditoria_metodologica`](../../../07_reports/external-reviews/auditoria_metodologica_forecasting_financeiro.md)
+   (linhas 26 e 257) afirma que o builder calcula VaR/ES/`max_drawdown` sobre
+   `error = y_pred − y_true`. O **código atual não faz nada disso**: usa exclusivamente
+   `quantile_p10/p50_post_guardrail` e **não tem** `max_drawdown`. A auditoria descreve uma
+   versão anterior (via `DATA_PIPELINE_WALKTHROUGH.md`), não o `src/` atual. O dossiê já
+   marcou isso como resolvido; **confirmo por leitura direta**.
+
+3. **`max_drawdown` ausente — e `DATA_PIPELINE_WALKTHROUGH.md` ainda descreve a versão antiga.**
+   O walkthrough ([`:1470`](../../../02_data/DATA_PIPELINE_WALKTHROUGH.md#L1470), seção 6.3.7)
+   e a auditoria que dele deriva citam `max_drawdown` e base `error`. O código não os tem.
+   **Isto é drift doc→código a corrigir em C.0.3** (no walkthrough, fora do escopo desta
+   revisão), não erro do skeleton — que já aponta a divergência.
+
+4. **"Uso atual no projeto" do skeleton está completo e até conservador.** Lista só
+   `gold_prediction_risk.{var_10, es_10_approx}` — e, de fato, **não há consumidor downstream**
+   (tabela terminal). O classificador "unknown (suspeito tail_error, não risco financeiro)" do
+   skeleton bate com o que o código mostra: número descritivo sobre quantil predito, sem
+   backtesting.
+
+5. **`expected_move`/`downside_risk` (base `y_pred`) não são mencionados no dossiê.** Vivem na
+   mesma tabela e na mesma função, mas usam **base diferente** (previsão pontual, não quantis).
+   Registrado no elemento 6 — é heterogeneidade da tabela, não erro de referência.
+
+6. **Pontos residuais metodológicos centrais já capturados pelo skeleton.** "Sem backtesting",
+   "ES como interpolação linear assumindo forma de cauda", "α=10% implícito no nome" constam dos
+   "Riscos conhecidos". Os aprofundamentos acima detalham o **mecanismo** (a derivação dos
+   coeficientes 1.125/0.125 e o viés de subestimação de cauda; o clip ativando só sob crossing;
+   média de quantis ≠ VaR backtested) e o "quando cada escolha se aplica".
+
+### Veredito do item #11
+
+🟡 **Ressalvas.** Referências **intactas** e evidência fiel ao código — o VaR/ES é calculado
+exatamente como o dossiê (e o skeleton já corrigido) afirma: `var_10 = q10_post`,
+`es_10_approx = 1.125·q10 − 0.125·q50`, clip `min(es, var)`, média por grupo, **sem** `error`
+e **sem** `max_drawdown` (discrepância da auditoria externa **confirmada como resolvida**). As
+ressalvas são **metodológicas/de enquadramento**, não de localização: (a) é VaR/ES **sobre
+quantil predito**, não VaR backtested — falta backtesting de excedências (Kupiec/Christoffersen);
+(b) o ES é uma **extrapolação linear** que **subestima caudas gordas** (~18% até na normal); (c)
+α=10% é cauda rasa e o nível vive só no nome da coluna; (d) o clip mascara (em vez de sinalizar)
+um eventual cruzamento, hoje neutralizado pelo guardrail que **ordena** o triplo; (e) é tabela
+**terminal**, sem consumidor, e a living-paper já a **proíbe** como evidência — o que **reduz** o
+risco prático. Decisões recomendadas registradas nos elementos 1, 2, 3, 4 e 5 (declarar alvo/α,
+manter descritivo, ressalvar subestimação de cauda, sinalizar em vez de mascarar, exigir
+backtesting antes de promover) — pendentes de confirmação com a pesquisa acadêmica do paper.
+
+---
