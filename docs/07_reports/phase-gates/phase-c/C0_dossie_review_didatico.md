@@ -61,7 +61,7 @@ update_when:
 - [x] #9 — prob_up
 - [x] #10 — confidence_calibrated
 - [x] #11 — VaR / ES gold
-- [ ] #12 — gold_model_decision_final
+- [x] #12 — gold_model_decision_final
 - [x] #13 — Phase B DM family-6 (referencia)
 
 ---
@@ -2718,6 +2718,258 @@ localização; as decisões (não promover, renomear para `heuristic_coverage_wi
 substituir por interval/Winkler/CRPS/WIS, enforcement nos consumidores downstream) são de
 C.0.2/C.0.3. Decisões recomendadas registradas nos elementos 3 e 6 — pendentes de confirmação
 com a pesquisa acadêmica do paper.
+
+---
+
+## #12 — gold_model_decision_final
+
+### O que é (didático)
+
+Diferente dos itens anteriores, **`gold_model_decision_final` não é um teste nem uma
+métrica** — é uma **tabela de rollup** (Tier 3). Ela junta **7 tabelas gold** (métricas por
+config, robustez, gap de generalização, DM, MCS, win-rate e a intersecção pareada) em
+**uma linha por `(asset, parent_sweep_id, split=test, horizon, config)`**, acrescenta
+**rankings** e **flags de prontidão**, e ordena tudo. O nome promete uma "decisão final" e
+ela é a tabela que **alimenta os plots oficiais**.
+
+O "truque" a entender — e o ponto que percorre todo o item — é a **distância entre o que o
+nome promete e o que a tabela faz**: apesar de chamar-se *decision final* e expor uma coluna
+`academic_decision_ready`, a tabela **não implementa nenhuma regra de vencedor
+pré-registrada**. Ela **ordena por erro pontual** (`rank_rmse`, depois `rank_mae`) enquanto
+as métricas probabilísticas (pinball/PICP/MPIW) entram apenas como **colunas que pegam
+carona**, sem nunca decidir a ordem. Quem lê a primeira linha da tabela (ou o config que o
+plot escolhe) está vendo o **melhor em RMSE**, não o melhor probabilisticamente.
+
+### Elementos
+
+**1. O rollup e seus 7 inputs (`requires_gold`)**
+- **O que o doc afirma:** rollup final de diagnósticos por (asset, horizon), composto por
+  `_build_model_decision_final` (linha 463); `requires_gold` nas linhas 824-832 lista 7
+  tabelas; `output_table = "gold_model_decision_final"` (linha 822).
+- **Como deveria funcionar (exemplo):** para `(BTC, sweepX, h+7)`, o builder pega a linha de
+  métricas da config `feat_A|sig_3`, anexa os ICs de robustez, o gap test−val, quantas
+  vitórias DM ela teve, se está no confidence set do MCS, sua win-rate média, e os flags de
+  alinhamento — tudo numa **única linha**. É uma costura de tabelas, não um cálculo
+  estatístico novo.
+- **O que esperar no código:** `requires_gold` com 7 entradas; `build()` apenas repassando
+  os `ctx.gold_outputs[...]` para `_build_model_decision_final`.
+- **Ref do doc → código:** [`confidence.py:824-832`](../../../../src/domain/services/gold_builders/confidence.py#L824) (`requires_gold`) e [`confidence.py:834-844`](../../../../src/domain/services/gold_builders/confidence.py#L834) (`build`). ✅ **Confere:** L824-832 listam exatamente as 7 tabelas (`gold_prediction_metrics_by_config`, `..._robustness_by_horizon`, `..._generalization_gap`, `gold_dm_pairwise_results`, `gold_mcs_results`, `gold_win_rate_pairwise_results`, `gold_paired_oos_intersection_by_horizon`); L835-844 chamam a função module-level passando cada `ctx.gold_outputs[...]` + `primary_quantile_contract=ctx.primary_quantile_contract`.
+
+**2. Filtro `split == test` + `primary_metric_map` (pinball/PICP/MPIW entram; `confidence_calibrated` NÃO)**
+- **O que o doc afirma:** `primary_metric_map` (linhas 492-499) inclui `mean_pinball_q10/q50/q90_{primary}`, `mean_mean_pinball_{primary}`, `mean_picp_{primary}`, `mean_mpiw_{primary}`; **não inclui `confidence_calibrated`**. O contrato de quantis default é `post_guardrail`.
+- **Como deveria funcionar (exemplo):** o `primary_quantile_contract` é um "interruptor". Se for `post_guardrail` (default), a tabela lê `mean_pinball_q50_post_guardrail` e o **renomeia** para `mean_pinball_q50` (nome agnóstico ao contrato). Assim, quem lê a tabela vê `mean_pinball_q50` sem saber se veio do contrato cru ou reparado — o contrato fica registrado numa coluna à parte (`primary_quantile_contract`). Só as linhas de **test** entram (val/train são descartadas).
+- **O que esperar no código:** `base = metrics_by_config[... == "test"]`; um dict `primary_metric_map`; um `rename(columns=...)`; uma coluna `primary_quantile_contract`.
+- **Ref do doc → código:** [`confidence.py:488`](../../../../src/domain/services/gold_builders/confidence.py#L488) (filtro test), [`confidence.py:492-499`](../../../../src/domain/services/gold_builders/confidence.py#L492) (map), [`confidence.py:521-522`](../../../../src/domain/services/gold_builders/confidence.py#L521) (rename + coluna do contrato). ✅ **Confere:** L488 `base = metrics_by_config[metrics_by_config["split"].astype(str) == "test"].copy()`; L492-499 o map exatamente como descrito, **sem** `confidence_calibrated`; L472/L479-480 fixam `primary_quantile_contract: Literal["raw","post_guardrail"] = "post_guardrail"` com validação. Confirmei lendo a função inteira: `confidence_calibrated` **nunca** é referenciada.
+- ⚠️ **Ponto de atenção — aqui o código faz a coisa certa (e isso é informativo)**
+  Vale registrar o **acerto**: o `confidence_calibrated` (item #10, um *score* heurístico
+  `calibration_term × width_term` que **não é proper score**) é **deliberadamente excluído**
+  do rollup. Ou seja, a métrica heurística mais frágil **não** contamina a decision_final.
+  Isso é exatamente o que o skeleton recomenda para itens heurísticos ("não entra como
+  critério confirmatório em decision_final").
+
+  **Quando isso importa:** se alguém auditar a tabela procurando "a heurística suspeita", vai
+  encontrar que ela **não está lá** — bom sinal. **O que ainda fica:** as colunas
+  probabilísticas que entram (`mean_pinball_*`, `mean_picp`, `mean_mpiw`) são as **certas**
+  para um claim probabilístico; o problema (próximo elemento) **não é** quais colunas existem,
+  e sim que **nenhuma delas governa a ordenação** da tabela.
+
+**3. Ordenação e ranks por RMSE/MAE/DA — métricas probabilísticas só "pegam carona"**
+- **O que o doc afirma:** `rank_rmse` (linhas 785-789, `mean_rmse.rank(ascending=True)`), `rank_mae` (linhas 790-794), e `sort_values` final (linhas 815-818) por `["asset","parent_sweep_id","horizon","rank_rmse","rank_mae"]`. Mistura objetivos: ordenação **pontual** enquanto pinball/PICP/MPIW entram como **colunas auxiliares**.
+- **Como deveria funcionar (exemplo):** para `(BTC, sweepX, h+7)` com duas configs:
+
+  | Config | mean_rmse | mean_pinball | rank_rmse | Fica em cima? |
+  |---|---|---|---|---|
+  | LSTM | **0.010** | 0.011 | **1** | **sim** (RMSE menor) |
+  | TFT  | 0.012 | **0.008** | 2 | não |
+
+  O `sort_values` coloca a **LSTM** no topo porque tem `rank_rmse=1` — mesmo que a **TFT**
+  tenha **melhor pinball** (0.008 < 0.011), que é a métrica do claim probabilístico. As
+  colunas de pinball estão lá, ao lado, mas **não influenciam a ordem**. Quem ler "a primeira
+  linha" como "o melhor modelo" lê o **melhor pontual**.
+- **O que esperar no código:** três `groupby(...).rank(...)` (rmse asc, mae asc, da desc) e um `sort_values` que usa rmse/mae.
+- **Ref do doc → código:** [`confidence.py:785-801`](../../../../src/domain/services/gold_builders/confidence.py#L785) (os 3 ranks) e [`confidence.py:815-818`](../../../../src/domain/services/gold_builders/confidence.py#L815) (sort). ✅ **Confere:** L785-789 `rank_rmse` (`rank(method="min", ascending=True)`), L790-794 `rank_mae` (asc), L795-801 `rank_da` (`ascending=False` — maior acurácia direcional é melhor); agrupados por `decision_rank_cols = ["asset","parent_sweep_id","horizon"]` (L784); L815-818 ordena por `rank_rmse, rank_mae` (note: `rank_da` é **computado mas não entra no sort**).
+- ⚠️ **Ponto de atenção — a tabela "decide" por erro pontual, mas o claim do TCC é probabilístico**
+  Este é o ponto central do item, e é o mesmo descasamento dos itens #1 (loss
+  `squared_error`) e #2 (MCS com `squared_error`), agora materializado na **camada de
+  decisão**. O rollup ordena (e portanto "elege" implicitamente o topo) por **RMSE/MAE** —
+  acurácia do **ponto previsto**. As métricas que sustentariam o claim probabilístico
+  (pinball, PICP, MPIW) estão na tabela como **passageiras**: aparecem, mas não dirigem.
+
+  **Quando ordenar por RMSE é aceitável:** se o claim for **pontual** ("o modelo prevê melhor
+  o valor central / a mediana"), `rank_rmse` é coerente e a tabela está correta para esse fim.
+  Também é aceitável como **ordenação de conveniência** para inspeção visual, *desde que
+  rotulada como tal*.
+
+  **Quando não é:** assim que a tabela (ou um plot derivado dela) for lida como evidência de
+  que **"o TFT é melhor probabilisticamente"**. Aí ordenar por RMSE é responder a **outra
+  pergunta**. A Phase B confirmatória elegeu o vencedor pela **pinball loss** (loss
+  probabilística, via `phase_b_dm_family_6`); a decision_final gold ordena por RMSE. Não é
+  bug — é uma **mistura de objetivos** sem regra de vencedor declarada: a coluna que decide
+  (`rank_rmse`) não casa com a coluna que o claim exige (`mean_pinball`).
+
+  **Implicação para o TCC:** a "primeira linha por (asset, horizon)" desta tabela **não é** o
+  vencedor probabilístico — é o vencedor em RMSE. Tratá-la como scorecard confirmatório
+  importaria o vencedor errado. O caminho honesto (e o que o próprio skeleton aponta) é usar
+  o sidecar `model_comparison_confirmatory_scorecard_phase_c.parquet`, que **separa** o
+  vencedor primário (por loss probabilística) do perfil comparativo.
+
+**4. `dm_net_wins` calculado com `pvalue_two_sided` cru (sem Holm)**
+- **O que o doc afirma:** DM processing nas linhas 588-631 conta winners/losers por `pvalue_two_sided < 0.05` — **não** por `pvalue_adj_holm`.
+- **Como deveria funcionar (exemplo):** para cada grupo `(asset, sweep, split, horizon)`, percorre os pares DM; se `p_cru < 0.05` e a diferença de loss aponta a favor de uma config, ela ganha +1 vitória, a outra +1 derrota. `dm_net_wins = vitórias − derrotas`. Com 6 pares e p-values crus `{0.004, 0.02, 0.03, 0.06, 0.20, 0.50}`, **3** passam o corte cru (0.004/0.02/0.03) e viram vitórias/derrotas; os outros são ignorados.
+- **O que esperar no código:** `groupby([... sem split_signature])`, leitura de `pvalue_two_sided`, filtro `p >= 0.05 → continue`, contagem por sinal de `mean_loss_diff_left_minus_right`.
+- **Ref do doc → código:** [`confidence.py:599-601`](../../../../src/domain/services/gold_builders/confidence.py#L599) (groupby), [`confidence.py:605`](../../../../src/domain/services/gold_builders/confidence.py#L605) (lê `pvalue_two_sided`), [`confidence.py:609`](../../../../src/domain/services/gold_builders/confidence.py#L609) (filtro `p >= 0.05`), [`confidence.py:628`](../../../../src/domain/services/gold_builders/confidence.py#L628) (`dm_net_wins`). ✅ **Confere:** L605 `p = pd.to_numeric(r.get("pvalue_two_sided"), ...)`; L609 `if pd.isna(p) or pd.isna(d) or p >= 0.05: continue`; L628 `"dm_net_wins": int(winners.get(cfg, 0) - losers.get(cfg, 0))`; groupby em L599-601 por `["asset","parent_sweep_id","split","horizon"]` (**sem** `split_signature`).
+- ⚠️ **Ponto de atenção — herda integralmente o item #1 (elemento 7) e o item #3**
+  Esta é a **mesma** inconsistência já dissecada: o parquet `gold_dm_pairwise_results`
+  carrega `pvalue_adj_holm` (corrigido por multiplicidade), mas a decision_final **ignora**
+  esse ajuste e reconta vitórias com o `pvalue_two_sided` **cru**. Resultado: existem **dois
+  veredictos** de "DM significativo" no sistema — o ajustado (parquet) e o cru
+  (`dm_net_wins`).
+
+  **Quando é tolerável:** se `dm_net_wins` for lido como **diagnóstico/descritivo** (como a
+  reinterpretação do C.0.1 sugere), o p cru é aceitável **desde que rotulado como
+  não-inferencial**. **Quando não é:** se `dm_net_wins` for tratado como sinal de
+  superioridade — aí **superconta** vitórias que são ruído de múltiplas comparações (e ainda
+  sobre o universo enviesado pelo top-50). Detalhe extra herdado do item #3: o groupby da
+  contagem (L599-601) **não inclui `split_signature`**, mesma assimetria de "família por grain
+  administrativo". Não é decisão nova deste item — segue o que o item #1/#3 definir.
+
+**5. MCS → coluna `mcs_selected_alpha_0_05` (renomeada; `split_signature` descartada)**
+- **O que o doc afirma:** MCS summary nas linhas 633-647; renomeia `selected_in_mcs_alpha_0_05` → `mcs_selected_alpha_0_05` e mergeia como coluna diagnóstica.
+- **Como deveria funcionar (exemplo):** se a config `feat_A|sig_3` está no confidence set, ela chega na decision_final com `mcs_selected_alpha_0_05 = True`. Lembre da assimetria do item #2: `True` = "não foi possível **rejeitá-la** como inferior", **não** "ela venceu".
+- **O que esperar no código:** seleção de colunas + `rename`.
+- **Ref do doc → código:** [`confidence.py:633-647`](../../../../src/domain/services/gold_builders/confidence.py#L633). ✅ **Confere:** L642-644 seleciona `["asset","parent_sweep_id","split","horizon","config_label","selected_in_mcs_alpha_0_05"]`; L645-647 `rename({"selected_in_mcs_alpha_0_05": "mcs_selected_alpha_0_05"})`.
+- ⚠️ **Ponto de atenção — descarte de `split_signature` já documentado no item #2**
+  O descarte ativo de `split_signature` na seleção de colunas (L642-644) e o colapso por
+  `drop_duplicates(merge_cols)` no merge final (L727) foram dissecados no **item #2,
+  elemento 11**. Em sweeps com múltiplos folds de test, isso colapsa registros de
+  `split_signatures` distintos de forma **não-determinística** quanto a qual
+  `mcs_selected_alpha_0_05` fica. **Quando importa:** walk-forward com vários folds, em que
+  uma config é selecionada em um split e não em outro. Aqui apenas **herdamos** o ponto — a
+  decisão pertence ao item #2.
+
+**6. Win-rate → coluna `win_rate_ex_ties_mean` (sem variância, sem p-value, sem disclaimer)**
+- **O que o doc afirma:** win-rate processing nas linhas 649-694; agrega `win_rate_ex_ties_mean` por config; a coluna aparece na tabela final **sem disclaimer**, expondo risco de ser lida como inferencial.
+- **Como deveria funcionar (exemplo):** uma config que aparece em 4 pares com win-rates (ex-empates) `{0.7, 0.6, 0.55, 0.8}` recebe `win_rate_ex_ties_mean = média = 0.6625`. É uma **fração** ("em 66% dos timestamps eu errei menos que o oponente"), **sem** intervalo de confiança nem teste — puramente descritiva (ver item #8).
+- **O que esperar no código:** coleta das win-rates left/right por config e `np.mean(vals)`.
+- **Ref do doc → código:** [`confidence.py:649-694`](../../../../src/domain/services/gold_builders/confidence.py#L649) (processamento) e [`confidence.py:691`](../../../../src/domain/services/gold_builders/confidence.py#L691) (`win_rate_ex_ties_mean`). ✅ **Confere:** L676-681 acumula `left_win_rate_ex_ties`/`right_win_rate_ex_ties` por config (como left **e** como right); L691 `"win_rate_ex_ties_mean": float(np.mean(vals))`. Sem variância, sem p-value, sem contagem de empates na coluna final.
+- ⚠️ **Ponto de atenção — coluna descritiva ao lado de colunas que parecem inferenciais**
+  O risco prático não é a fórmula (uma média de frações é o que diz ser) — é o **vizinho de
+  coluna**. Na mesma linha da tabela final convivem `dm_net_wins` (que *cheira* a teste),
+  `mcs_selected_alpha_0_05` (que *cheira* a aprovação) e `win_rate_ex_ties_mean` (que **não
+  tem** nenhum lastro inferencial). Um leitor desavisado trata os três como "evidência" do
+  mesmo nível.
+
+  **Quando é aceitável:** se a tabela/relatório rotular `win_rate_ex_ties_mean` explicitamente
+  como **descritiva** (sem teste), ela é um diagnóstico legítimo de "frequência de vitória".
+  **Quando não é:** se for usada para **eleger** ou para sugerir significância — ela não
+  controla nada (nem variância, nem empates na coluna final, nem múltiplas comparações). O
+  skeleton já marca: "não usar como critério confirmatório em decision_final".
+
+**7. `academic_decision_ready` — o nome promete mais do que a coluna entrega**
+- **O que o doc afirma:** `academic_decision_ready` (linhas 803-813) depende de `pairwise_ready_dm & pairwise_ready_mcs & target_exact_alignment`; **não** depende de win-rate.
+- **Como deveria funcionar (exemplo):** o nome sugere "pronto para a decisão acadêmica / este modelo está academicamente validado". O **que ela realmente computa** é um **E lógico de três flags de alinhamento de dados**, vindas de `gold_paired_oos_intersection_by_horizon`: (1) o DM tinha timestamps alinhados suficientes; (2) o MCS idem; (3) os targets batem exatamente. Ou seja, mede **"houve dados pareados suficientes para rodar DM/MCS"**, **não** "alguém venceu". Uma config pode ter `academic_decision_ready = True` **e** `dm_net_wins = −5` (perde feio): prontidão ≠ vitória.
+- **O que esperar no código:** default `False` para flags ausentes; `bool` AND das três; **nenhuma** verificação de p-value, de status `PROMOTED_CONFIRMATORY` dos inputs, ou de critério de vencedor.
+- **Ref do doc → código:** [`confidence.py:803-813`](../../../../src/domain/services/gold_builders/confidence.py#L803). ✅ **Confere:** L803-805 preenchem `pairwise_ready_dm/pairwise_ready_mcs/target_exact_alignment` com `False` se ausentes; L809-813 `academic_decision_ready = _dm & _mcs & _tgt` (cada uma `.where(notna, False).astype(bool)`). Confirmado: **não** entra win-rate, **não** entra p-value, **não** entra status dos inputs.
+- ⚠️ **Ponto de atenção — nome "academic_decision_ready" sugere um veredicto que ela não emite**
+  Esta é a segunda metade do descasamento nome↔conteúdo (a primeira é a ordenação por RMSE).
+  A flag é um **portão de qualidade de dados** ("os pareamentos DM/MCS foram computáveis e os
+  targets alinham"), não um **veredicto confirmatório**. Ela **não** verifica: que os inputs
+  P0 (DM/MCS/Holm/top-50) estejam `PROMOTED_CONFIRMATORY`; que exista critério de vencedor
+  pré-registrado; que `decision_criterion_hash`/`version` estejam persistidos (o skeleton
+  pede isso como TODO).
+
+  **Quando o nome é inofensivo:** num pipeline interno onde "ready" é entendido como
+  "os pré-requisitos de alinhamento foram satisfeitos para *poder* tentar a inferência".
+  **Quando é perigoso:** num relatório/plot/TCC onde `academic_decision_ready = True` é lido
+  como **"este modelo está academicamente validado como vencedor"**. A distância entre os dois
+  é exatamente o que falta para ser confirmatório (pré-registro + inputs promovidos + critério
+  congelado). O risco é de **nomenclatura que superpromete** — o mesmo padrão do item #10
+  (`confidence_calibrated` que não calibra) e do item #2 (`selected` que não é "vencedor"),
+  agora no nível da decisão final.
+
+**8. Consumo nos plots oficiais — `pick_config` elege o config exibido por `rank_rmse`**
+- **O que o doc afirma:** `gold_model_decision_final` é consumido por plots oficiais ([`generate_prediction_analysis_plots_use_case.py:819`](../../../../src/use_cases/generate_prediction_analysis_plots_use_case.py#L819)); risco de mostrar "modelo vencedor" sem disclaimer de que a ordenação é por RMSE/MAE, não por loss probabilística.
+- **Como deveria funcionar (exemplo):** a tabela é carregada (L819) e passada como `decision_df` ao plot `fig_oos_timeseries_examples` (L851). Lá dentro, `pick_config(h)` ordena `decision_df` por `rank_rmse` **ascendente** e pega `.iloc[0]` → o config exibido como **exemplo** para aquele horizonte é o **rank_rmse=1**. No exemplo do elemento 3 (LSTM rank 1, TFT rank 2), o plot de h+7 mostra a **série da LSTM** como "o exemplo" — e o leitor entende "este é o modelo". Se `decision_df` estiver vazia, cai num fallback que ordena `gold_prediction_metrics_by_config` por `mean_rmse` (mesmo critério pontual).
+- **O que esperar no código:** load da tabela, passagem ao plot, e seleção do config por `rank_rmse` → `iloc[0]`.
+- **Ref do doc → código:** [`generate_prediction_analysis_plots_use_case.py:819`](../../../../src/use_cases/generate_prediction_analysis_plots_use_case.py#L819) (load), [`:851`](../../../../src/use_cases/generate_prediction_analysis_plots_use_case.py#L851) (passa `decision_df=gold_dec`) e [`:587-605`](../../../../src/use_cases/generate_prediction_analysis_plots_use_case.py#L587) (`pick_config`). ✅ **Confere:** L819 `gold_dec = self._filter_asset(self._load_gold_table(..., "gold_model_decision_final"), asset)`; L851 passa `decision_df=gold_dec` ao `_build_fig_oos_timeseries_examples`; L588-592 exige `rank_rmse` e faz `sort_values("rank_rmse", ascending=True)`; L594-595 `r = d.iloc[0]; return f"{r['feature_set_name']}|{r['config_signature']}"`. Fallback pontual em L596-604 (`mean_rmse`).
+- ⚠️ **Ponto de atenção — o plot oficial materializa o "vencedor RMSE" como o exemplo visual**
+  Aqui o descasamento dos elementos 3 e 7 vira **artefato visível**. O plot
+  `fig_oos_timeseries_examples` não desenha "um config qualquer": desenha **especificamente o
+  melhor em RMSE** por horizonte. Sem rótulo, a leitura natural de quem abre o relatório é
+  "este é *o* modelo / o vencedor".
+
+  **Quando é aceitável:** se a legenda/título do plot disser claramente algo como "exemplo do
+  config com menor RMSE em h+N" — aí é um exemplo honesto de inspeção visual, não uma
+  alegação de superioridade. **Quando não é:** se o plot for apresentado (no TCC ou num
+  relatório) como "a previsão do melhor modelo" sem qualificar o critério — porque o critério
+  é **pontual** (RMSE) e o claim do trabalho é **probabilístico** (pinball). O config com
+  melhor pinball pode **nunca** aparecer no plot. Não é um defeito do plot em si; é a
+  **propagação** do critério de ordenação pontual da decision_final até a figura que o leitor
+  enxerga como conclusão.
+
+### Cross-check — o que NÃO está corretamente indicado/referenciado
+
+Para a `gold_model_decision_final`, **todas as referências de "Uso atual" e "Implementação
+atual localizada" conferem** com o código (li a função inteira `_build_model_decision_final`,
+L463-818, e o consumidor de plots L587-605/L819-851). Pontos a registrar:
+
+1. **Nenhuma referência quebrada.** As linhas-âncora do dossiê estão corretas e as correções
+   que o próprio skeleton já fez batem: `requires_gold` em **L824-832** (não 824-831) ✅;
+   `rank_mae` em **L790-794** (não L816) ✅; `rank_rmse` L785-789 ✅; `primary_metric_map`
+   L492-499 ✅; DM L588-631 com `pvalue_two_sided` ✅; MCS L633-647 ✅; win-rate L649-694 ✅;
+   `academic_decision_ready` L803-813 ✅; `sort_values` L815-818 ✅; consumidor de plots
+   **L819** ✅.
+
+2. **`rank_da` existe mas o dossiê não o menciona.** O código computa um terceiro rank —
+   `rank_da` (acurácia direcional, `ascending=False`, L795-801) — que **não** entra no
+   `sort_values` final (L815-818 usa só `rank_rmse, rank_mae`). É inócuo (coluna a mais), mas
+   completa o quadro: são **três** ranks pontuais computados, **dois** usados para ordenar.
+
+3. **`academic_decision_ready`: o dossiê captura "sem pré-registro do critério", mas não
+   nomeia o risco de nomenclatura.** A coluna se chama *academic_decision_ready* e computa
+   **apenas prontidão de alinhamento de dados** (L803-813) — não um veredicto. O dossiê fala
+   genericamente em "sem pré-registro"; o código revela algo mais específico e mais
+   arriscado: um **nome que sugere validação acadêmica** sobre uma flag puramente operacional.
+   (Elemento 7.)
+
+4. **O consumo nos plots é mais específico do que "pode mostrar modelo vencedor".** O dossiê
+   diz que os plots "podem mostrar 'modelo vencedor' sem disclaimer". O código mostra o
+   **mecanismo exato**: `pick_config` ordena por `rank_rmse` e pega `.iloc[0]`
+   (L587-595) — o exemplo exibido é **deterministicamente o melhor em RMSE**, com fallback
+   também pontual. Não é "pode": é "elege por RMSE por construção". (Elemento 8.)
+
+5. **Subtileza não mencionada no dossiê — `sweep_map` colapsa `config_label → parent_sweep_id`
+   por `drop_duplicates`.** Antes dos merges, L700-715 constroem um mapa
+   `(asset, split, horizon, config_label) → parent_sweep_id` e fazem
+   `drop_duplicates(["asset","split","horizon","config_label"])` (L712). Se o **mesmo
+   `config_label` existir sob mais de um `parent_sweep_id`**, o `parent_sweep_id` anexado a
+   `out` é escolhido **arbitrariamente** (a primeira ocorrência). É o mesmo *flavour* do
+   colapso de `split_signature` do item #2: não-determinístico quanto à granularidade. Raro
+   se `config_label` for único por sweep, mas não há garantia explícita disso aqui.
+
+6. **Ponto residual metodológico central:** a tabela **ordena por erro pontual** (RMSE/MAE)
+   enquanto o claim do TCC é **probabilístico** (pinball), e a flag `academic_decision_ready`
+   **não** é um critério de vencedor pré-registrado. O skeleton captou ambos ("ordenação por
+   `rank_rmse, rank_mae` (pontual)"; "sem pré-registro do critério"; "preferir o sidecar
+   confirmatório"). Os aprofundamentos dos elementos 3, 7 e 8 detalham o "quando e por quê".
+
+### Veredito do item #12
+
+🟡 **Ressalvas.** Referências **intactas** e evidência fiel ao código — o rollup costura as 7
+tabelas, ordena por RMSE/MAE, expõe `dm_net_wins` (p cru), `mcs_selected_alpha_0_05`,
+`win_rate_ex_ties_mean` e `academic_decision_ready` exatamente como o dossiê afirma, e os
+plots oficiais a consomem em L819. As ressalvas são (a) **metodológicas, que percorrem todo
+o item** — a tabela "decide" por **erro pontual** enquanto o claim é **probabilístico**, e a
+flag `academic_decision_ready` é um **portão de alinhamento de dados**, não um veredicto
+confirmatório (sem pré-registro, sem inputs promovidos, sem critério congelado); herda ainda
+os riscos de DM/MCS/Holm/top-50/win-rate dos itens #1-#8; e (b) **de precisão/completude do
+dossiê** — o `academic_decision_ready` é melhor descrito como **nomenclatura que superpromete**
+(não só "sem pré-registro"), o consumo nos plots **elege o config por `rank_rmse` por
+construção** (não só "pode mostrar vencedor"), existe um terceiro `rank_da` computado mas não
+usado no sort, e o `sweep_map` colapsa `config_label → parent_sweep_id` por `drop_duplicates`
+(não-determinístico se um label cruzar sweeps). Não há defeito de localização; as decisões
+(ordenar por loss probabilística, renomear/redefinir `academic_decision_ready`, rotular as
+colunas descritivas, pré-registrar o critério, qualificar os plots) são de C.0.2/C.0.3.
 
 ---
 
