@@ -728,14 +728,14 @@ Writer: [`src/adapters/parquet_analytics_run_repository.py`](../../src/adapters/
 
 #### Quality gates aplicados
 
-- Schema-level: `required_columns` + `status` whitelist — `analytics_store_schema.py:747-750`, gate `validate_table_payload` em `:713-772`
-- `run_id_execution_consistency` — `validate_analytics_quality_use_case.py:382-399`
-- `referential_integrity` (outros facts referenciam `dim_run.run_id`) — `:401-430`
-- `required_tables_presence` — `:326-342`
-- `cardinality_config_fold_seed` — `:775-784`
-- `baselines_share_parent_sweep_id_with_candidates` — `:1017-1056`
-- `tft_baselines_timestamp_subset_alignment` — `:92-170, 1058-1074`
-- `official_contract_quantile_attention` — `:1076-1145`
+- Schema-level: `required_columns` + `status` whitelist — `analytics_store_schema.py:747-750`, gate `validate_table_payload` em `analytics_store_schema.py:713-772`
+- `run_id_execution_consistency` — `quality_checks/cardinality.py:122-150` (RunIdExecutionConsistencyCheck)
+- `referential_integrity` (outros facts referenciam `dim_run.run_id`) — `quality_checks/contracts.py:33-60` (ReferentialIntegrityCheck)
+- `required_tables_presence` — `quality_checks/cardinality.py:30-43` (RequiredTablesPresenceCheck)
+- `cardinality_config_fold_seed` — `quality_checks/cardinality.py:187-208` (CardinalityConfigFoldSeedCheck)
+- `baselines_share_parent_sweep_id_with_candidates` — `quality_checks/alignment.py:123-163` (BaselinesSharedParentSweepCheck)
+- `tft_baselines_timestamp_subset_alignment` — `quality_checks/alignment.py:164-...` (TftBaselinesTimestampSubsetAlignmentCheck)
+- `official_contract_quantile_attention` — `quality_checks/contracts.py:428-...` (OfficialContractQuantileAttentionCheck)
 
 ### 4.2 fact_run_snapshot
 
@@ -777,7 +777,7 @@ Writer: [`src/adapters/parquet_analytics_run_repository.py`](../../src/adapters/
 
 #### Quality gates
 
-- `min_samples_by_split` (`n_samples_train/val/test`) — `validate_analytics_quality_use_case.py:786-805`
+- `min_samples_by_split` (`n_samples_train/val/test`) — `quality_checks/cardinality.py:209-...` (MinSamplesBySplitCheck)
 - `referential_integrity` — `:401-430`
 
 ### 4.3 fact_config
@@ -799,7 +799,7 @@ Writer: [`src/adapters/parquet_analytics_run_repository.py`](../../src/adapters/
 #### Quality gates
 
 - `prediction_mode` whitelist `{point, quantile}` — `analytics_store_schema.py:752-755`
-- `oos_horizon_coverage` consome `evaluation_horizons_json` — `validate_analytics_quality_use_case.py:562-598`
+- `oos_horizon_coverage` consome `evaluation_horizons_json` — `quality_checks/contracts.py:177-211` (OosHorizonCoverageCheck)
 
 ### 4.4 fact_epoch_metrics
 
@@ -830,7 +830,7 @@ Writer: [`src/adapters/parquet_analytics_run_repository.py`](../../src/adapters/
 
 #### Quality gates
 
-- `required_metrics_nan` em `train_loss, val_loss` — `validate_analytics_quality_use_case.py:432-448`
+- `required_metrics_nan` em `train_loss, val_loss` — `quality_checks/cardinality.py:151-186` (RequiredMetricsNanCheck)
 
 ### 4.5 fact_split_metrics
 
@@ -861,7 +861,7 @@ Writer: [`src/adapters/parquet_analytics_run_repository.py`](../../src/adapters/
 
 #### Quality gates
 
-- `required_metrics_nan` em `rmse, mae, directional_accuracy, n_samples` — `validate_analytics_quality_use_case.py:432-448`
+- `required_metrics_nan` em `rmse, mae, directional_accuracy, n_samples` — `quality_checks/cardinality.py:151-186` (RequiredMetricsNanCheck)
 
 ### 4.6 fact_oos_predictions
 
@@ -914,16 +914,16 @@ Writer: [`src/adapters/parquet_analytics_run_repository.py`](../../src/adapters/
 
 #### Quality gates
 
-- `temporal_consistency` (parse, `target>=decision`, monotonic por grupo) — `validate_analytics_quality_use_case.py:451-490,639-644`
-- `oos_unique_key` (sem dups em PK) — `:492-506,645-650`
-- `oos_numeric_types` — `:508-527,651-656`
-- `oos_horizon_coverage` (esperado de `fact_config.evaluation_horizons_json`) — `:561-598,657-662`
-- `oos_supervised_nulls` — `:529-539,663-668`
-- `oos_interval_width_non_negative` (`q90 - q10 >= 0`) — `:541-551,669-674`
-- `oos_quantile_order` (`q10 <= q50 <= q90`) — `:553-559,675-680`
-- `oos_pairwise_target_alignment` (TFT vs baseline em mesmo `target_timestamp`) — `:600-637,714-719`
-- `oos_quantile_block_a_acceptance` via `QuantileContractAnalyzer.evaluate_block_a` — `:682-699`; thresholds em `quantile_contract_analyzer.py:9-15` (`max_crossing_bruto_rate=0.001, max_negative_interval_width_count=0, max_crossing_post_guardrail_rate=0.0`)
-- `block_quantile_degeneracy_gate` — `:700-713`; metric `p10_eq_p90_rate = count / n_rows`; falha se `mode=='quantile' AND n_rows>=min AND p10_eq_p90_rate >= max` — `quantile_contract_analyzer.py:292,330,367-369`
+- `temporal_consistency` (parse, `target>=decision`, monotonic por grupo) — `quality_checks/contracts.py:61-107` (TemporalConsistencyCheck)
+- `oos_unique_key` (sem dups em PK) — `quality_checks/contracts.py:108-148` (OosUniqueKeyCheck)
+- `oos_numeric_types` — `quality_checks/contracts.py:149-176` (OosNumericTypesCheck)
+- `oos_horizon_coverage` (esperado de `fact_config.evaluation_horizons_json`) — `quality_checks/contracts.py:177-211` (OosHorizonCoverageCheck)
+- `oos_supervised_nulls` — `quality_checks/contracts.py:212-238` (OosSupervisedNullsCheck)
+- `oos_interval_width_non_negative` (`q90 - q10 >= 0`) — `quality_checks/contracts.py:239-275` (OosIntervalWidthNonNegativeCheck)
+- `oos_quantile_order` (`q10 <= q50 <= q90`) — `quality_checks/contracts.py:276-320` (OosQuantileOrderCheck)
+- `oos_pairwise_target_alignment` (TFT vs baseline em mesmo `target_timestamp`) — `quality_checks/alignment.py:18-122` (OosPairwiseTargetAlignmentCheck)
+- `oos_quantile_block_a_acceptance` via `QuantileContractAnalyzer.evaluate_block_a` — `quality_checks/calibration.py:23-53` (OosQuantileBlockAAcceptanceCheck); thresholds em `quantile_contract_analyzer.py:9-15` (`max_crossing_bruto_rate=0.001, max_negative_interval_width_count=0, max_crossing_post_guardrail_rate=0.0`)
+- `block_quantile_degeneracy_gate` — `quality_checks/calibration.py:54-73` (BlockQuantileDegeneracyGateCheck); metric `p10_eq_p90_rate = count / n_rows`; falha se `mode=='quantile' AND n_rows>=min AND p10_eq_p90_rate >= max` — `quantile_contract_analyzer.py:292,330,367-369`
 
 ### 4.7 fact_failures
 
@@ -958,7 +958,7 @@ Writer: [`src/adapters/parquet_analytics_run_repository.py`](../../src/adapters/
 
 #### Quality gates
 
-- `official_contract_quantile_attention` requer `feature_importance_json, attention_summary_json` nao-vazios em runs candidatas oficiais — `validate_analytics_quality_use_case.py:1076-1145`
+- `official_contract_quantile_attention` requer `feature_importance_json, attention_summary_json` nao-vazios em runs candidatas oficiais — `quality_checks/contracts.py:428-...` (OfficialContractQuantileAttentionCheck)
 
 ### 4.9 fact_inference_runs
 
@@ -972,7 +972,7 @@ Writer: [`src/adapters/parquet_analytics_run_repository.py`](../../src/adapters/
 
 #### Quality gates
 
-- `inference_predictions_continuity` — `validate_analytics_quality_use_case.py:344-361`
+- `inference_predictions_continuity` — `quality_checks/cardinality.py:44-82` (InferencePredictionsContinuityCheck)
 
 ### 4.10 fact_inference_predictions
 
@@ -1043,7 +1043,7 @@ Baselines sao modelos estatisticos/ingenuos cujas predicoes sao escritas em `fac
 4. `bridge_run_features` — via `_persist_bridge_run_features` (`:427-442`) (single row `feature_name=f"baseline:{name}"`)
 5. `fact_oos_predictions` — via `_emit_oos_rows` (`:191-286`) → `append_fact_oos_predictions` (`:614-616`)
 
-**NAO** emite: `fact_training_runtime`, `fact_feature_importance`, `fact_attention_summary` (exemptos por gate em `validate_analytics_quality_use_case.py:1076-1099`).
+**NAO** emite: `fact_training_runtime`, `fact_feature_importance`, `fact_attention_summary` (exemptos por gate em `quality_checks/contracts.py:428-...` — OfficialContractQuantileAttentionCheck).
 
 **Convencao `parent_sweep_id`** (para alinhamento pareado):
 - `parent_sweep_id_root = config['output_subdir']` — `run_baselines_test_pipeline_use_case.py:191-195`
@@ -1054,7 +1054,7 @@ Baselines sao modelos estatisticos/ingenuos cujas predicoes sao escritas em `fac
 **Alinhamento de timestamps com TFT** (contrato F.0.2/F.0.3):
 - Offsets espelham os drops do trainer TFT: `evaluation_start_offset_days = max(max_encoder_length - 1, 0)`; `evaluation_end_offset_days = max(max_prediction_length, 0)` — `run_baselines_test_pipeline_use_case.py:200-212`
 - Aplicados no slicing: `idxs = idxs[n_start:]` depois `idxs = idxs[:-n_end]` — `run_baselines_use_case.py:223-228`
-- Defesa: gate `tft_baselines_timestamp_subset_alignment` (`validate_analytics_quality_use_case.py:92-170, 1058-1074`) verifica set-equality de `target_timestamp_utc` por `(asset, parent_sweep_id, split, horizon)`
+- Defesa: gate `tft_baselines_timestamp_subset_alignment` (`quality_checks/alignment.py:164-...` — TftBaselinesTimestampSubsetAlignmentCheck) verifica set-equality de `target_timestamp_utc` por `(asset, parent_sweep_id, split, horizon)`
 
 **`run_id` deterministico** (`_compute_run_id`, `run_baselines_use_case.py:98-116`):
 - `sha256({"kind":"baseline", "baseline_name", "asset", "parent_sweep_id", "seed", "window"})`
@@ -1173,10 +1173,10 @@ Baselines sao modelos estatisticos/ingenuos cujas predicoes sao escritas em `fac
 
 ### 5.7 Quality gates aplicados aos baselines
 
-- **`baselines_share_parent_sweep_id_with_candidates`** (cohort_decision; `validate_analytics_quality_use_case.py:1017-1056`): para cada `parent_sweep_id`, requer `n_baselines > 0` se `n_candidates > 0`. Deteccao por `feature_set_name=="baseline" OR model_version.startswith("baseline_")` (`:1030-1034`).
-- **`tft_baselines_timestamp_subset_alignment`** (cohort_decision; `:92-170, 1058-1074`): join `fact_oos_predictions × dim_run` + verifica set-equality `tft_ts == baseline_ts` por `(asset, parent_sweep_id, split, horizon)`. Falha → retorna `symdiff` cardinality.
-- **Artifact-exemption** (`:1076-1099`): exclui `run_id`s de baseline do contrato `feature_importance/attention`, mas ainda exige p10/p50/p90.
-- **Probabilistic-metric exclusion** (`:925-927`): point baselines (`zero_return`, `historical_mean_rolling`) filtrados de metricas PICP-dependentes.
+- **`baselines_share_parent_sweep_id_with_candidates`** (cohort_decision; `quality_checks/alignment.py:123-163` — BaselinesSharedParentSweepCheck): para cada `parent_sweep_id`, requer `n_baselines > 0` se `n_candidates > 0`. Deteccao por `feature_set_name=="baseline" OR model_version.startswith("baseline_")` (`alignment.py:~140`).
+- **`tft_baselines_timestamp_subset_alignment`** (cohort_decision; `quality_checks/alignment.py:164-...` — TftBaselinesTimestampSubsetAlignmentCheck): join `fact_oos_predictions × dim_run` + verifica set-equality `tft_ts == baseline_ts` por `(asset, parent_sweep_id, split, horizon)`. Falha → retorna `symdiff` cardinality.
+- **Artifact-exemption** (`quality_checks/contracts.py:428-...` — OfficialContractQuantileAttentionCheck): exclui `run_id`s de baseline do contrato `feature_importance/attention`, mas ainda exige p10/p50/p90.
+- **Probabilistic-metric exclusion** (`gold_builders/quantile.py:162-171` em `_build_metrics_single_contract`): point baselines (`zero_return`, `historical_mean_rolling`) filtrados de metricas PICP-dependentes.
 
 ### 5.8 Lacunas dos baselines
 
@@ -1215,7 +1215,7 @@ e ADR-0005 para o contrato.
 
 **LACUNA G1 (architectural)** — §A.59: `analytics_store_schema.py` declara **zero** `GOLD_*_SCHEMA` constants. O registry `ANALYTICS_TABLE_SCHEMAS` (`:674-691`) enumera apenas silver. Gold tables nao tem ref de schema, dtype contract, partition policy, nem PK declarada.
 
-**LACUNA G2 (writer divergence)** — §A.60: O writer unico de gold e `_safe_write` em `refresh_analytics_store_use_case.py:190-193`:
+**LACUNA G2 (writer divergence)** — §A.60: O writer unico de gold e `_safe_write` em `refresh_analytics_store_use_case.py:245-248`:
 ```python
 def _safe_write(df, path):
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -1225,7 +1225,7 @@ def _safe_write(df, path):
 
 **LACUNA G3 (update policy)** — §A.61: Toda escrita gold e **full overwrite** por construcao (`df.to_parquet` em single file).
 
-**LACUNA G4** — §A.62: Todas as 24 tabelas gold emitidas estao "written but not declared".
+**LACUNA G4** — §A.62: Todas as 25 tabelas gold emitidas estao "written but not declared".
 
 ### 6.1 Inventario de tabelas gold emitidas
 
@@ -1271,16 +1271,16 @@ Tiers (R-22.2.bis):
 
 Reusadas em multiplas gold tables. Cada formula com `file:line`.
 
-#### 6.2.1 `_pinball_loss(y_true, y_pred_q, quantile)` — `:470-473`
+#### 6.2.1 `_pinball_loss(y_true, y_pred_q, quantile)` — `gold_builders/quantile.py:79-83`
 
 ```
 diff = y_true - y_pred_q
 pinball = max(q * diff, (q - 1) * diff)
 ```
 
-Aplicada per row em `:575-577` para q=0.1, q=0.5, q=0.9. Mean per (run, split, horizon) gera colunas `pinball_q10`, `pinball_q50`, `pinball_q90`, `mean_pinball` (`:619-622`).
+Aplicada per row em `gold_builders/quantile.py:188-190` para q=0.1, q=0.5, q=0.9. Mean per (run, split, horizon) gera colunas `pinball_q10`, `pinball_q50`, `pinball_q90`, `mean_pinball` (`gold_builders/quantile.py:244-247`).
 
-#### 6.2.2 PICP e MPIW — `:563-567, 623-625`
+#### 6.2.2 PICP e MPIW — `gold_builders/quantile.py:177-178, 244-246`
 
 ```
 pred_interval_width = q90 - q10
@@ -1288,16 +1288,16 @@ covered_80 = (y_true >= q10) AND (y_true <= q90)
 PICP = mean(covered_80)             # cobertura empirica
 MPIW = mean(pred_interval_width)    # largura media
 coverage_nominal = 0.80
-coverage_error = PICP - coverage_nominal   # :641
+coverage_error = PICP - coverage_nominal   # gold_builders/quantile.py:261
 ```
 
-Mascara probabilistica: cols probabilisticas (`pinball_*`, `picp`, `mpiw`, `prob_up`) NaN-fied para rows com `prediction_mode != "quantile"` OR quantiles degenerados (`q10==q90`) — `:534-557, 597-599`.
+Mascara probabilistica: cols probabilisticas (`pinball_*`, `picp`, `mpiw`, `prob_up`) NaN-fied para rows com `prediction_mode != "quantile"` OR quantiles degenerados (`q10==q90`) — `gold_builders/quantile.py:162-171` (dentro de `_build_metrics_single_contract`).
 
-`confidence_calibrated = calibration_term * width_term` (`:643-645`):
+`confidence_calibrated = calibration_term * width_term` (`gold_builders/quantile.py:263-266`):
 - `calibration_term = clip(1 - |coverage_error| / coverage_nominal, 0, 1)`
 - `width_term = 1 / (1 + clip(pred_interval_width, 0, +inf))`
 
-#### 6.2.3 `_prob_up_from_quantiles(q10, q50, q90)` — `:475-493`
+#### 6.2.3 `_prob_up_from_quantiles(q10, q50, q90)` — `gold_builders/quantile.py:85-101`
 
 CDF piecewise-linear approximation (anchors `CDF(q10)=0.1`, `CDF(q90)=0.9`):
 ```
@@ -1312,7 +1312,7 @@ cdf0 = fallback if cdf0 is NaN
 prob_up = 1.0 - cdf0
 ```
 
-#### 6.2.4 Diebold-Mariano — `_compute_dm_pairwise_from_loss_matrix:1327-1364`
+#### 6.2.4 Diebold-Mariano — `gold_builders/pairwise.py:67-104` (`_compute_dm_pairwise_from_loss_matrix`)
 
 Per-par `(left, right)` em loss matrix `L[t, config]` (loss = squared_error per timestamp):
 ```
@@ -1337,18 +1337,17 @@ dm_stat  = mean_d / sqrt(var_mean)
 p_value  = 2 * (1 - Phi(|dm_stat|))       # two-sided normal CDF
 ```
 
-Selecao top-50 configs por `mean(squared_error)` antes do pairwise — `_select_top_configs_for_pairwise:1367-1384`.
+Selecao top-50 configs por `mean(squared_error)` antes do pairwise — `gold_builders/pairwise.py:43-65` (`_select_top_configs_for_pairwise`).
 
-Loss matrix construido em `_build_gold_dm_pairwise_results:1568-1640`:
-- Filtra `split=="test"` e `status=="ok"` (`:1597-1598`)
-- Por grupo `(asset, parent_sweep_id, split_signature, split, horizon)`
-- `config_label = f"{feature_set_name}|{config_signature}"` (`:1608`)
-- `loss = (y_pred - y_true)^2` (`:1609`)
-- Mean per `(target_timestamp, config_label)` (`:1615-1619`)
-- Pivot to wide; `dropna(axis=0, how="any")` (alinhamento estrito) — `:1620-1621`
+Preprocessing + loss matrix construido em `DmPairwiseResultsGoldBuilder.build: gold_builders/pairwise.py:288-333` + `_pairwise_preprocess: pairwise.py:215-283`:
+- Filtra `split=="test"` e `status=="ok"` (`pairwise.py:268-269`)
+- Por grupo `(asset, parent_sweep_id, split_signature, split, horizon)` via `_pairwise_group_cols`
+- `config_label = f"{feature_set_name}|{config_signature}"` (`pairwise.py:282`)
+- `squared_error = (y_pred - y_true)^2` (`pairwise.py:283`)
+- Mean per `(target_timestamp, config_label)` + pivot to wide; `dropna(axis=0, how="any")` (alinhamento estrito) — `pairwise.py:302-314`
 - DM stat por par; output cols: `left_config, right_config, n, mean_loss_diff_left_minus_right, dm_stat, pvalue_two_sided, asset, parent_sweep_id, split_signature, split, horizon, aligned_timestamps, n_configs`
 
-#### 6.2.5 Holm step-down adjustment — `_apply_holm_adjustment_for_dm:2228-2259`
+#### 6.2.5 Holm step-down adjustment — `gold_builders/pairwise.py:183-214` (`_apply_holm_adjustment_for_dm`)
 
 Per grupo `(asset, parent_sweep_id, split, horizon)`:
 ```
@@ -1363,7 +1362,7 @@ significant_adj_0_05 = (pvalue_adj_holm < 0.05)
 
 Output cols adicionadas a `gold_dm_pairwise_results`: `pvalue_adj_holm, significant_adj_0_05`.
 
-#### 6.2.6 MCS (Model Confidence Set) — `_compute_mcs_from_loss_matrix:1387-1460`
+#### 6.2.6 MCS (Model Confidence Set) — `gold_builders/pairwise.py:107-180` (`_compute_mcs_from_loss_matrix`)
 
 Hansen et al. (2011), variante range t-stat com block bootstrap.
 
@@ -1408,7 +1407,7 @@ Algoritmo:
 
 Output cols: `config_label, selected_in_mcs_alpha_0_05, mean_loss`. Loss matrix mesma construcao do DM (squared_error per `(target_timestamp, config_label)`).
 
-#### 6.2.7 Win rate pairwise — `_build_gold_win_rate_pairwise_results:2048`
+#### 6.2.7 Win rate pairwise — `WinRatePairwiseResultsGoldBuilder.build: gold_builders/pairwise.py:385-447`
 
 Por par `(left, right)`: `win_rate = mean(loss_left < loss_right)` ao longo dos `target_timestamp`s alinhados. Estatistica simples sem ajuste de variancia.
 
@@ -1416,53 +1415,53 @@ Por par `(left, right)`: `win_rate = mean(loss_left < loss_right)` ao longo dos 
 
 Para nao explodir o doc, cada tabela e resumida; o codigo do builder e fonte da verdade.
 
-#### 6.3.1 gold_prediction_metrics_by_run_split_horizon — `:496-663`
+#### 6.3.1 gold_prediction_metrics_by_run_split_horizon — `gold_builders/quantile.py:288-407` (`PredictionMetricsByRunSplitHorizonGoldBuilder.build`); formulas compartilhadas em `quantile.py:102-287` (`_build_metrics_single_contract`)
 
 - **Grain**: 1 linha por `(run_id, asset, feature_set_name, config_signature, split, fold, seed, horizon)`
 - **Reads**: `dim_run, fact_oos_predictions, fact_config`
-- **Cols agregados** (`:608-628`): `n_samples, n_probabilistic_samples, rmse, mae, mape, smape, directional_accuracy, bias, pinball_q10, pinball_q50, pinball_q90, mean_pinball, picp, mpiw, pred_interval_width, prob_up`
+- **Cols agregados** (`gold_builders/quantile.py:241-248`): `n_samples, n_probabilistic_samples, rmse, mae, mape, smape, directional_accuracy, bias, pinball_q10, pinball_q50, pinball_q90, mean_pinball, picp, mpiw, pred_interval_width, prob_up`
 - **Cols derivados**: `is_quantile_genuine, coverage_nominal=0.80, coverage_error, prob_down, confidence_calibrated`
-- **Variantes**: existe `gold_prediction_metrics_by_run_split_horizon` (acima) + `_build_gold_quantile_guardrail_audit` (`:769-878`) que compara metricas raw vs post-guardrail
-- **Quantile contract**: usa as cols `quantile_p10/p50/p90` (RAW) ou `*_post_guardrail` per `primary_quantile_contract` (constructor arg) — `:1838-1888`
+- **Variantes**: existe `gold_prediction_metrics_by_run_split_horizon` (acima) + `QuantileGuardrailAuditGoldBuilder` (`quantile.py:407-556`) que compara metricas raw vs post-guardrail
+- **Quantile contract**: usa as cols `quantile_p10/p50/p90` (RAW) ou `*_post_guardrail` per `primary_quantile_contract` (constructor arg) — `quantile.py:296-302`
 
-#### 6.3.2 gold_prediction_metrics_by_config — `:933-963`
+#### 6.3.2 gold_prediction_metrics_by_config — `gold_builders/quantile.py:615-667` (`PredictionMetricsByConfigGoldBuilder.build`)
 
 - **Grain**: 1 linha por `(asset, feature_set_name, config_signature, split, horizon)` (drop fold/seed/run_id)
 - **Reads**: `gold_prediction_metrics_by_run_split_horizon`
 - **Agregacao**: mean / std / iqr / min / max sobre seeds e folds (em particular `n_runs_*` para contagem)
 
-#### 6.3.3 gold_prediction_metrics_by_horizon — `:965-995`
+#### 6.3.3 gold_prediction_metrics_by_horizon — `gold_builders/descriptive.py:315-362` (`PredictionMetricsByHorizonGoldBuilder.build`)
 
 - **Grain**: agregado por `horizon` somente (sem config)
 - **Reads**: idem above
 
-#### 6.3.4 gold_prediction_calibration — `:997-1023`
+#### 6.3.4 gold_prediction_calibration — `gold_builders/descriptive.py:363-419` (`PredictionCalibrationGoldBuilder.build`)
 
 - **Grain**: por `(config_signature, split, horizon)`
-- **Cols**: `picp` (raw e post_guardrail), `coverage_error`, `mpiw_*`, `mean_pinball_*` — `:1008-1013`
+- **Cols**: `picp` (raw e post_guardrail), `coverage_error`, `mpiw_*`, `mean_pinball_*`
 
-#### 6.3.5 gold_prediction_generalization_gap — `:1025-1061`
+#### 6.3.5 gold_prediction_generalization_gap — `gold_builders/confidence.py:133-182` (`PredictionGeneralizationGapGoldBuilder.build`)
 
 - **Grain**: por `(config_signature, horizon)` com `test` vs `val`
-- **Cols**: `gap_mean_pinball_test_minus_val, gap_picp_test_minus_val, gap_mpiw_test_minus_val, gap_rmse_test_minus_val, gap_mae_test_minus_val, gap_directional_accuracy_test_minus_val` (`:1886-1888`)
+- **Cols**: `gap_mean_pinball_test_minus_val, gap_picp_test_minus_val, gap_mpiw_test_minus_val, gap_rmse_test_minus_val, gap_mae_test_minus_val, gap_directional_accuracy_test_minus_val`
 
-#### 6.3.6 gold_prediction_robustness_by_horizon — `:1063-1111`
+#### 6.3.6 gold_prediction_robustness_by_horizon — `gold_builders/confidence.py:183-242` (`PredictionRobustnessByHorizonGoldBuilder.build`)
 
 - **Grain**: por `(config_signature, horizon)`
 - **Metricas**: dispersao das metricas across seeds (std, range, etc.)
 
-#### 6.3.7 gold_prediction_risk — `:1226-1303`
+#### 6.3.7 gold_prediction_risk — `gold_builders/confidence.py:35-132` (`PredictionRiskGoldBuilder.build`)
 
 - **Grain**: por `(asset, parent_sweep_id, config_signature, split, horizon)`
 - **Reads**: `dim_run + fact_oos_predictions`
 - **Cols** (tail / extreme): VaR, ES (expected shortfall), max_drawdown (todos calculados sobre `error = y_pred - y_true`)
 
-#### 6.3.8 gold_oos_consolidated — `:1305-1461`
+#### 6.3.8 gold_oos_consolidated — `gold_builders/descriptive.py:125-148` (`OosConsolidatedGoldBuilder.build`)
 
 - **Grain**: 1 linha por row de `fact_oos_predictions` enriquecido com `dim_run.parent_sweep_id` + flags derivados (`is_baseline, is_quantile_mode`)
 - **Uso**: feed unificado para os demais agregados gold
 
-#### 6.3.9 gold_oos_quality_report — `:1463-1566`
+#### 6.3.9 gold_oos_quality_report — `gold_builders/descriptive.py:149-314` (`OosQualityReportGoldBuilder.build`)
 
 - **Grain**: por `(asset, parent_sweep_id, split, horizon)`
 - **Cols**: contagens de rows, NaN counts, range checks, alinhamento de target_timestamp
@@ -1478,87 +1477,89 @@ Para nao explodir o doc, cada tabela e resumida; o codigo do builder e fonte da 
 - **Grain**: 1 linha por `(asset, parent_sweep_id, split, horizon, config_label)`
 - **Cols**: `config_label, selected_in_mcs_alpha_0_05, mean_loss`
 
-#### 6.3.12 gold_win_rate_pairwise_results — §6.2.7, `:2048-2139`
+#### 6.3.12 gold_win_rate_pairwise_results — §6.2.7, `gold_builders/pairwise.py:381-447` (`WinRatePairwiseResultsGoldBuilder.build`)
 
 - **Grain**: idem DM, mas sem variance/p-value
 - **Cols**: `left_config, right_config, n, win_rate_left, win_rate_right`
 
-#### 6.3.13 gold_paired_oos_intersection_by_horizon — `:1718-1809`
+#### 6.3.13 gold_paired_oos_intersection_by_horizon — `gold_builders/pairwise.py:448-559` (`PairedOosIntersectionByHorizonGoldBuilder.build`)
 
 - **Grain**: por `(asset, parent_sweep_id, split, horizon, run_id_tft, run_id_baseline)`
 - **Cols**: `intersection_count, tft_only_count, baseline_only_count, union_count, jaccard_index`
 - **Uso**: feed para DM/MCS so quando intersection_count > 0
 
-#### 6.3.14 gold_model_decision_final — `:1811-2046`
+#### 6.3.14 gold_model_decision_final — `gold_builders/confidence.py:821-846` (`ModelDecisionFinalGoldBuilder.build`)
 
 - **Grain**: 1 linha por `(asset, parent_sweep_id, split, horizon)` (com config selecionada)
 - **Reads**: `metrics_by_config + robustness_by_horizon + generalization_gap + dm_results + mcs_results + win_rate + paired_intersection`
 - **Logica**: criterio composto — config selecionada deve estar em MCS, ter DM significativo vs baseline (Holm-adjusted), generalization_gap dentro de threshold
 - **Output**: a decisao final que sustenta `STRATEGIC_DIRECTION` claims
 
-#### 6.3.15 gold_quality_statistics_report — `:2141-2261`
+#### 6.3.15 gold_quality_statistics_report — `gold_builders/confidence.py:847-966` (`QualityStatisticsReportGoldBuilder.build`)
 
 - **Grain**: por `(asset, parent_sweep_id, split, horizon)`
-- **Cols**: agregados de quality (`dm_min_pvalue` em `:2171`, `mcs_*`, etc.)
+- **Cols**: agregados de quality (`dm_min_pvalue`, `mcs_*`, etc.)
 
-#### 6.3.16 gold_quality_run_sweep_summary — `:1190-1224`
+#### 6.3.16 gold_quality_run_sweep_summary — `gold_builders/confidence.py:967-1045` (`QualityRunSweepSummaryGoldBuilder.build`)
 
 - **Grain**: por `(asset, parent_sweep_id)`
 - **Reads**: `quality_report + quality_statistics + dim_run`
 - **Cols**: contagem de runs ok/failed/partial, breakdown por status
 
-#### 6.3.17 gold_feature_set_impact — `:429`
+#### 6.3.17 gold_feature_set_impact — `gold_builders/descriptive.py:114-124` (`FeatureSetImpactGoldBuilder.build`)
 
 - **Grain**: por `(feature_set_name, split, horizon)`
 - **Logica**: delta de metrica vs baseline (within same parent_sweep_id)
 
-#### 6.3.18 gold_feature_impact_by_horizon — `:1113-1188`
+#### 6.3.18 gold_feature_impact_by_horizon — `gold_builders/confidence.py:243-330` (`FeatureImpactByHorizonGoldBuilder.build`)
 
 - **Grain**: por `(asset, parent_sweep_id, feature_set_name, horizon)`
 - **Reads**: `dim_run + gold_prediction_metrics_by_run_split_horizon`
 
-#### 6.3.19 gold_feature_contrib_local_summary — `:2262-2416`
+#### 6.3.19 gold_feature_contrib_local_summary — `gold_builders/confidence.py:331-820` (`FeatureContribLocalSummaryGoldBuilder.build`)
 
 - **Grain**: por `(asset, parent_sweep_id, feature_set_name, horizon, feature_name)`
 - **Reads**: `fact_feature_contrib_local + dim_run`
 - **Agregacao**: `mean(contribution)`, `mean(abs_contribution)`, `feature_rank` agregado, sign consistency (% positive)
 
-#### 6.3.20 gold_runs_long — `:267-294`
+#### 6.3.20 gold_runs_long — `gold_builders/ranking.py:209-216` (`RunsLongGoldBuilder.build`)
 
 - **Grain**: long-format de `(dim_run JOIN fact_split_metrics)`
 - **Cols** (`:271-294`): `run_id, asset, feature_set_name, feature_set_hash, config_signature, model_version, parent_sweep_id, trial_number, fold, seed, split, rmse, mae, ...`
 - **Uso**: base para `ranking_by_config, consistency_topk, ic95`
 
-#### 6.3.21 gold_ranking_by_config — `:296-338`
+#### 6.3.21 gold_ranking_by_config — `gold_builders/ranking.py:217-224` (`RankingByConfigGoldBuilder.build`)
 
 - **Grain**: por `(config_signature, split)` com rank de RMSE/MAE
 
-#### 6.3.22 gold_consistency_topk — `:339-390`
+#### 6.3.22 gold_consistency_topk — `gold_builders/ranking.py:225-230` (`ConsistencyTopkGoldBuilder.build`)
 
 - **Grain**: medida de consistencia top-k across seeds por config
 
-#### 6.3.23 gold_ic95_by_config_metric — `:392-428`
+#### 6.3.23 gold_ic95_by_config_metric — `gold_builders/descriptive.py:103-113` (`Ic95GoldBuilder.build`)
 
 - **Grain**: per `(config_signature, split, metric_name)` com IC95 bootstrap
 
-#### 6.3.24 gold_quantile_guardrail_audit — `:769-878`
+#### 6.3.24 gold_quantile_guardrail_audit — `gold_builders/quantile.py:407-556` (`QuantileGuardrailAuditGoldBuilder.build`)
 
 - **Grain**: per `(run_id, split, horizon)`
-- **Cols**: comparacao RAW vs POST-GUARDRAIL de `pinball_*, picp, mpiw, coverage_error` — `:1008-1013`
+- **Cols**: comparacao RAW vs POST-GUARDRAIL de `pinball_*, picp, mpiw, coverage_error`
 
-#### 6.3.25 gold_quantile_degeneracy_report — `:880-931`
+#### 6.3.25 gold_quantile_degeneracy_report — `gold_builders/quantile.py:557-614` (`QuantileDegeneracyReportGoldBuilder.build`)
 
 - **Grain**: per `(run_id, split, horizon)`
 - **Cols**: contagem de `p10==p90` rows, `p10_eq_p90_rate`, gate result
 
 ### 6.4 Quality gates do refresh (silver validation)
 
-`ValidateAnalyticsQualityUseCase` consome o silver ANTES de gerar gold. Gates relevantes:
-- `required_tables_presence` — `:326-342`
-- `referential_integrity` (todo fact referencia `dim_run.run_id`) — `:401-430`
-- `temporal_consistency, oos_unique_key, oos_numeric_types, oos_horizon_coverage, oos_supervised_nulls, oos_interval_width_non_negative, oos_quantile_order` — `:451-559, 639-680`
-- `oos_pairwise_target_alignment, oos_quantile_block_a_acceptance, block_quantile_degeneracy_gate` — `:600-713`
-- `min_samples_by_split, cardinality_config_fold_seed, baselines_share_parent_sweep_id_with_candidates, tft_baselines_timestamp_subset_alignment, official_contract_quantile_attention` — `:775-1145`
+`ValidateAnalyticsQualityUseCase` consome o silver ANTES de gerar gold. Gates relevantes (pos-R21: checks vivem em `src/domain/services/quality_checks/`):
+- `required_tables_presence` — `quality_checks/cardinality.py:30-43` (RequiredTablesPresenceCheck)
+- `referential_integrity` (todo fact referencia `dim_run.run_id`) — `quality_checks/contracts.py:33-60` (ReferentialIntegrityCheck)
+- `temporal_consistency, oos_unique_key, oos_numeric_types, oos_horizon_coverage, oos_supervised_nulls, oos_interval_width_non_negative, oos_quantile_order` — `quality_checks/contracts.py:61-320`
+- `oos_pairwise_target_alignment, oos_quantile_block_a_acceptance, block_quantile_degeneracy_gate` — `quality_checks/alignment.py:18-122`, `quality_checks/calibration.py:23-73`
+- `min_samples_by_split, cardinality_config_fold_seed` — `quality_checks/cardinality.py:187-...`
+- `baselines_share_parent_sweep_id_with_candidates, tft_baselines_timestamp_subset_alignment` — `quality_checks/alignment.py:123-...`
+- `official_contract_quantile_attention` — `quality_checks/contracts.py:428-...`
 
 ### 6.5 Lacunas do gold
 
@@ -1755,7 +1756,7 @@ Comentario em `run_baselines_use_case.py:259` documenta `y_true = target_return[
 `analytics_store_schema.py` registry `ANALYTICS_TABLE_SCHEMAS` (`:674-691`) lista apenas silver. Gold schemaless.
 
 ### A.60 — `_safe_write` (gold) sem PK/dtype/partition
-`refresh_analytics_store_use_case.py:189-193`. Diverge do silver (`ParquetAnalyticsRunRepository._write_with_overwrite_policy`).
+`refresh_analytics_store_use_case.py:245-248`. Diverge do silver (`ParquetAnalyticsRunRepository._write_with_overwrite_policy`).
 
 ### A.61 — Gold full overwrite por construcao
 Cada `df.to_parquet(path, index=False)` em single file. Sem upsert, sem append.
@@ -1764,22 +1765,22 @@ Cada `df.to_parquet(path, index=False)` em single file. Sem upsert, sem append.
 Toda a §6.1 e gap A.59 materializada.
 
 ### A.63 — DM lag selection hard-coded
-`refresh_analytics_store_use_case.py:1342`: `lag = min(max(1, n^(1/3)), 10)`. Sem opcao de override.
+`gold_builders/pairwise.py:85` (`_compute_dm_pairwise_from_loss_matrix`): `lag = min(max(1, n^(1/3)), 10)`. Sem opcao de override.
 
 ### A.64 — MCS params hard-coded
-`refresh_analytics_store_use_case.py:1387-1394`: `alpha=0.05, bootstrap_samples=300, block_len=5, random_seed=42`. Nao configuraveis via CLI/YAML.
+`gold_builders/pairwise.py:107-115` (`_compute_mcs_from_loss_matrix`): `alpha=0.05, bootstrap_samples=300, block_len=5, random_seed=42`. Nao configuraveis via CLI/YAML.
 
 ### A.65 — DM top-50 cap silencioso
-`_select_top_configs_for_pairwise:1367-1384` filtra para top-50 configs por `mean(squared_error)` antes do pairwise — configs alem do top-50 nao aparecem em `gold_dm_pairwise_results`. Nao reportado em metadado.
+`gold_builders/pairwise.py:43-65` (`_select_top_configs_for_pairwise`) filtra para top-50 configs por `mean(squared_error)` antes do pairwise — configs alem do top-50 nao aparecem em `gold_dm_pairwise_results`. Nao reportado em metadado.
 
 ### A.66 — Holm grouping fixo
-`_apply_holm_adjustment_for_dm:2236` agrupa por `(asset, parent_sweep_id, split, horizon)`. Nao usa `split_signature` mesmo quando disponivel. Pode misturar p-values de splits diferentes do mesmo logical split.
+`gold_builders/pairwise.py:197` (`_apply_holm_adjustment_for_dm`) agrupa por `(asset, parent_sweep_id, split, horizon)`. Nao usa `split_signature` mesmo quando disponivel. Pode misturar p-values de splits diferentes do mesmo logical split.
 
 ### A.67 — `_prob_up_from_quantiles` fallback mascara degeneracao
-`:489-491`. Quando `width=0`, retorna `1.0`/`0.0`/`0.5` em vez de NaN. Esconde modelo degenerado em `prob_up` agregada.
+`gold_builders/quantile.py:95-97`. Quando `width=0`, retorna `1.0`/`0.0`/`0.5` em vez de NaN. Esconde modelo degenerado em `prob_up` agregada.
 
 ### A.68 — `coverage_nominal = 0.80` hard-coded
-`:640`. Assume contrato fixo p10/p90. Se sweep usar quantis diferentes (e.g. p05/p95), `coverage_error = picp - 0.80` esta errado mas nao falha — gold publica numero incorreto silenciosamente.
+`gold_builders/quantile.py:260`. Assume contrato fixo p10/p90. Se sweep usar quantis diferentes (e.g. p05/p95), `coverage_error = picp - 0.80` esta errado mas nao falha — gold publica numero incorreto silenciosamente.
 
 ---
 
