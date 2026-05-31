@@ -59,7 +59,7 @@ update_when:
 - [x] #7 — Pinball loss
 - [x] #8 — Win-rate gold
 - [x] #9 — prob_up
-- [ ] #10 — confidence_calibrated
+- [x] #10 — confidence_calibrated
 - [x] #11 — VaR / ES gold
 - [ ] #12 — gold_model_decision_final
 - [x] #13 — Phase B DM family-6 (referencia)
@@ -2524,6 +2524,200 @@ filter (→ NaN, não número enganoso), com a elegibilidade julgada nos quantis
 para o contrato post-guardrail. Não há defeito de localização; as decisões (níveis dinâmicos,
 WIS/CRPS, pinball como loss do DM gold) são de C.0.2/C.0.3. Decisões recomendadas registradas
 nos elementos 2, 3 e 7 — pendentes de confirmação com a pesquisa acadêmica do paper.
+
+---
+
+## #10 — confidence_calibrated
+
+### O que é (didático)
+
+`confidence_calibrated` é um **score heurístico** entre 0 e 1 que tenta resumir, num único
+número por run, "quão boa é a banda de previsão" combinando **duas qualidades opostas**:
+(1) a banda cobre o que deveria — *calibração* — e (2) a banda é estreita — *sharpness*
+(nitidez). A intuição: uma banda boa acerta a cobertura nominal de 80% **e** é apertada. O
+código multiplica um **termo de calibração** (perto de 1 quando a PICP do item #5 está perto
+de 0,80) por um **termo de largura** (perto de 1 quando o MPIW do item #6 é pequeno). O
+"truque" — e o problema — é que essa combinação é um **produto *ad hoc***: **não é um proper
+score** (não tem a propriedade de ser minimizado/maximizado em expectativa pela distribuição
+verdadeira), e o termo de largura **depende da escala do alvo**. O nome sugere "calibração
+estatística", mas calibração de verdade é só **metade** da fórmula.
+
+### Elementos
+
+**1. calibration_term — o "quão perto da cobertura nominal de 80%"**
+- **O que o doc afirma:** `coverage_error = picp − coverage_nominal` (linha 261), com `coverage_nominal = 0.80`; `calibration_term = clip(1 − |coverage_error| / 0.80, 0, 1)` (linhas 263-265).
+- **Como deveria funcionar (exemplo):** mede a distância da PICP (item #5) ao alvo 0,80, normaliza por 0,80 e faz "1 menos isso". PICP=0,80 → `coverage_error`=0 → `calibration_term`=**1,0** (calibração perfeita). PICP=0,60 → `|−0,20|/0,80=0,25` → **0,75**. PICP=1,00 → `|+0,20|/0,80=0,25` → **0,75** (igual ao de 0,60 — o termo é **simétrico** em `|PICP − 0,80|`). PICP=0,40 → `0,40/0,80=0,50` → **0,50**. PICP=0 (banda nunca cobre) → `0,80/0,80=1,0` → **0** (piso do `clip`).
+- **O que esperar no código:** `coverage_nominal = 0.80`; `coverage_error = picp − 0.80`; um `(1.0 − abs(coverage_error)/0.80).clip(lower=0.0, upper=1.0)`, tudo sobre a tabela já **agregada** (`agg`).
+- **Ref do doc → código:** [`quantile.py:260-265`](../../../../src/domain/services/gold_builders/quantile.py#L260). ✅ **Confere:** L260 `agg["coverage_nominal"] = 0.80`; L261 `agg["coverage_error"] = agg["picp"] - agg["coverage_nominal"]`; L263-265 exatamente `(1.0 - (agg["coverage_error"].abs() / agg["coverage_nominal"])).clip(lower=0.0, upper=1.0)`. (O dossiê cita "linha 261" para `coverage_error` e menciona `coverage_nominal=0.80` no mesmo bullet; o `coverage_nominal = 0.80` mora de fato na **linha 260** — registrado no cross-check.)
+- ⚠️ **Ponto de atenção — calibration_term é a PICP re-embrulhada, e o 0,80 é hard-coded**
+  Matematicamente, `calibration_term` é uma **transformação determinística da PICP** do item
+  #5 — não traz informação nova, só re-expressa a PICP numa escala [0,1] centrada no alvo.
+  Isso significa que **herda todas as ressalvas da PICP**:
+  - **Nominal 0,80 hard-coded (linha 260):** assume que o intervalo é o `q10–q90` (= 80%
+    nominal). É **coerente** com os quantis usados no projeto, mas se algum dia o contrato
+    usasse `q05/q95`, o `0.80` estaria errado e o score silenciosamente desalinhado. É o
+    mesmo `coverage_nominal=0.80` do item #5 — não é um número independente.
+  - **Simetria sub/sobre-cobertura:** o termo só enxerga `|PICP − 0,80|`, então PICP=0,60
+    (sub-cobertura, banda otimista demais) e PICP=1,00 (sobre-cobertura, banda larga demais)
+    recebem **o mesmo** `calibration_term=0,75`. Tratar os dois erros como equivalentes é uma
+    escolha — um interval/Winkler score, por contraste, penaliza explicitamente a
+    **não-cobertura** com um termo escalado por `alpha`.
+  - **Range assimétrico:** sub-cobertura pode levar o termo até **0** (PICP=0), mas
+    sobre-cobertura só desce até **0,75** (PICP=1 ⇒ `coverage_error`=+0,20). Não é defeito —
+    é consequência de `nominal=0,80` (não dá para "sobre-cobrir" mais que 0,20 acima de 0,80).
+
+  **Quando importa:** sempre que `confidence_calibrated` for lido como se medisse calibração
+  *além* da PICP — não mede; é a própria PICP transformada. **Quando é tolerável:** como
+  atalho visual numa triagem, sabendo que o componente de calibração ≡ PICP.
+
+**2. width_term — o "quão estreito é o intervalo"**
+- **O que o doc afirma:** `width_term = 1.0 / (1.0 + agg["pred_interval_width"].clip(lower=0.0))` (linha 266).
+- **Como deveria funcionar (exemplo):** transforma a **largura média** do intervalo (= o MPIW do item #6) num número em (0,1], **decrescente** com a largura. `width=0` → `1/(1+0)=`**1,0** (máximo); `width=1` → **0,5**; `width=4` → `1/5=`**0,2**; `width=9` → **0,1**. Quanto mais larga a banda, mais perto de 0.
+- **O que esperar no código:** `1/(1 + clip(width, lower=0))`, onde `width` é a média agregada por grupo (a coluna `pred_interval_width` da `agg`, linha 246 — **idêntica** ao `mpiw` da linha 245; ver item #6).
+- **Ref do doc → código:** [`quantile.py:266`](../../../../src/domain/services/gold_builders/quantile.py#L266). ✅ **Confere** exatamente; o `width` consumido é a média agregada (`pred_interval_width`, L246), a mesma quantidade do MPIW.
+- ⚠️ **Ponto de atenção — width_term depende da ESCALA do alvo (o problema central do score)**
+  O `1 +` no denominador fixa um **ponto de virada implícito de "1 unidade do alvo"**:
+  larguras `≪ 1` mal mexem em `width_term` (≈ 1; a calibração domina o produto); larguras
+  `≫ 1` empurram `width_term` para perto de 0 (a largura domina; a calibração quase some).
+  Como "1 unidade" significa coisas diferentes em alvos diferentes, **o mesmo modelo recebe
+  scores radicalmente diferentes só por causa da escala do alvo**:
+
+  | Alvo | escala típica | MPIW típico | `width_term` | `calibration_term` (PICP=0,80) | `confidence_calibrated` |
+  |---|---|---|---|---|---|
+  | Retorno (ex.: log-return) | ~0,01 | ~0,02 | `1/1,02 ≈ 0,980` | 1,0 | **≈ 0,980** |
+  | Preço / nível | ~100 | ~50 | `1/51 ≈ 0,0196` | 1,0 | **≈ 0,0196** |
+
+  Mesma qualidade de calibração (PICP=0,80 nos dois), mas os scores diferem por **~50×** —
+  puro artefato da unidade do alvo. **Quando é aceitável:** comparar runs **no mesmo alvo,
+  mesma escala** (ex.: ranquear configs do mesmo ativo/horizonte). **Quando não é:** qualquer
+  agregado **cross-asset/cross-target**, ou comparar um modelo de retorno com um de preço — o
+  ranking vira função da escala, não da qualidade. É exatamente o "depende da escala do
+  target" listado nos *Riscos conhecidos*; a tabela acima quantifica o mecanismo.
+- ⚠️ **Ponto de atenção — `clip(lower=0)` faz largura média negativa virar width_term = 1,0 (recompensa invertida)**
+  O `clip(lower=0.0)` protege contra largura **média** negativa, mas com um efeito perverso:
+  se o cruzamento de quantis (`q10 > q90`, largura negativa por linha — ver item #6,
+  cross-check #5) puxar a média para `≤ 0`, o `clip` a leva a 0 e `width_term = 1/(1+0) = `
+  **1,0**, o **máximo**. Ou seja, um intervalo **patológico** (cruzado) recebe o **melhor**
+  termo de nitidez — comportamento ao contrário do desejado. Mesmo sem média negativa,
+  alguns cruzamentos **encolhem** a média e **inflam** `width_term` na direção errada.
+  **Quando importa:** isso vive no **contrato `raw`** (`confidence_calibrated_raw`), onde os
+  cruzamentos não são reparados. No **`post_guardrail`** (o alias primário — ver elemento 5),
+  o guardrail ordena os quantis, então `q90 ≥ q10` e a largura é `≥ 0` por construção, neutralizando
+  o caminho. O dossiê não menciona esse ponto — registrado no cross-check.
+
+**3. confidence_calibrated = calibration_term × width_term**
+- **O que o doc afirma:** `agg["confidence_calibrated"] = calibration_term * width_term` (linha 267).
+- **Como deveria funcionar (exemplo):** produto dos dois termos, ambos em [0,1] → score em [0,1]. Máximo (→1) quando a calibração é perfeita (PICP=0,80) **e** a largura tende a 0. Mas o produto troca calibração por largura de forma **arbitrária**: Modelo X com PICP=0,80 (`cal`=1,0) e largura 4 (`wt`=0,2) → **0,20**; Modelo Y com PICP=0,40 (`cal`=0,5) e largura 1 (`wt`=0,5) → **0,25**. **Y pontua mais que X** apesar de ter calibração muito pior — só porque a banda é mais estreita. O produto não tem regra de troca defensável.
+- **O que esperar no código:** uma única linha multiplicando os dois termos, atribuída a `agg["confidence_calibrated"]`.
+- **Ref do doc → código:** [`quantile.py:267`](../../../../src/domain/services/gold_builders/quantile.py#L267). ✅ **Confere** exatamente: `agg["confidence_calibrated"] = calibration_term * width_term`.
+- ⚠️ **Ponto de atenção — não é proper score; a forma de produto e o nome são as armadilhas**
+  Três problemas, todos nos *Riscos conhecidos* do dossiê:
+  - **Não é proper score.** Um *proper scoring rule* (CRPS, WIS, interval/Winkler score) tem a
+    garantia teórica de ser otimizado, em expectativa, pela distribuição **verdadeira** —
+    por isso pode embasar claim. `confidence_calibrated` não tem essa propriedade: é possível
+    "ganhar" score com bandas mal calibradas porém estreitas (ver Modelo Y acima). Logo **não
+    sustenta claim confirmatório** de qualidade probabilística.
+  - **Combinação multiplicativa sem base teórica.** Por que produto, e não soma, média
+    ponderada, mínimo? O produto implica "se um termo é 0, o score é 0", mas a regra de troca
+    entre calibração e largura no meio do intervalo é totalmente *ad hoc*. Um interval score
+    combina largura e penalidade de não-cobertura de forma **aditiva e principled** (escalada
+    por `alpha`); este produto não.
+  - **Nome induz interpretação incorreta.** "confidence_calibrated" soa como "está calibrado"
+    (propriedade estatística). Mas calibração de verdade é só o `calibration_term` (≡ PICP); o
+    score é cobertura **×** nitidez. Reportar "confidence_calibrated alto" como "modelo bem
+    calibrado" é um erro de leitura que o nome convida.
+
+  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: **não promover** a
+  > confirmatório. Para qualquer claim de qualidade probabilística, **substituir** por um
+  > proper score — **interval/Winkler score** (Gneiting-Raftery 2007) como o mais direto para
+  > intervalos `q10–q90`, ou **CRPS/WIS** (Bracher et al. 2021) se a avaliação for sobre o
+  > leque de quantis. Enquanto isso, tratar `confidence_calibrated` apenas como **score
+  > heurístico operacional de triagem**, nunca como evidência de calibração.
+
+**4. Unidade estatística — agregado por run × split × horizonte**
+- **O que o doc afirma:** "A unidade estatística está correta? Run-level agregado." A métrica é uma coluna de `gold_prediction_metrics_*`.
+- **Como deveria funcionar (exemplo):** o score **não** é por linha — é calculado sobre a tabela `agg`, agrupada por `[run_id, asset, feature_set_name, config_signature, split, fold, seed, horizon]`. Usa a **PICP agregada** (média de `covered_80`) e a **largura média** (MPIW) daquele grupo. Então há **um** `confidence_calibrated` por (run × split × horizonte), não um por timestamp.
+- **O que esperar no código:** `calibration_term`/`width_term`/`confidence_calibrated` definidos **depois** do `groupby(...).agg(...)`, operando em colunas da `agg`.
+- **Ref do doc → código:** [`quantile.py:229-250`](../../../../src/domain/services/gold_builders/quantile.py#L229) (groupby + agg de `picp` e `pred_interval_width`) e [`:260-267`](../../../../src/domain/services/gold_builders/quantile.py#L260) (score sobre a `agg`). ✅ **Confere:** os termos são computados sobre `agg`, downstream do `groupby` da linha 230. Consequência herdada do mesmo **Cat C filter / `prob_eligible_mask`** (L170-212): runs *point* ou degenerados têm `picp`/`pred_interval_width` = NaN → `confidence_calibrated` = NaN (só runs quantílicos genuínos recebem score numérico).
+
+**5. Variantes `raw` / `post_guardrail` e o alias primário**
+- **O que o doc afirma:** a coluna é passada-through em `gold_prediction_calibration` como `confidence_calibrated_raw` e `confidence_calibrated_post_guardrail` (dossiê, descriptive.py).
+- **Como deveria funcionar (exemplo):** `_build_metrics_single_contract` roda **duas vezes** — uma sobre os quantis crus (`RAW_QUANTILE_COLUMNS`) e outra sobre os pós-guardrail (`POST_GUARDRAIL_QUANTILE_COLUMNS`) — e o builder pai sufixa os resultados. Há, portanto, **três** colunas: `confidence_calibrated_raw`, `confidence_calibrated_post_guardrail` e a versão "nua" `confidence_calibrated`, que é um **alias do contrato primário** = `post_guardrail` (com fallback para `raw` se o pós-guardrail não existir).
+- **O que esperar no código:** `confidence_calibrated` listado em `PROBABILISTIC_METRIC_COLUMNS` (para receber os sufixos `_raw`/`_post_guardrail`); um helper que define o alias nu = `post_guardrail`.
+- **Ref do doc → código:** [`quantile.py:47`](../../../../src/domain/services/gold_builders/quantile.py#L47) (na lista `PROBABILISTIC_METRIC_COLUMNS`), [`:335-336`](../../../../src/domain/services/gold_builders/quantile.py#L335) (sufixo `_raw`), [`:391-392`](../../../../src/domain/services/gold_builders/quantile.py#L391) (sufixo `_post_guardrail`), [`:399-400`](../../../../src/domain/services/gold_builders/quantile.py#L399) (alias primário). ✅ **Confere:** L47 inclui `"confidence_calibrated"`; L399-400 `_set_alias_post_primary(out, "confidence_calibrated")` aponta o alias nu para `..._post_guardrail` (L348-352), com fallback `_set_alias_raw_only` quando o pós-guardrail falta (L373, L386). **Nota:** o dossiê cita as variantes `_raw`/`_post_guardrail` mas não destaca que a coluna **nua** = contrato `post_guardrail` — relevante porque é a versão "primária" que sai para downstream, e é onde o caminho de largura-negativa do elemento 2 fica neutralizado pelo guardrail.
+
+**6. Consumo downstream + NÃO-consumo por `gold_model_decision_final`**
+- **O que o doc afirma:** "**Não** é consumida por `gold_model_decision_final`" — `primary_metric_map` em `confidence.py:492-499` inclui só `mean_pinball*`, `mean_picp`, `mean_mpiw`. O risco "está em docs, plots e quality checks que possam interpretar a coluna como métrica de calibração estatística". Pass-through em `descriptive.py` (linhas 363-419) como `confidence_calibrated_raw`/`_post_guardrail`.
+- **Como deveria funcionar (exemplo):** o `PredictionCalibrationGoldBuilder` apenas **seleciona e copia** as colunas (incluindo as três variantes de `confidence_calibrated`) para `gold_prediction_calibration` — não recalcula nada. Já o `_build_model_decision_final` monta o `primary_metric_map` **sem** `confidence_calibrated`, então a tabela de decisão final **não** o vê. Logo a heurística **não vaza** para o artefato confirmatório; ela só vive nas tabelas de métricas/calibração.
+- **O que esperar no código:** em `descriptive.py`, um `keep = [...]` contendo `confidence_calibrated_raw`/`_post_guardrail`/`confidence_calibrated` e um `return df[keep].copy()`; em `confidence.py`, um `primary_metric_map` que **não** lista a coluna.
+- **Ref do doc → código:** [`descriptive.py:398`](../../../../src/domain/services/gold_builders/descriptive.py#L398) (`confidence_calibrated_raw`), [`:407`](../../../../src/domain/services/gold_builders/descriptive.py#L407) (`confidence_calibrated_post_guardrail`), [`:415`](../../../../src/domain/services/gold_builders/descriptive.py#L415) (`confidence_calibrated` nu), [`:419`](../../../../src/domain/services/gold_builders/descriptive.py#L419) (`return metrics_run_split_h[keep].copy()` — seleção pura) e [`confidence.py:492-499`](../../../../src/domain/services/gold_builders/confidence.py#L492). ✅ **Confere:** o pass-through é cópia de colunas sem recomputação (L419); o `primary_metric_map` (L492-499) lista exatamente `mean_pinball_q10/q50/q90`, `mean_mean_pinball`, `mean_picp`, `mean_mpiw` — **sem** `confidence_calibrated`. A afirmação cross-file mais sujeita a drift ("não entra no decision_final") está **correta** no código atual.
+- ⚠️ **Ponto de atenção — o decision_final está protegido; o perigo real é a tabela "calibration" e os plots/docs**
+  Boa notícia: como o `decision_final` **não** consome a coluna, o claim confirmatório atual
+  **não** é contaminado pela heurística. A má notícia é o **nome do destino**: a coluna é
+  copiada para uma tabela literalmente chamada `gold_prediction_**calibration**`, ao lado de
+  PICP/MPIW/coverage_error. Um leitor de plot/doc/quality-check que veja `confidence_calibrated`
+  numa tabela de "calibration" naturalmente a lê como métrica de calibração estatística — que
+  **não** é. **Quando importa:** sempre que essa coluna for plotada/reportada/usada num
+  quality-check como se fosse evidência de calibração. **Quando é inócuo:** uso interno de
+  triagem rotulado como heurística.
+
+  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: manter a coluna
+  > **fora** do `gold_model_decision_final` (já é o caso) e, em PR futuro fora de C.0,
+  > **renomear** `confidence_calibrated` → `heuristic_coverage_width_score` (e os sufixos
+  > `_raw`/`_post_guardrail`), além de **impedir** seu uso como evidência de calibração em docs
+  > canônicos, plots oficiais e quality checks. A renomeação ataca a raiz do risco — o nome.
+
+### Cross-check — o que NÃO está corretamente indicado/referenciado
+
+Para o `confidence_calibrated`, **todas as referências doc→código conferem** por leitura
+direta (L260-267 em `quantile.py`; pass-through L363-419 em `descriptive.py`; `primary_metric_map`
+L492-499 em `confidence.py`). Pontos a registrar:
+
+1. **Nenhuma referência quebrada.** As linhas-âncora estão corretas: `calibration_term`
+   (263-265) ✅, `width_term` (266) ✅, `confidence_calibrated` (267) ✅, `coverage_error`
+   (261) ✅, pass-through em `descriptive.py` (363-419, com as colunas nas linhas 398/407/415)
+   ✅, não-consumo em `confidence.py` (492-499) ✅.
+2. **Precisão menor — `coverage_nominal = 0.80` mora na linha 260, não na 261.** O dossiê
+   menciona `coverage_nominal=0.80` dentro do bullet de `coverage_error` ("linha 261"); a
+   atribuição do nominal é a **linha 260** (`coverage_error` é a 261). Não muda nada
+   substantivo.
+3. **A coluna "nua" `confidence_calibrated` = contrato `post_guardrail` não é destacada.** O
+   dossiê descreve `confidence_calibrated_raw` e `confidence_calibrated_post_guardrail`, mas há
+   **três** colunas: a nua é alias do `post_guardrail` (quantile.py:399-400), com fallback raw.
+   É a versão que efetivamente flui downstream.
+4. **Não no dossiê — `clip(lower=0)` recompensa cruzamento de quantis (contrato raw).** Largura
+   média negativa (cruzamento `q10 > q90`, ver item #6) é levada a 0 pelo `clip`, dando
+   `width_term = 1,0` (máximo) a um intervalo patológico. Vive no `confidence_calibrated_raw`;
+   no `post_guardrail` o guardrail ordena os quantis e neutraliza o caminho. Registrado no
+   elemento 2.
+5. **Não no dossiê — o score é uma re-codificação determinística de PICP e MPIW.** Como
+   `calibration_term ≡ f(PICP)` (item #5) e `width_term ≡ 1/(1+MPIW)` (item #6),
+   `confidence_calibrated` **não adiciona informação** além de duas colunas que o
+   `decision_final` **já** possui (`mean_picp`, `mean_mpiw`). Isso reforça por que excluí-lo do
+   `decision_final` **não perde nada**: o sinal já está lá, em forma separável e interpretável.
+6. **Riscos metodológicos centrais já capturados pelo dossiê.** "Dependência da escala do
+   target", "combinação multiplicativa sem fundamento teórico" e "nome induz interpretação
+   incorreta" constam dos *Riscos conhecidos*; os aprofundamentos acima detalham o mecanismo
+   (tabela de escala 50×, troca arbitrária calibração×largura, ausência de propriedade de
+   proper score) e o "quando cada escolha se aplica".
+
+### Veredito do item #10
+
+🟡 **Ressalvas.** Referências **intactas** e evidência fiel ao código — o score é calculado
+exatamente como o dossiê afirma (`calibration_term × width_term`, sobre `picp` e largura média
+agregadas, com pass-through para `gold_prediction_calibration` e **fora** do
+`gold_model_decision_final`). As ressalvas são (a) **metodológicas** — não é proper score,
+`width_term` é **dependente da escala** do alvo (scores cross-asset incomparáveis), o produto
+troca calibração por largura sem regra defensável, e o **nome** sugere calibração estatística
+quando entrega cobertura×nitidez; e (b) **de precisão/completude do dossiê** — `coverage_nominal`
+está na linha 260 (não 261), a coluna **nua** = contrato `post_guardrail` não é destacada, o
+`clip(lower=0)` que **recompensa cruzamento de quantis** no contrato `raw` não é mencionado, e
+o fato de o score ser uma **re-codificação determinística de PICP×(1/(1+MPIW))** (logo, sem
+informação nova além do que o `decision_final` já tem) não é registrado. Não há defeito de
+localização; as decisões (não promover, renomear para `heuristic_coverage_width_score`,
+substituir por interval/Winkler/CRPS/WIS, enforcement nos consumidores downstream) são de
+C.0.2/C.0.3. Decisões recomendadas registradas nos elementos 3 e 6 — pendentes de confirmação
+com a pesquisa acadêmica do paper.
 
 ---
 
