@@ -1533,10 +1533,9 @@ combina num número só.
   é devolvido **intacto** pelo *sort* — não vira `[100, 100]`.) Esse invariante **já tem
   teste**: `test_guardrail_keeps_already_ordered_triplet`
   ([`test_quantile_guardrail_service.py:6-11`](../../../../tests/unit/domain/services/test_quantile_guardrail_service.py#L6))
-  afirma que uma tripla já ordenada volta inalterada com `applied=False`. **Vale registrar
-  como teste de contrato adicional** o corolário no nível do MPIW (que o C.0.2/C.0.3 decide):
-  para toda linha elegível, `pred_interval_width_post_guardrail ≥ |pred_interval_width_raw|`
-  e nunca zero — fechando a garantia no agregado, não só na unidade do *sort*.
+  afirma que uma tripla já ordenada volta inalterada com `applied=False` — provando o
+  invariante na **unidade** do *sort* (o corolário no nível do MPIW está na Decisão
+  recomendada abaixo).
 
   O que **de fato** distingue os dois contratos:
   - para linhas **bem-ordenadas** (o caso normal `q10 ≤ q50 ≤ q90`), a largura
@@ -1556,6 +1555,17 @@ combina num número só.
   `q10_raw == q90_raw` com `q50` fora desse valor), mas significa que algumas linhas com
   spread pós-guardrail real ficam de fora. **Por que é defensável:** julgar genuinidade
   pelo que o **modelo** emitiu (cru) é coerente entre PICP e MPIW.
+
+  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper; decisão de
+  > C.0.2/C.0.3)* — **teste de contrato, não mudança de cálculo.** O invariante "o guardrail
+  > nunca colapsa um intervalo genuíno" já está coberto na **unidade** do *sort*
+  > ([`test_quantile_guardrail_service.py:6-11`](../../../../tests/unit/domain/services/test_quantile_guardrail_service.py#L6)).
+  > Recomenda-se **fechar a garantia no agregado** com um teste de contrato no gold builder:
+  > para toda linha elegível, `pred_interval_width_post_guardrail ≥ |pred_interval_width_raw|`
+  > e **nunca zero**; e, por grupo, `mpiw_post_guardrail` finito e ≥ 0 sempre que houver
+  > linhas elegíveis. **Não altera o cálculo** — apenas trava a propriedade contra regressão
+  > (ex.: se o guardrail um dia deixar de ser um *sort* puro). Pertence à trilha "Testes
+  > necessarios" do skeleton, não às decisões metodológicas.
 
 **3. Agregação: MPIW = média de `pred_interval_width` (e a coluna gêmea idêntica)**
 - **O que o doc afirma:** `mpiw = ("pred_interval_width", "mean")`
@@ -1802,10 +1812,10 @@ guardrail é um *sort* puro que **nunca** colapsa um intervalo genuíno, então 
 largura-zero entrando no `mpiw_post_guardrail`) e a sutileza de a elegibilidade ser julgada
 pelas **pontas cruas** não é mencionada. Não há defeito de localização; as decisões
 (interval/Winkler score, rotular MPIW como diagnóstico não-inferencial, dedup das colunas
-gêmeas, tratamento de cruzamento) são de C.0.2/C.0.3. A normalização cross-asset fica
-**fora de escopo** (TCC é single-asset; MPIW absoluto basta). Decisões recomendadas
-registradas nos elementos 1, 3 e 4 — pendentes de confirmação com a pesquisa acadêmica do
-paper.
+gêmeas, tratamento de cruzamento, teste de contrato do invariante do guardrail) são de
+C.0.2/C.0.3. A normalização cross-asset fica **fora de escopo** (TCC é single-asset; MPIW
+absoluto basta). Decisões recomendadas registradas nos elementos 1, 2, 3 e 4 — pendentes de
+confirmação com a pesquisa acadêmica do paper.
 
 ---
 
