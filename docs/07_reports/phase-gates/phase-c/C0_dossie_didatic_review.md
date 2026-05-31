@@ -939,6 +939,35 @@ corte é **silencioso**: nada downstream registra que o universo foi podado.
   **condicional a um universo selecionado pelo teste**. Reportado como "superioridade"
   ele **superestima** — a garantia estatística não cobre a etapa de seleção.
 
+  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: **não aplicar
+  > o filtro top-50 no teste de comparação TFT vs baselines.** Trata-se de *não invocá-lo
+  > nesse caminho* — **não** necessariamente remover a função do código. Sob o escopo
+  > **TFT all_features**, o universo desse teste é **pré-definido pelo desenho** (TFT + os
+  > baselines) e pequeno, então o filtro tende a já ser **inerte** (`passthrough` quando
+  > `cfg_count ≤ 50`); desativá-lo explicitamente nesse teste apenas torna a garantia de
+  > não-seleção **explícita e auditável**. Combinado com as correções de método dos itens
+  > #1 (loss/lag/HLN/one-sided) e #3 (família Holm correta), o DM/MCS/win-rate sobre esse
+  > cohort passa a ser **elegível a confirmatório** numa tabela gold **read-only auditável**.
+  >
+  > **Escopo e efeito desta decisão (importante):** ela vale **apenas para o teste
+  > "TFT vs baselines"**, cuja pergunta é uma comparação **direcional e pré-especificada**.
+  > Ela **não** se generaliza automaticamente para outros testes:
+  > - **Ablação de features (TFT₁ vs TFT₂, com/sem feature X):** aí a pergunta é, por
+  >   natureza, **config-vs-config** — pode legitimamente exigir **all-configs-vs-all-configs**
+  >   e uma **família pré-registrada própria** (cada feature set é uma config distinta), com
+  >   controle de multiplicidade adequado. **Caveat:** mesmo nesse caso, o filtro **como está
+  >   hoje** (top-X por *test loss*) continua sendo seleção pós-test — se um cap de custo for
+  >   necessário lá, o critério tem de ser **por validation ou pré-registrado**, nunca por
+  >   test loss. Reusa-se a *ideia* de cap, não a implementação atual.
+  > - **Demais testes/métricas** (PICP, MPIW, pinball, VaR/ES, e a futura métrica de
+  >   importância de features — seja por ablação, permutation ou attention): **cada um exige
+  >   análise individual**; esta decisão não decide por eles.
+  >
+  > Em uma frase: **a escolha "TFT vs baselines em vez de all-vs-all" é específica deste
+  > teste; o desenho all-vs-all não está "proibido" — está reservado para perguntas que são
+  > genuinamente sobre um conjunto grande de configs (ex.: ablação), e mesmo lá sem seleção
+  > por test loss.**
+
 **2. Idempotência / passthrough quando `cfg_count ≤ 50` (cap silencioso)**
 - **O que o doc afirma:** "retorna o próprio DataFrame sem filtro se `cfg_count <=
   max_configs` (linha 55)".
@@ -1058,9 +1087,14 @@ sobre o desfecho do teste, sem rastro**, contaminando todo artefato pairwise dow
 e, por carona, `gold_model_decision_final`; e (b) **de completude do dossiê** — três
 nuances não capturadas: suporte da seleção ≠ suporte do teste, `n_configs` registra o
 tamanho pós-filtro (poda literalmente invisível), e o empate de `sort` não-estável
-(benigno). Não é defeito de localização; a decisão (remover / mover para validação /
-marcar exploratório com flag propagada) é de C.0.2/C.0.3. A Phase B, corretamente,
-**não usa** este filtro.
+(benigno). Não é defeito de localização. **Decisão recomendada registrada no elemento 1**
+(*a confirmar com a pesquisa acadêmica*): **não aplicar o filtro no teste TFT vs baselines**
+— escopo pré-definido pelo desenho, filtro provavelmente já inerte (`passthrough`); com as
+correções dos itens #1 e #3, a gold read-only auditável fica elegível a confirmatório. A
+decisão é **específica deste teste**: all-vs-all permanece válido para perguntas sobre um
+conjunto grande de configs (ex.: **ablação de features**, TFT₁ vs TFT₂), e mesmo lá **sem
+seleção por test loss**; demais testes/métricas exigem análise individual. A Phase B,
+corretamente, **não usa** este filtro.
 
 ---
 
