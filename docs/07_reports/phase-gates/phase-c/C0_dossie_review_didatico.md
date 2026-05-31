@@ -54,7 +54,7 @@ update_when:
 - [x] #2 — MCS gold
 - [x] #3 — Holm gold
 - [x] #4 — top-50 filter
-- [ ] #5 — PICP
+- [x] #5 — PICP
 - [ ] #6 — MPIW
 - [ ] #7 — Pinball loss
 - [ ] #8 — Win-rate gold
@@ -1025,6 +1025,301 @@ tamanho pós-filtro (poda literalmente invisível), e o empate de `sort` não-es
 (benigno). Não é defeito de localização; a decisão (remover / mover para validação /
 marcar exploratório com flag propagada) é de C.0.2/C.0.3. A Phase B, corretamente,
 **não usa** este filtro.
+
+---
+
+## #5 — PICP
+
+### O que é (didático)
+
+**PICP** (*Prediction Interval Coverage Probability*) é simplesmente uma **taxa de
+acerto do intervalo**. O modelo, a cada timestamp, emite um intervalo `[q10, q90]`
+(o "miolo" de 80% da distribuição prevista). O PICP pergunta: **de todas as vezes
+que o modelo deu esse intervalo, em quantas o valor real caiu dentro?** Se o modelo
+está bem **calibrado**, o real deveria cair dentro ~**80%** das vezes — nem mais
+(intervalo largo/medroso), nem menos (intervalo estreito/confiante demais).
+
+O "truque" é só contar: para cada linha OOS marca **1** se `q10 ≤ y_true ≤ q90`,
+**0** caso contrário, e tira a **média**. O número-alvo (`coverage_nominal`) é
+**0,80** porque o intervalo vai do percentil 10 ao 90 (`0,90 − 0,10 = 0,80`). PICP
+mede **calibração** (o intervalo cumpre o que promete?); sozinho **não** mede
+*sharpness* (largura) — isso é o MPIW (item #6), e os dois só fazem sentido **juntos**.
+
+### Elementos
+
+**1. `covered_80` — indicador binário de cobertura por linha**
+- **O que o doc afirma:** `covered_80` = 1 se `q10 ≤ y_true ≤ q90`, senão 0, por linha
+  ([`quantile.py:178-180`](../../../../src/domain/services/gold_builders/quantile.py#L178)).
+- **Como deveria funcionar (exemplo):** intervalo `[q10=95, q90=110]`. Se `y_true=100`
+  → **dentro** → `covered_80=1`. Se `y_true=120` → **fora** → `0`. Se `y_true=95`
+  exatamente na borda → **dentro** (limites inclusivos `>=`/`<=`) → `1`. PICP será a
+  fração desses 1s.
+- **O que esperar no código:** `((y_true >= q10_col) & (y_true <= q90_col)).astype(float)`,
+  usando as **colunas do contrato sendo processado** (raw **ou** post-guardrail — a
+  função roda duas vezes).
+- **Ref do doc → código:** [`quantile.py:178-180`](../../../../src/domain/services/gold_builders/quantile.py#L178).
+  ✅ **Confere** (li a função `_build_metrics_single_contract` inteira, 102-285):
+  `valid["covered_80"] = ((valid["y_true"] >= valid[q10_col]) & (valid["y_true"] <=
+  valid[q90_col])).astype(float)`. As bordas são **inclusivas**; `q10_col`/`q90_col`
+  vêm de `quantile_columns` (raw em uma chamada, post-guardrail na outra — L305/L381).
+
+**2. Filtro de elegibilidade Cat C (`_prob_eligible`) — quais linhas contam para o PICP**
+- **O que o doc afirma:** `covered_80` só conta para linhas `_prob_eligible` (Cat C
+  filter: `prediction_mode == quantile` **E** `q10_raw != q90_raw`,
+  [`quantile.py:148-171`](../../../../src/domain/services/gold_builders/quantile.py#L148));
+  linhas não-elegíveis (point/degeneradas) têm `covered_80` forçado a **NaN**
+  ([`quantile.py:210-212`](../../../../src/domain/services/gold_builders/quantile.py#L210)).
+- **Como deveria funcionar (exemplo):** uma run de **previsão pontual**
+  (`prediction_mode != "quantile"`) não tem intervalo de verdade → é excluída do PICP.
+  Uma run de quantis onde o modelo **colapsou** o intervalo (q10 cru == q90 cru, ex.
+  ambos = 100) → degenerada → excluída. Só linhas com **intervalo genuíno** entram na
+  média. As demais viram NaN e o `.mean()` as ignora.
+- **O que esperar no código:** uma máscara `is_quantile_mode & is_non_degenerate`,
+  depois um loop que põe NaN em `covered_80` (e nas outras colunas probabilísticas) onde
+  a máscara é falsa.
+- **Ref do doc → código:** [`quantile.py:169-171`](../../../../src/domain/services/gold_builders/quantile.py#L169)
+  (máscara) + [`quantile.py:210-212`](../../../../src/domain/services/gold_builders/quantile.py#L210)
+  (NaN). ✅ **Confere:** `is_quantile_mode = valid["prediction_mode"].astype(str)
+  .str.lower() == "quantile"` (L169); `prob_eligible_mask = (is_quantile_mode &
+  is_non_degenerate).astype(bool)` (L170); e o loop `for col in prob_row_cols: ...
+  valid.loc[~prob_eligible_mask, col] = np.nan` (L210-212), com `covered_80` em
+  `prob_row_cols` (L207).
+- ⚠️ **Ponto de atenção — a degeneração é *filtrada*, mas a elegibilidade é julgada no contrato cru**
+  O risco "q10==q90 torna PICP não-informativo" listado no dossiê **já está mitigado**:
+  uma linha com intervalo colapsado **não entra** na média do PICP (vira NaN). Sem o
+  filtro, um intervalo de largura zero quase nunca cobriria (`y_true` teria de bater
+  exatamente no ponto) e arrastaria o PICP para baixo de forma espúria — o filtro evita
+  isso. **Mas há uma sutileza que o dossiê não menciona:** a elegibilidade
+  (`is_non_degenerate`) é sempre calculada nos **quantis CRUS**
+  (`RAW_QUANTILE_COLUMNS`, [`quantile.py:162-166`](../../../../src/domain/services/gold_builders/quantile.py#L162)),
+  **mesmo quando o contrato processado é o post-guardrail**. Ou seja: quem decide se uma
+  linha conta para o `picp_post_guardrail` é a **degeneração crua** (o que o modelo
+  emitiu), não a largura pós-guardrail.
+
+  | Linha | q10/q90 crus | q10/q90 pós-guardrail | Entra no PICP? |
+  |---|---|---|---|
+  | genuína | 95 / 110 | 95 / 110 | ✅ sim (raw e post) |
+  | colapsada na origem | 100 / 100 | 100 / 100 | ❌ não (raw e post) |
+  | colapsada na origem, "aberta" pelo guardrail | 100 / 100 | 99 / 101 | ❌ **não** — exclusão pelo cru |
+
+  **Quando importa:** se o guardrail "consertar" muitos intervalos colapsados, o
+  `picp_post_guardrail` será calculado sobre um **denominador menor** (só as linhas que
+  já eram genuínas no cru), não sobre todas as linhas com intervalo pós-guardrail válido.
+  **Por que é defensável:** medir genuinidade pelo que o **modelo** produziu (não pelo
+  remendo do guardrail) é a leitura mais honesta de "a run é mesmo probabilística?".
+  **Implicação para o TCC:** ao reportar PICP, vale declarar que a base elegível é
+  fixada pelos quantis **crus** — duas runs com o mesmo PICP podem ter denominadores
+  (n elegível) diferentes. O `n_probabilistic_samples` (elemento 3) é o número a citar
+  junto.
+
+**3. Agregação: PICP = média de `covered_80` por grupo**
+- **O que o doc afirma:** `picp = ("covered_80", "mean")`
+  ([`quantile.py:244`](../../../../src/domain/services/gold_builders/quantile.py#L244)),
+  agrupado por `(run_id, asset, feature_set_name, config_signature, split, fold, seed,
+  horizon)`.
+- **Como deveria funcionar (exemplo):** num grupo com 50 linhas elegíveis, se 40
+  cobriram → `PICP = 40/50 = 0,80`. Como as não-elegíveis são NaN, o `.mean()` do pandas
+  **as ignora** — o PICP é, portanto, a média **só sobre as linhas elegíveis**. O
+  contador `n_probabilistic_samples` (= soma de `_prob_eligible`,
+  [`quantile.py:233`](../../../../src/domain/services/gold_builders/quantile.py#L233))
+  guarda quantas linhas entraram.
+- **O que esperar no código:** `picp=("covered_80", "mean")` dentro do `.agg(...)`, e o
+  groupby pelos campos de run/split/horizon.
+- **Ref do doc → código:** [`quantile.py:244`](../../../../src/domain/services/gold_builders/quantile.py#L244)
+  (agg) + [`quantile.py:214-227`](../../../../src/domain/services/gold_builders/quantile.py#L214)
+  (group_cols). ✅ **Confere:** `picp=("covered_80", "mean")` na L244;
+  `n_probabilistic_samples=("_prob_eligible", "sum")` na L233; group_cols nas L214-227.
+- ⚠️ **Ponto de atenção — PICP é uma estimativa ruidosa: ponto sem intervalo de confiança**
+  O PICP é uma **proporção binomial** estimada sobre `n` linhas; ele tem **erro
+  amostral** que o gold legacy não reporta. Com cobertura verdadeira 0,80 e `n=50`
+  linhas, o desvio-padrão da estimativa é `sqrt(0,80·0,20/50) ≈ 0,057` → uma faixa de
+  95% ≈ **[0,69; 0,91]**. Ou seja: um modelo **perfeitamente calibrado** vai exibir PICP
+  oscilando entre ~0,69 e ~0,91 só por flutuação amostral. Observar `PICP = 0,74` **não**
+  prova descalibração; observar `0,82` **não** prova calibração.
+
+  **Quando importa:** sempre que o número for usado para **declarar** "calibrado / não
+  calibrado" — sem uma banda, a leitura vira binária e enganosa, ainda mais com `n`
+  pequeno (poucas linhas OOS por run). **Como a Phase B trata:** o H1 confirmatório
+  compara o PICP contra **bandas Tier 1/Tier 2** justamente para não tratar o ponto como
+  veredicto exato. O gold legacy expõe o `coverage_error` (elemento 4) mas **sem IC** —
+  é o ponto, não a faixa.
+
+  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: reportar o
+  > PICP **com IC** (bootstrap ou intervalo binomial de Wilson) e, para qualquer leitura
+  > de calibração, compará-lo contra uma **banda** (no espírito dos Tiers da Phase B) em
+  > vez do ponto isolado. Citar sempre `n_probabilistic_samples` ao lado.
+- ⚠️ **Ponto de atenção — cobertura *incondicional* (marginal) esconde *clustering* de falhas**
+  PICP é **cobertura marginal**: conta *quantas* falhas, ignora *quando* elas acontecem.
+  Dois modelos com o mesmo PICP de 0,80 podem ser muito diferentes:
+
+  | Modelo | 20% de falhas distribuídas como… | Qualidade real |
+  |---|---|---|
+  | A | espalhadas, ~independentes no tempo | calibração saudável |
+  | B | **agrupadas** num período volátil (ex. todas numa semana de crash) | calibração ruim — falha justo quando o intervalo mais importa |
+
+  O PICP **não distingue** A de B. Quem distingue é o **teste de Christoffersen (1998)**,
+  que checa **cobertura condicional** + **independência** das falhas (analisa as
+  *runs* de acertos/erros). O gold legacy não tem esse teste — só a contagem marginal.
+
+  **Quando importa:** num claim de "modelo bem calibrado" para fins financeiros, falhas
+  agrupadas (modelo B) são exatamente o pior caso (subestima risco em cluster) e ficam
+  **invisíveis** no PICP. **Quando é tolerável:** como retrato descritivo rápido da
+  cobertura média, o PICP marginal serve.
+
+  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: para promover
+  > o PICP além de descritivo, adicionar o **teste de Christoffersen** (cobertura
+  > condicional + independência) como complemento — o PICP marginal vira o "primeiro
+  > olhar", não o veredicto de calibração.
+
+**4. `coverage_nominal = 0.80` hard-coded + `coverage_error`**
+- **O que o doc afirma:** `coverage_nominal = 0.80` fixo
+  ([`quantile.py:260`](../../../../src/domain/services/gold_builders/quantile.py#L260));
+  `coverage_error = picp − coverage_nominal`
+  ([`quantile.py:261`](../../../../src/domain/services/gold_builders/quantile.py#L261)).
+- **Como deveria funcionar (exemplo):** `PICP = 0,83` → `coverage_error = +0,03`
+  (cobrindo **a mais** — intervalos um pouco largos). `PICP = 0,72` →
+  `coverage_error = −0,08` (cobrindo **a menos** — intervalos estreitos/confiantes
+  demais). O sinal diz a **direção** da descalibração; o alvo de referência é 0,80.
+- **O que esperar no código:** `agg["coverage_nominal"] = 0.80` (literal) e
+  `agg["coverage_error"] = agg["picp"] - agg["coverage_nominal"]`.
+- **Ref do doc → código:** [`quantile.py:260-261`](../../../../src/domain/services/gold_builders/quantile.py#L260).
+  ✅ **Confere** exatamente: `agg["coverage_nominal"] = 0.80`; `agg["coverage_error"] =
+  agg["picp"] - agg["coverage_nominal"]`.
+- ⚠️ **Ponto de atenção — o nominal (e os níveis de quantil) são literais, não lidos do contrato**
+  O `0,80` é coerente com o intervalo `[q10, q90]` (= `0,90 − 0,10`), **mas é um
+  literal**: o código **não deriva** o nominal dos `quantile_levels` reais do sweep.
+  E não é só o nominal — **todo o pipeline assume 10/50/90**: os nomes das colunas
+  (`RAW_QUANTILE_COLUMNS = quantile_p10/p50/p90`,
+  [`quantile.py:32-37`](../../../../src/domain/services/gold_builders/quantile.py#L32)),
+  os quantis do pinball (0,1/0,5/0,9, item #7) e agora o `coverage_nominal=0,80`.
+
+  | Cenário do sweep | O que acontece | Risco |
+  |---|---|---|
+  | quantis = {0,1; 0,5; 0,9} (atual) | nominal 0,80 bate com o intervalo | ✅ nenhum |
+  | quantis = {0,05; 0,5; 0,95} **mas colunas ainda nomeadas p10/p90** | PICP de um intervalo de 90% comparado a nominal **0,80** | 🔴 `coverage_error` sistematicamente errado (~+0,10) |
+  | quantis = {0,05; 0,95} com **outros nomes de coluna** | o guard de colunas faltantes ([`quantile.py:133-135`](../../../../src/domain/services/gold_builders/quantile.py#L133)) devolve DataFrame vazio | ⚠️ métrica simplesmente some, sem aviso explícito |
+
+  **Quando importa:** qualquer sweep futuro com níveis ≠ {0,1; 0,5; 0,9}, ou uma promoção
+  a confirmatório onde o nominal precisa ser **provadamente** o do contrato. **Quando é
+  tolerável:** o escopo atual fixa 10/50/90, então hoje o literal está "certo por
+  coincidência de configuração". O risco é de **drift silencioso** se a config mudar.
+
+  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: derivar
+  > `coverage_nominal` **dinamicamente** = `q_high − q_low` lido dos `quantile_levels`
+  > reais do contrato, em vez do literal `0,80`; e validar por contrato que os níveis
+  > batem com os nomes de coluna. Alinha o PICP a sweeps com outros níveis e elimina o
+  > risco de `coverage_error` calculado contra o nominal errado.
+
+**5. Saídas e consumo cross-file: `picp_raw`/`picp_post_guardrail` → calibration → decision_final**
+- **O que o doc afirma:** coluna `picp` em `gold_prediction_metrics_by_run_split_horizon`
+  e agregados; usada por `gold_prediction_calibration`; em `gold_model_decision_final`
+  entra **indiretamente** como `mean_picp_post_guardrail` (de
+  `gold_prediction_metrics_by_config`), **não** como critério de ordenação nem de
+  `academic_decision_ready`.
+- **Como deveria funcionar (exemplo):** o `picp` "nu" calculado no agg é **renomeado**
+  pelo builder para **`picp_raw`** e **`picp_post_guardrail`** (o padrão dois-contratos),
+  então **não existe coluna `picp` nua** no parquet. `gold_prediction_calibration`
+  carrega as duas; `gold_prediction_metrics_by_config` faz a média → `mean_picp_raw`/
+  `mean_picp_post_guardrail`; o `decision_final` escolhe o contrato **post_guardrail**
+  (default) e renomeia para **`mean_picp`**, levado adiante como **coluna passiva** (sem
+  efeito na ordenação ou no gate).
+- **O que esperar no código:** o rename `{m: f"{m}_raw"}` / `{m: f"{m}_post_guardrail"}`
+  no builder run/split/horizon; `picp_raw`/`picp_post_guardrail` mantidas em
+  `gold_prediction_calibration`; `mean_picp_post_guardrail` mapeado para `mean_picp` no
+  `decision_final`; ordenação por `rank_rmse, rank_mae`; `academic_decision_ready` sem
+  PICP.
+- **Ref do doc → código:** rename em
+  [`quantile.py:335-337`](../../../../src/domain/services/gold_builders/quantile.py#L335)
+  e [`:391-393`](../../../../src/domain/services/gold_builders/quantile.py#L391);
+  `picp_raw`/`picp_post_guardrail` em
+  [`descriptive.py:394`](../../../../src/domain/services/gold_builders/descriptive.py#L394)
+  e [`:403`](../../../../src/domain/services/gold_builders/descriptive.py#L403)
+  (`gold_prediction_calibration`); média em
+  [`quantile.py:651-657`](../../../../src/domain/services/gold_builders/quantile.py#L651)
+  (`mean_<m>`); `mean_picp_post_guardrail → mean_picp` em
+  [`confidence.py:497`](../../../../src/domain/services/gold_builders/confidence.py#L497)
+  + rename em [`:521`](../../../../src/domain/services/gold_builders/confidence.py#L521);
+  ordenação em [`confidence.py:815-818`](../../../../src/domain/services/gold_builders/confidence.py#L815);
+  `academic_decision_ready` em [`confidence.py:809-813`](../../../../src/domain/services/gold_builders/confidence.py#L809).
+  ✅ **Confere:** o builder substitui `picp` por `picp_raw`/`picp_post_guardrail`
+  (não há alias nu — `_set_alias_post_primary` só roda para `confidence_calibrated`,
+  `prob_up`, `prob_down`, [`quantile.py:399-400`](../../../../src/domain/services/gold_builders/quantile.py#L399));
+  `gold_prediction_calibration` carrega as duas (L394/L403); o `decision_final` mapeia
+  `mean_picp_{post_guardrail}` → `mean_picp` (L497) e a ordenação é por `rank_rmse,
+  rank_mae` (L815-818), com `academic_decision_ready` dependendo **só** de
+  `pairwise_ready_dm`, `pairwise_ready_mcs`, `target_exact_alignment` (L809-813) — **sem
+  PICP**.
+- ⚠️ **Ponto de atenção — "picp" no doc ≠ `picp_raw`/`picp_post_guardrail` no parquet (e `mean_picp` no final)**
+  O dossiê fala em "coluna `picp`", mas **nenhuma tabela gold persiste uma coluna `picp`
+  nua**: ela aparece sempre **sufixada pelo contrato** (`picp_raw`, `picp_post_guardrail`)
+  e, no `gold_model_decision_final`, como **`mean_picp`** (com `primary_quantile_contract`
+  registrando qual contrato foi escolhido — default **post_guardrail**,
+  [`confidence.py:472`](../../../../src/domain/services/gold_builders/confidence.py#L472)).
+  **Quando importa:** quem consultar o parquet por `picp` não acha nada — precisa saber o
+  sufixo; e ao ler "PICP" num relatório, é obrigatório perguntar **raw ou
+  post-guardrail?** (o número de destaque do artefato final é o **post-guardrail**).
+  **Quando é tolerável:** desde que o contrato seja sempre declarado junto. É imprecisão
+  de **nomenclatura no dossiê**, não referência quebrada — o código está coerente.
+
+### Cross-check — o que NÃO está corretamente indicado/referenciado
+
+Todas as referências de "Implementação atual localizada" do dossiê de PICP **conferem**
+com o código (li a função `_build_metrics_single_contract` inteira, 102-285, mais o
+builder run/split/horizon 288-404, `gold_prediction_calibration` em descriptive.py
+363-419, o agg por config em quantile.py 615-667 e o rollup em confidence.py 463-818).
+Pontos a registrar:
+
+1. **Nenhuma referência quebrada.** Linhas-âncora **exatas**: `covered_80` em L178-180 ✅;
+   Cat C filter em L148-171 ✅; máscara NaN em L210-212 ✅; `picp=("covered_80","mean")`
+   em L244 ✅; `coverage_nominal = 0.80` em L260 ✅; `coverage_error` em L261 ✅.
+
+2. **"Coluna `picp`" é imprecisão de nomenclatura.** O parquet
+   `gold_prediction_metrics_by_run_split_horizon` **não tem** coluna `picp` nua — só
+   `picp_raw` e `picp_post_guardrail` (rename em quantile.py L335-337/L391-393); no
+   `gold_model_decision_final` a coluna é `mean_picp`. Quem busca `picp` no artefato não
+   encontra. Registrado no elemento 5 (completude, não ref quebrada).
+
+3. **"`covered_80` só é computado para linhas `_prob_eligible`" descreve o efeito, não o
+   mecanismo.** Na verdade `covered_80` é calculado para **todas** as linhas válidas
+   (L178-180) e **depois** mascarado a NaN nas não-elegíveis (L210-212) — "computa e
+   mascara", não "computa só para elegíveis". O efeito líquido é idêntico (só elegíveis
+   entram na média), e o segundo bullet de evidência do dossiê já cita o mascaramento, então
+   o conjunto é autoconsistente; registro a mecânica exata por precisão.
+
+4. **Sutileza não capturada — elegibilidade julgada no contrato CRU mesmo para o PICP
+   post-guardrail.** `is_non_degenerate` usa sempre `RAW_QUANTILE_COLUMNS` (L162-166),
+   independentemente de o contrato processado ser raw ou post-guardrail. O dossiê diz que
+   "degeneração torna PICP não-informativo", mas o código na verdade **filtra** a
+   degeneração — com a assimetria raw-vs-post detalhada no elemento 2. É o achado mais
+   informativo deste item.
+
+5. **Afirmação de "Uso atual" confirmada integralmente.** PICP entra no
+   `gold_model_decision_final` apenas como coluna `mean_picp` (de
+   `mean_picp_post_guardrail`); **não** é chave de ordenação (ordena por `rank_rmse,
+   rank_mae`, L815-818) **nem** compõe `academic_decision_ready` (só DM/MCS/alinhamento,
+   L809-813). Bate com o que o dossiê declara.
+
+6. **Pontos residuais metodológicos centrais já capturados pelo dossiê.**
+   `coverage_nominal` hard-coded, cobertura incondicional escondendo clustering, e
+   degeneração — os três constam dos "Riscos conhecidos". Os aprofundamentos acima
+   detalham o mecanismo (ruído binomial sem IC, Christoffersen, drift de nível de quantil)
+   e o "quando cada escolha se aplica".
+
+### Veredito do item #5
+
+🟡 **Ressalvas.** Referências **intactas** e evidência fiel ao código — o PICP é
+calculado exatamente como o dossiê afirma (indicador `covered_80` inclusivo, filtro
+Cat C de elegibilidade, média por grupo, nominal 0,80 e `coverage_error`). As ressalvas
+são (a) **metodológicas** — nominal e níveis de quantil **hard-coded** (drift silencioso
+se a config mudar), cobertura **marginal** sem teste de Christoffersen (clustering de
+falhas invisível) e **ponto sem IC** (estimativa binomial ruidosa, ao contrário das
+bandas Tier da Phase B); e (b) **de precisão/completude do dossiê** — não existe coluna
+`picp` nua (só `picp_raw`/`picp_post_guardrail`, e `mean_picp` no final), o `covered_80`
+é "computado e mascarado" (não "só para elegíveis"), e a elegibilidade é julgada nos
+quantis **crus** mesmo para o `picp_post_guardrail` (assimetria não mencionada). Não há
+defeito de localização; as decisões (nominal dinâmico, Christoffersen, IC/banda) são de
+C.0.2/C.0.3. Decisões recomendadas registradas nos elementos 3 e 4 — pendentes de
+confirmação com a pesquisa acadêmica do paper.
 
 ---
 
