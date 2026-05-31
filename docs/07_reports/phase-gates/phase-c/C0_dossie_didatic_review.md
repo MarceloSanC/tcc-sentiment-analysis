@@ -1182,6 +1182,18 @@ mede **calibração** (o intervalo cumpre o que promete?); sozinho **não** mede
   (n elegível) diferentes. O `n_probabilistic_samples` (elemento 3) é o número a citar
   junto.
 
+  > **Correção recomendada ao dossiê** *(doc-sync do skeleton §6 PICP; **não** depende da
+  > pesquisa do paper — é mismatch doc↔código, não decisão metodológica)*: nos "Riscos
+  > conhecidos", a linha "degeneração quantílica (q10==q90) torna PICP não informativo"
+  > está **desatualizada** — o código **filtra** a degeneração (a métrica não é arrastada).
+  > Substituir/complementar por: a elegibilidade `is_non_degenerate` é avaliada nos
+  > **quantis crus** (`RAW_QUANTILE_COLUMNS`,
+  > [`quantile.py:162-166`](../../../../src/domain/services/gold_builders/quantile.py#L162))
+  > **mesmo ao construir o `picp_post_guardrail`** — logo o denominador do PICP
+  > pós-guardrail é fixado pela degeneração **crua**, não pela largura pós-guardrail
+  > (assimetria raw-vs-post). Acrescentar `n_probabilistic_samples` como o n elegível a
+  > reportar junto do PICP.
+
 **3. Agregação: PICP = média de `covered_80` por grupo**
 - **O que o doc afirma:** `picp = ("covered_80", "mean")`
   ([`quantile.py:244`](../../../../src/domain/services/gold_builders/quantile.py#L244)),
@@ -1331,6 +1343,16 @@ mede **calibração** (o intervalo cumpre o que promete?); sozinho **não** mede
   **Quando é tolerável:** desde que o contrato seja sempre declarado junto. É imprecisão
   de **nomenclatura no dossiê**, não referência quebrada — o código está coerente.
 
+  > **Correção recomendada ao dossiê** *(doc-sync do skeleton §6 PICP; **não** depende da
+  > pesquisa do paper — é mismatch doc↔código, não decisão metodológica)*: nos campos "Uso
+  > atual no projeto"/"Implementação atual localizada", substituir "coluna `picp`" por
+  > **`picp_raw` e `picp_post_guardrail`** (não há coluna `picp` nua em
+  > `gold_prediction_metrics_by_run_split_horizon` — rename em
+  > [`quantile.py:335-337`](../../../../src/domain/services/gold_builders/quantile.py#L335)/[`391-393`](../../../../src/domain/services/gold_builders/quantile.py#L391))
+  > e registrar que no `gold_model_decision_final` a coluna é **`mean_picp`** (vinda de
+  > `mean_picp_post_guardrail`; contrato default **post_guardrail**,
+  > [`confidence.py:472`](../../../../src/domain/services/gold_builders/confidence.py#L472)).
+
 ### Cross-check — o que NÃO está corretamente indicado/referenciado
 
 Todas as referências de "Implementação atual localizada" do dossiê de PICP **conferem**
@@ -1389,7 +1411,11 @@ bandas Tier da Phase B); e (b) **de precisão/completude do dossiê** — não e
 quantis **crus** mesmo para o `picp_post_guardrail` (assimetria não mencionada). Não há
 defeito de localização; as decisões (nominal dinâmico, Christoffersen, IC/banda) são de
 C.0.2/C.0.3. Decisões recomendadas registradas nos elementos 3 e 4 — pendentes de
-confirmação com a pesquisa acadêmica do paper.
+confirmação com a pesquisa acadêmica do paper. **Correções recomendadas ao dossiê
+(skeleton)** registradas nos elementos 2 e 5 — são doc-sync (mismatch doc↔código) e
+**não** dependem da pesquisa do paper: (1) "coluna `picp`" → `picp_raw`/`picp_post_guardrail`
+(e `mean_picp` no final); (2) a degeneração é **filtrada**, com a elegibilidade julgada
+nos quantis **crus** mesmo para o `picp_post_guardrail`.
 
 ---
 
