@@ -55,7 +55,7 @@ update_when:
 - [x] #3 — Holm gold
 - [x] #4 — top-50 filter
 - [x] #5 — PICP
-- [ ] #6 — MPIW
+- [x] #6 — MPIW
 - [ ] #7 — Pinball loss
 - [ ] #8 — Win-rate gold
 - [ ] #9 — prob_up
@@ -1320,6 +1320,295 @@ quantis **crus** mesmo para o `picp_post_guardrail` (assimetria não mencionada)
 defeito de localização; as decisões (nominal dinâmico, Christoffersen, IC/banda) são de
 C.0.2/C.0.3. Decisões recomendadas registradas nos elementos 3 e 4 — pendentes de
 confirmação com a pesquisa acadêmica do paper.
+
+---
+
+## #6 — MPIW
+
+### O que é (didático)
+
+**MPIW** (*Mean Prediction Interval Width* — largura média do intervalo preditivo) é
+simplesmente a **largura média** do intervalo `[q10, q90]` que o modelo emite. Para
+cada linha OOS calcula `largura = q90 − q10`; o MPIW é a **média** dessas larguras. Ele
+mede **sharpness** (o quão "apertado"/confiante é o intervalo): MPIW menor = intervalos
+mais estreitos.
+
+O "truque" — e a armadilha — é que **sharpness sozinha não diz nada sobre honestidade**.
+Um modelo pode reduzir o MPIW à vontade simplesmente **mentindo** (emitindo intervalos
+absurdamente estreitos). Quem checa se o intervalo cumpre o que promete é o **PICP**
+(item #5). Por isso MPIW e PICP **só fazem sentido juntos**: largura sem cobertura
+premia o modelo otimista demais; cobertura sem largura premia o modelo medroso (intervalo
+gigante que sempre acerta). O par largura×cobertura é o que um *interval score* (Winkler)
+combina num número só.
+
+### Elementos
+
+**1. `pred_interval_width` — largura por linha (= q90 − q10)**
+- **O que o doc afirma:** `pred_interval_width = q90_col − q10_col` por linha
+  ([`quantile.py:177`](../../../../src/domain/services/gold_builders/quantile.py#L177)).
+- **Como deveria funcionar (exemplo):** intervalo `[q10=95, q90=110]` → largura `15`.
+  Um modelo mais "afiado" que devolve `[q10=99, q90=101]` → largura `2`. Quanto menor a
+  largura, mais confiante o modelo se diz — mas só o PICP dirá se essa confiança é
+  justificada.
+- **O que esperar no código:** `valid["pred_interval_width"] = valid[q90_col] -
+  valid[q10_col]`, usando as **colunas do contrato sendo processado** (raw **ou**
+  post-guardrail — a função `_build_metrics_single_contract` roda duas vezes, L305/L381).
+- **Ref do doc → código:** [`quantile.py:177`](../../../../src/domain/services/gold_builders/quantile.py#L177).
+  ✅ **Confere** (li a função inteira, 102-285): `valid["pred_interval_width"] =
+  valid[q90_col] - valid[q10_col]`. É uma subtração simples, **sem `abs()`** e **sem
+  clip** nesta linha.
+- ⚠️ **Ponto de atenção — quantis cruzados passam o filtro → largura pode ser negativa (no contrato cru)**
+  A largura é `q90 − q10` **sem valor absoluto**. Se os quantis **cruzam** (`q10 > q90`,
+  patologia comum em modelos de quantis sem monotonicidade imposta), a largura fica
+  **negativa**. E o filtro de elegibilidade (elemento 2) **não pega isso**: ele exige
+  apenas `q10_raw != q90_raw` ([`quantile.py:166`](../../../../src/domain/services/gold_builders/quantile.py#L166)),
+  ou seja, exclui só a **igualdade exata** (degeneração), **não** o cruzamento. Uma linha
+  com `q10_raw=110, q90_raw=95` tem `q10 ≠ q90` → é elegível → entra na média com largura
+  **−15**.
+
+  Que o cruzamento de fato ocorre nos quantis crus está provado pelo próprio código: o
+  `QuantileGuardrailAuditGoldBuilder` computa `negative_width_before` justamente como
+  `(quantile_p90 − quantile_p10) < 0`
+  ([`quantile.py:515-517`](../../../../src/domain/services/gold_builders/quantile.py#L515)) —
+  essa métrica só existe porque larguras negativas aparecem **antes** do guardrail.
+
+  | Contrato | Cruzamento (q10>q90)? | O que entra no MPIW |
+  |---|---|---|
+  | **raw** (`mpiw_raw`) | possível | largura **negativa** contamina a média (puxa para baixo) |
+  | **post_guardrail** (`mpiw_post_guardrail`) | o guardrail impõe monotonicidade | larguras ≥ 0 (cruzamento removido) |
+
+  **Quando importa:** ler `mpiw_raw` como "sharpness" é enganoso se houver cruzamento — um
+  MPIW artificialmente baixo (ou negativo) reflete **patologia**, não intervalos
+  apertados. **Quando é tolerável:** o número de destaque do artefato final é o
+  **post_guardrail** (ver elemento 4), onde o cruzamento já foi corrigido — então o risco
+  vive no contrato cru. Mesmo assim, o `mpiw_raw` persistido carrega a distorção.
+
+  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: para qualquer
+  > leitura de sharpness, usar o **`mpiw_post_guardrail`** (cruzamento já corrigido) e/ou
+  > **excluir da elegibilidade** as linhas com largura negativa (cruzamento), não só as de
+  > largura zero. Reportar a `crossing_before_rate` (já calculada no guardrail audit) ao
+  > lado do `mpiw_raw`.
+
+**2. Filtro Cat C de elegibilidade — degeneração mascarada a NaN, julgada nos quantis CRUS**
+- **O que o doc afirma:** sujeito ao **mesmo Cat C filter** do PICP; linhas não-elegíveis
+  têm `pred_interval_width` forçado a NaN
+  ([`quantile.py:210-212`](../../../../src/domain/services/gold_builders/quantile.py#L210)).
+- **Como deveria funcionar (exemplo):** uma run de **previsão pontual**
+  (`prediction_mode != "quantile"`) não tem intervalo → excluída. Uma run de quantis com
+  intervalo **colapsado na origem** (q10_raw == q90_raw, ex. ambos = 100) → degenerada →
+  excluída. Só linhas com intervalo genuíno entram na média; as demais viram NaN e o
+  `.mean()` as ignora.
+- **O que esperar no código:** a mesma máscara `prob_eligible_mask = is_quantile_mode &
+  is_non_degenerate` do PICP, com `pred_interval_width` na lista `prob_row_cols` que é
+  zerada a NaN.
+- **Ref do doc → código:** [`quantile.py:208`](../../../../src/domain/services/gold_builders/quantile.py#L208)
+  (`pred_interval_width` em `prob_row_cols`) + [`quantile.py:210-212`](../../../../src/domain/services/gold_builders/quantile.py#L210)
+  (NaN) + [`quantile.py:162-171`](../../../../src/domain/services/gold_builders/quantile.py#L162)
+  (elegibilidade). ✅ **Confere:** `pred_interval_width` é o 7º item de `prob_row_cols`
+  (L208) e o loop `valid.loc[~prob_eligible_mask, col] = np.nan` (L210-212) o mascara; a
+  elegibilidade vem de `is_non_degenerate = (p10_raw != p90_raw) & ...` (L166) e
+  `is_quantile_mode` (L169).
+- ⚠️ **Ponto de atenção — "MPIW=0 em degenerados" está mitigado; mas a elegibilidade é julgada no CRU mesmo para o post-guardrail**
+  O risco listado no dossiê ("MPIW=0 em quantis degenerados") está **majoritariamente
+  mitigado**: uma linha com intervalo colapsado **não entra** na média (vira NaN). Se uma
+  run for **toda** degenerada, `n_probabilistic_samples = 0` e o MPIW vira **NaN** (não
+  `0`) — então a frase do dossiê **superestima** o risco não-tratado: o filtro já o
+  contém, e o resultado de uma degeneração total é NaN, não um zero enganoso.
+
+  **Mas há a mesma sutileza do PICP (elemento 2 do item #5), e aqui ela é ainda mais
+  visível:** a elegibilidade (`is_non_degenerate`) é **sempre** calculada nos
+  **quantis CRUS** (`RAW_QUANTILE_COLUMNS`, [`quantile.py:162-166`](../../../../src/domain/services/gold_builders/quantile.py#L162)),
+  **mesmo quando o contrato processado é o post-guardrail**. A largura, porém, é a do
+  contrato corrente. Daí uma **assimetria** específica do MPIW:
+
+  | Linha | q10/q90 crus | q10/q90 pós-guardrail | Entra no `mpiw_post_guardrail`? | Largura que entra |
+  |---|---|---|---|---|
+  | genuína | 95 / 110 | 95 / 110 | ✅ sim | 15 |
+  | colapsada na origem | 100 / 100 | 100 / 100 | ❌ não (cru degenerado) | — |
+  | genuína no cru, **colapsada pelo guardrail** | 95 / 110 | 100 / 100 | ✅ **sim** (cru não é degenerado) | **0** |
+
+  **Quando importa:** se o guardrail colapsar intervalos genuínos (clampando q10_post ==
+  q90_post para forçar monotonicidade), essas linhas **continuam elegíveis** (porque o cru
+  era genuíno) e entram no `mpiw_post_guardrail` com **largura 0**, **puxando-o para
+  baixo**. É a **assimetria inversa** à do PICP: lá o cru-degenerado é excluído mesmo
+  quando o guardrail "abre" o intervalo; aqui o cru-genuíno é incluído mesmo quando o
+  guardrail "fecha" o intervalo. **Por que é defensável:** medir genuinidade pelo que o
+  **modelo** emitiu (cru) é coerente entre PICP e MPIW; mas a consequência sobre a *média
+  de largura* é que zeros induzidos pelo guardrail entram no denominador.
+
+**3. Agregação: MPIW = média de `pred_interval_width` (e a coluna gêmea idêntica)**
+- **O que o doc afirma:** `mpiw = ("pred_interval_width", "mean")`
+  ([`quantile.py:245`](../../../../src/domain/services/gold_builders/quantile.py#L245));
+  **também emitido** `pred_interval_width = ("pred_interval_width", "mean")` como coluna
+  separada ([`quantile.py:246`](../../../../src/domain/services/gold_builders/quantile.py#L246)).
+- **Como deveria funcionar (exemplo):** num grupo com 3 linhas elegíveis de larguras
+  {10, 14, 12} → `MPIW = 36/3 = 12`. Como as não-elegíveis são NaN, o `.mean()` do pandas
+  **as ignora** — o MPIW é a média **só sobre as elegíveis**, agrupado por `(run_id,
+  asset, feature_set_name, config_signature, split, fold, seed, horizon)`.
+- **O que esperar no código:** `mpiw=("pred_interval_width", "mean")` dentro do `.agg(...)`,
+  e o groupby pelos campos de run/split/horizon.
+- **Ref do doc → código:** [`quantile.py:245`](../../../../src/domain/services/gold_builders/quantile.py#L245)
+  (`mpiw`) + [`quantile.py:246`](../../../../src/domain/services/gold_builders/quantile.py#L246)
+  (`pred_interval_width`) + [`quantile.py:214-227`](../../../../src/domain/services/gold_builders/quantile.py#L214)
+  (group_cols). ✅ **Confere** exatamente: ambas as linhas agregam a **mesma** coluna-fonte
+  `pred_interval_width` com `mean`.
+- ⚠️ **Ponto de atenção — `mpiw` e `pred_interval_width` são numericamente IDÊNTICAS**
+  As duas saídas (L245 e L246) aplicam `mean` sobre a **mesma** coluna por linha
+  (`pred_interval_width`), logo produzem **exatamente o mesmo número**. Após o rename do
+  builder, o parquet carrega **quatro** colunas em **dois pares idênticos**: `mpiw_raw` ==
+  `pred_interval_width_raw` e `mpiw_post_guardrail` == `pred_interval_width_post_guardrail`.
+  Não é erro — `pred_interval_width` existe porque é a coluna que **alimenta o
+  `confidence_calibrated`** (elemento 4); `mpiw` é o **nome semântico** da métrica. **Quando
+  importa:** um leitor do parquet pode supor que são **duas medidas diferentes** (ex.: uma
+  normalizada, outra crua) e ler significado onde não há — são byte-a-byte iguais.
+- ⚠️ **Ponto de atenção — MPIW sozinho não mede calibração (sharpness sem cobertura)**
+  Este é o ponto metodológico central do item. MPIW responde "quão estreito?", **nunca**
+  "quão honesto?". Dois modelos com larguras muito diferentes podem ser igualmente
+  (des)calibrados, e o "melhor MPIW" pode ser o **pior** modelo:
+
+  | Modelo | MPIW | PICP | Leitura correta |
+  |---|---|---|---|
+  | A | 5 (estreito) | 0,55 | sharp mas **descalibrado** — intervalo otimista demais, não cobre |
+  | B | 20 (largo) | 0,80 | bem calibrado, porém **pouco informativo** (intervalo largo) |
+  | C | 8 | 0,80 | calibrado **e** razoavelmente sharp ← o desejável |
+
+  Olhar só o MPIW elegeria **A** ("menor largura"), que é o pior. Por isso a literatura
+  combina os dois num **interval score / Winkler score** (penaliza largura **e** penaliza
+  cada vez que o real cai fora), e o skeleton fixa: "MPIW só entra junto a PICP; nunca
+  isolado". **Quando importa:** sempre que MPIW for usado para **comparar ou escolher**
+  modelos. **Quando é tolerável:** como descrição de sharpness **reportada lado a lado com
+  o PICP** do mesmo grupo. **Como a Phase B trata:** reporta MPIW junto ao PICP, nunca
+  como critério isolado.
+
+  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: nunca reportar
+  > MPIW isolado; acoplá-lo **sempre** ao PICP do mesmo grupo e, para qualquer uso
+  > comparativo/seletivo, preferir um **interval score (Winkler)** que combine largura e
+  > cobertura num único número próprio (*proper*).
+
+**4. Saídas e consumo cross-file: `mpiw_raw`/`mpiw_post_guardrail` → calibration → decision_final (`mean_mpiw`)**
+- **O que o doc afirma:** coluna `mpiw` em `gold_prediction_metrics_*` e
+  `gold_prediction_calibration`.
+- **Como deveria funcionar (exemplo):** como toda métrica probabilística, o `mpiw` "nu" do
+  agg é **renomeado** pelo builder para `mpiw_raw` e `mpiw_post_guardrail` (padrão
+  dois-contratos) — **não existe coluna `mpiw` nua** no parquet. A média por config gera
+  `mean_mpiw_raw`/`mean_mpiw_post_guardrail`, e o `decision_final` escolhe o contrato
+  **post_guardrail** (default) renomeando para **`mean_mpiw`**.
+- **O que esperar no código:** rename `{m: f"{m}_raw"}`/`{m: f"{m}_post_guardrail"}` no
+  builder; `mpiw_raw`/`mpiw_post_guardrail` em `gold_prediction_calibration`;
+  `mean_mpiw_{contrato}` → `mean_mpiw` no `decision_final`.
+- **Ref do doc → código:** rename em
+  [`quantile.py:335-337`](../../../../src/domain/services/gold_builders/quantile.py#L335)
+  e [`:391-393`](../../../../src/domain/services/gold_builders/quantile.py#L391);
+  `mpiw_raw`/`mpiw_post_guardrail` (e os gêmeos `pred_interval_width_*`) em
+  [`descriptive.py:395-396`](../../../../src/domain/services/gold_builders/descriptive.py#L395)
+  e [`:404-405`](../../../../src/domain/services/gold_builders/descriptive.py#L404)
+  (`gold_prediction_calibration`); `mean_mpiw_{post_guardrail} → mean_mpiw` em
+  [`confidence.py:498`](../../../../src/domain/services/gold_builders/confidence.py#L498);
+  e `gap_mpiw_{post_guardrail}_test_minus_val → gap_mpiw_test_minus_val` em
+  [`confidence.py:565`](../../../../src/domain/services/gold_builders/confidence.py#L565).
+  ✅ **Confere:** `gold_prediction_calibration` carrega `mpiw_raw`/`mpiw_post_guardrail`
+  (L395/L404); o `decision_final` mapeia `mean_mpiw_post_guardrail → mean_mpiw` (L498) e
+  expõe também o gap test−val (L565). A ordenação final continua por `rank_rmse,
+  rank_mae` (ver item #5, [`confidence.py:815-818`](../../../../src/domain/services/gold_builders/confidence.py#L815)),
+  então `mean_mpiw` é **coluna passiva** (não é chave de ordenação nem entra no
+  `academic_decision_ready`).
+- ⚠️ **Ponto de atenção — o dossiê omite que MPIW chega ao `gold_model_decision_final` e alimenta o `confidence_calibrated`**
+  O campo "Uso atual no projeto" do dossiê lista apenas `gold_prediction_metrics_*` e
+  `gold_prediction_calibration`. Na prática o MPIW vai **mais longe**:
+  - chega ao **`gold_model_decision_final`** como `mean_mpiw` (e como `gap_mpiw_test_minus_val`),
+    [`confidence.py:498`](../../../../src/domain/services/gold_builders/confidence.py#L498)/[`:565`](../../../../src/domain/services/gold_builders/confidence.py#L565)
+    — coluna passiva, mas presente no artefato final;
+  - a **mesma** largura por linha alimenta o **`confidence_calibrated`** via `width_term =
+    1 / (1 + pred_interval_width.clip(lower=0))`
+    ([`quantile.py:266`](../../../../src/domain/services/gold_builders/quantile.py#L266) —
+    ver item #10). Note o `clip(lower=0)`: lá a largura negativa (cruzamento, elemento 1)
+    é **zerada**, então a patologia some no `confidence_calibrated` mas **permanece** no
+    `mpiw_raw`;
+  - aparece ainda no `gold_quantile_guardrail_audit` como `mpiw_before`/`mpiw_after`
+    ([`quantile.py:469`](../../../../src/domain/services/gold_builders/quantile.py#L469)).
+
+  **Quando importa:** ao rastrear "onde o MPIW influencia decisões", a leitura do dossiê
+  subdimensiona o alcance — `mean_mpiw` está no artefato final e a largura compõe um score
+  heurístico (`confidence_calibrated`).
+- ⚠️ **Ponto de atenção — MPIW está em unidades absolutas; comparar cross-asset exige normalização**
+  MPIW herda a **escala do alvo**: a largura de um intervalo para um ativo cotado em
+  dezenas de milhares (ex.: BTC) é numericamente enorme perto da de um ativo em unidades
+  pequenas ou de uma série de retornos. Comparar `mpiw` **entre ativos** sem normalizar é
+  comparar laranjas com maçãs.
+
+  | Comparação | MPIW cru serve? |
+  |---|---|
+  | mesmo ativo, dois modelos | ✅ sim — escala comum |
+  | ativos diferentes / escalas diferentes | 🔴 não — precisa normalizar (ex.: dividir pela escala do alvo, ou usar largura relativa) |
+
+  **Quando importa:** qualquer ranking ou narrativa que junte MPIW de **ativos
+  diferentes**. **Quando é tolerável:** comparações **dentro do mesmo ativo/escala**.
+
+  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: disponibilizar
+  > um **MPIW normalizado** (ex.: pela escala/volatilidade do alvo, ou largura relativa ao
+  > nível previsto) para qualquer comparação cross-asset; manter o MPIW absoluto apenas
+  > para comparações intra-ativo.
+
+### Cross-check — o que NÃO está corretamente indicado/referenciado
+
+Todas as referências de "Implementação atual localizada" do dossiê de MPIW **conferem**
+com o código (li a função `_build_metrics_single_contract` inteira, 102-285, mais o
+builder run/split/horizon 288-404, `gold_prediction_calibration` em descriptive.py
+363-419 e o rollup em confidence.py 463-572). Pontos a registrar:
+
+1. **Nenhuma referência quebrada.** Linhas-âncora **exatas**: `pred_interval_width =
+   q90 − q10` em L177 ✅; máscara Cat C em L208 + L210-212 ✅; `mpiw=("pred_interval_width",
+   "mean")` em L245 ✅; `pred_interval_width=(...,"mean")` (coluna gêmea) em L246 ✅.
+
+2. **"Uso atual" subdimensiona o alcance do MPIW.** O dossiê lista só
+   `gold_prediction_metrics_*` e `gold_prediction_calibration`, mas o MPIW também: (a)
+   chega ao **`gold_model_decision_final`** como `mean_mpiw` e `gap_mpiw_test_minus_val`
+   ([`confidence.py:498`](../../../../src/domain/services/gold_builders/confidence.py#L498)/[`:565`](../../../../src/domain/services/gold_builders/confidence.py#L565));
+   (b) a largura por linha alimenta o **`confidence_calibrated`**
+   ([`quantile.py:266`](../../../../src/domain/services/gold_builders/quantile.py#L266));
+   (c) aparece no `gold_quantile_guardrail_audit` como `mpiw_before`/`mpiw_after`
+   ([`quantile.py:469`](../../../../src/domain/services/gold_builders/quantile.py#L469)).
+   É coluna passiva no artefato final (ordenação por `rank_rmse, rank_mae`), mas presente.
+
+3. **`mpiw` == `pred_interval_width` (colunas gêmeas idênticas) não é mencionado.** As duas
+   saídas (L245/L246) agregam a mesma fonte com `mean` → mesmo número; o parquet carrega
+   dois pares byte-a-byte iguais (`mpiw_*` e `pred_interval_width_*`). Registrado no
+   elemento 3.
+
+4. **Risco "MPIW=0 em degenerados" superestimado.** O Cat C filter **já mascara** linhas
+   cruamente degeneradas (q10_raw == q90_raw) a NaN — o resultado de uma run toda
+   degenerada é **NaN**, não `0`. O caminho residual de largura-zero é o **colapso pelo
+   guardrail** de linhas cruamente genuínas (elemento 2), não a degeneração crua que o
+   dossiê descreve.
+
+5. **Cruzamento de quantis (largura negativa) não capturado pelo dossiê.** O filtro exclui
+   só a igualdade exata, não o cruzamento (`q10 > q90`); larguras negativas entram no
+   `mpiw_raw` (elemento 1), comprovado pela existência da métrica `negative_width_before`
+   no guardrail audit ([`quantile.py:515-517`](../../../../src/domain/services/gold_builders/quantile.py#L515)).
+
+6. **Pontos residuais metodológicos centrais já capturados pelo dossiê.** "Comparar
+   largura sem cobertura", "MPIW=0 em degenerados" e "sem normalização cross-asset" constam
+   dos "Riscos conhecidos". Os aprofundamentos acima detalham o mecanismo (sharpness sem
+   cobertura via tabela A/B/C, assimetria de elegibilidade raw-vs-post, unidades absolutas)
+   e o "quando cada escolha se aplica".
+
+### Veredito do item #6
+
+🟡 **Ressalvas.** Referências **intactas** e evidência fiel ao código — o MPIW é
+calculado exatamente como o dossiê afirma (largura `q90 − q10` por linha, filtro Cat C,
+média por grupo, coluna gêmea `pred_interval_width`). As ressalvas são (a)
+**metodológicas** — MPIW isolado **não mede calibração** (sharpness sem cobertura; só faz
+sentido com PICP / interval score), unidades absolutas exigem normalização cross-asset, e
+o contrato cru pode conter **largura negativa** (cruzamento) que o filtro não pega; e (b)
+**de precisão/completude do dossiê** — "Uso atual" subdimensiona o alcance (MPIW chega ao
+`gold_model_decision_final` como `mean_mpiw`, alimenta o `confidence_calibrated` e aparece
+no guardrail audit), `mpiw` e `pred_interval_width` são colunas **idênticas**, o risco
+"MPIW=0 em degenerados" está **superestimado** (o filtro já o mitiga → NaN, não 0) e a
+assimetria de elegibilidade julgada nos quantis **crus** mesmo para o `mpiw_post_guardrail`
+não é mencionada. Não há defeito de localização; as decisões (interval/Winkler score, MPIW
+normalizado, tratamento de cruzamento) são de C.0.2/C.0.3. Decisões recomendadas
+registradas nos elementos 1, 3 e 4 — pendentes de confirmação com a pesquisa acadêmica do
+paper.
 
 ---
 
