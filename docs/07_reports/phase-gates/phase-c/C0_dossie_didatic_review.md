@@ -1694,8 +1694,34 @@ combina num número só.
 
   **Quando importa:** ao rastrear "onde o MPIW influencia decisões", a leitura do dossiê
   subdimensiona o alcance — `mean_mpiw` está no artefato final e a largura compõe um score
-  heurístico (`confidence_calibrated`).
-- ⚠️ **Ponto de atenção — MPIW está em unidades absolutas; comparar cross-asset exige normalização**
+  heurístico (`confidence_calibrated`). **Verificado, porém, que `mean_mpiw`/`gap_mpiw` são
+  colunas PASSIVAS:** a ordenação do `gold_model_decision_final` é por
+  `rank_rmse`/`rank_mae`/`rank_da` (métricas **pontuais**) e o `academic_decision_ready`
+  depende só de `pairwise_ready_dm`/`pairwise_ready_mcs`/`target_exact_alignment`
+  ([`confidence.py:785-813`](../../../../src/domain/services/gold_builders/confidence.py#L785))
+  — o MPIW **não entra em ranking nem gate**. E o único consumo **ativo** é correto: o plot
+  `fig_interval_width_vs_coverage` desenha **MPIW × PICP juntos**
+  ([`generate_prediction_analysis_plots_use_case.py:548-554`](../../../../src/use_cases/generate_prediction_analysis_plots_use_case.py#L548)),
+  nunca o MPIW sozinho. O risco é só **interpretativo**: uma coluna passiva no artefato final
+  pode ser lida como evidência (mesmo perigo do `win_rate_ex_ties`, item #8).
+
+  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper; decisão de
+  > C.0.2/C.0.3)*: fixar o **papel** de cada número, não eliminar o MPIW da propagação.
+  > **MPIW (com PICP) = diagnóstico/decomposição** — explica *por que* um modelo é sharp ou
+  > medroso; deve andar **sempre acoplado ao PICP** (o plot já faz isso) e **nunca** ser
+  > entrada inferencial ou de seleção. **Quem propaga para os testes e a decisão é um
+  > *proper score*** — o **interval score (Winkler)** alimentando DM/MCS e sendo o
+  > `primary_metric` do scorecard (regra §5.1 do skeleton: PICP/MPIW são *perfil*, não
+  > trocam o vencedor). Concretamente: (a) **rotular** `mean_mpiw`/`gap_mpiw` no
+  > `gold_model_decision_final` como **diagnósticos não-inferenciais** (mesmo tratamento
+  > sugerido para o `win_rate`, item #8); (b) introduzir o **interval score** (ver elemento
+  > 3) como o número que de fato segue para inferência/seleção. **Não é "MPIW some e só o
+  > Winkler propaga"** — é "MPIW vira **decomposição rotulada** do Winkler; o Winkler é que
+  > carrega o peso comparativo". *Diferença por passo:* per-row → agrega MPIW+PICP
+  > (diagnóstico) **e** Winkler (score); DM/MCS → recebe **Winkler**; scorecard → primária =
+  > Winkler/pinball, com MPIW+PICP como perfil; plots/artefato → MPIW×PICP **rotulado** como
+  > diagnóstico.
+- ⚠️ **Ponto de atenção — MPIW está em unidades absolutas (relevante só fora do escopo single-asset deste TCC)**
   MPIW herda a **escala do alvo**: a largura de um intervalo para um ativo cotado em
   dezenas de milhares (ex.: BTC) é numericamente enorme perto da de um ativo em unidades
   pequenas ou de uma série de retornos. Comparar `mpiw` **entre ativos** sem normalizar é
@@ -1704,15 +1730,15 @@ combina num número só.
   | Comparação | MPIW cru serve? |
   |---|---|
   | mesmo ativo, dois modelos | ✅ sim — escala comum |
-  | ativos diferentes / escalas diferentes | 🔴 não — precisa normalizar (ex.: dividir pela escala do alvo, ou usar largura relativa) |
+  | ativos diferentes / escalas diferentes | 🔴 não — exigiria normalização (e, na prática, outra análise) |
 
-  **Quando importa:** qualquer ranking ou narrativa que junte MPIW de **ativos
-  diferentes**. **Quando é tolerável:** comparações **dentro do mesmo ativo/escala**.
-
-  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: disponibilizar
-  > um **MPIW normalizado** (ex.: pela escala/volatilidade do alvo, ou largura relativa ao
-  > nível previsto) para qualquer comparação cross-asset; manter o MPIW absoluto apenas
-  > para comparações intra-ativo.
+  **Escopo deste TCC:** a análise é **single-asset** — os modelos são comparados **dentro do
+  mesmo ativo**, onde a escala é comum e o **MPIW absoluto basta**. Comparar modelos de
+  **ativos diferentes** não é o foco e provavelmente exigiria um **desenho de análise
+  distinto** (não bastaria normalizar a largura). Portanto **não há ação a tomar aqui**:
+  construir um "MPIW normalizado" seria **overengineering** para o que o TCC precisa. Fica
+  registrado apenas como **limite de validade** — não estender a leitura de MPIW para
+  cross-asset —, não como gap a corrigir.
 
 ### Cross-check — o que NÃO está corretamente indicado/referenciado
 
@@ -1764,16 +1790,20 @@ builder run/split/horizon 288-404, `gold_prediction_calibration` em descriptive.
 calculado exatamente como o dossiê afirma (largura `q90 − q10` por linha, filtro Cat C,
 média por grupo, coluna gêmea `pred_interval_width`). As ressalvas são (a)
 **metodológicas** — MPIW isolado **não mede calibração** (sharpness sem cobertura; só faz
-sentido com PICP / interval score), unidades absolutas exigem normalização cross-asset, e
-o contrato cru pode conter **largura negativa** (cruzamento) que o filtro não pega; e (b)
+sentido com PICP / interval score) e propaga ao artefato final como coluna **passiva** que
+deveria ser rotulada como diagnóstico (quem alimenta inferência/seleção é o interval score,
+não o MPIW), e o contrato cru pode conter **largura negativa** (cruzamento) que o filtro não
+pega; e (b)
 **de precisão/completude do dossiê** — "Uso atual" subdimensiona o alcance (MPIW chega ao
 `gold_model_decision_final` como `mean_mpiw`, alimenta o `confidence_calibrated` e aparece
 no guardrail audit), `mpiw` e `pred_interval_width` são colunas **idênticas**, o risco
 "MPIW=0 em degenerados" está **superestimado** (o filtro já o mitiga → NaN, não 0; e o
 guardrail é um *sort* puro que **nunca** colapsa um intervalo genuíno, então não há
 largura-zero entrando no `mpiw_post_guardrail`) e a sutileza de a elegibilidade ser julgada
-pelas **pontas cruas** não é mencionada. Não há defeito de localização; as decisões (interval/Winkler score, MPIW
-normalizado, tratamento de cruzamento) são de C.0.2/C.0.3. Decisões recomendadas
+pelas **pontas cruas** não é mencionada. Não há defeito de localização; as decisões
+(interval/Winkler score, rotular MPIW como diagnóstico não-inferencial, dedup das colunas
+gêmeas, tratamento de cruzamento) são de C.0.2/C.0.3. A normalização cross-asset fica
+**fora de escopo** (TCC é single-asset; MPIW absoluto basta). Decisões recomendadas
 registradas nos elementos 1, 3 e 4 — pendentes de confirmação com a pesquisa acadêmica do
 paper.
 
