@@ -52,7 +52,7 @@ update_when:
 
 - [x] #1 — Diebold-Mariano gold
 - [x] #2 — MCS gold
-- [ ] #3 — Holm gold
+- [x] #3 — Holm gold
 - [ ] #4 — top-50 filter
 - [ ] #5 — PICP
 - [ ] #6 — MPIW
@@ -586,6 +586,247 @@ condicional ao upstream — é ativo e independente; (b) o `drop_duplicates`
 na linha 727 pode colapsar registros de split_signatures distintos de forma
 não-determinística. Riscos metodológicos (B=300, block_len=5, loss desalinhada)
 são decisões para C.0.2/C.0.3, não defeitos de localização.
+
+---
+
+## #3 — Holm gold
+
+### O que é (didático)
+
+O **Holm-Bonferroni** é uma correção de **múltiplas comparações**. O problema que
+ele resolve: se você roda 100 testes ao nível α=5%, espera-se ~5 "significativos"
+**só por sorte**, mesmo sem nenhum efeito real. Quanto mais testes, maior a chance
+de pelo menos um falso positivo. O Holm controla o **FWER** (*family-wise error
+rate* — a probabilidade de cometer **≥1** falso positivo na **família** inteira de
+testes).
+
+O "truque" é um procedimento **step-down**: ordena os p-values do menor para o
+maior e exige cada vez **menos**: o menor p-value precisa passar de `α/m`, o
+próximo de `α/(m−1)`, …, o maior só de `α/1`. Equivalentemente (forma usada no
+código), multiplica o *j*-ésimo menor p-value por `(m − j + 1)` e força a
+sequência a ser **monotônica crescente**. É **uniformemente mais poderoso que
+Bonferroni** (que multiplicaria todos por `m`) e **não assume independência**
+entre os testes.
+
+A sutileza que faz ou quebra o Holm não está na fórmula — está na **definição da
+família**: *quais* testes pertencem ao mesmo conjunto. Holm só é tão bom quanto a
+família que você alimenta. No gold legacy, a fórmula está correta; a família é que
+é definida por um **groupby administrativo**, não pelo claim.
+
+### Elementos
+
+**1. Onde o Holm roda e sobre qual p-value**
+- **O que o doc afirma:** o ajuste é aplicado dentro de `DmPairwiseResultsGoldBuilder.build()` (linha 333), sobre os DM results já concatenados, lendo a coluna `pvalue_two_sided`; a saída ganha `pvalue_adj_holm` e `significant_adj_0_05` no parquet `gold_dm_pairwise_results`.
+- **Como deveria funcionar (exemplo):** o builder roda o DM por grupo, junta todas as linhas pairwise (cada uma com seu `pvalue_two_sided`) num único DataFrame e chama **uma vez** `_apply_holm_adjustment_for_dm` sobre o concat. Para 6 pares com p-values crus `{0.005, 0.02, 0.03, 0.04, 0.20, 0.50}`, o Holm devolve uma coluna nova de p-values **ajustados** ao lado dos crus.
+- **O que esperar no código:** `return _apply_holm_adjustment_for_dm(pd.concat(rows, ignore_index=True))` no fim do `build()`; dentro da função, um guard que devolve o df intacto se não houver `pvalue_two_sided`.
+- **Ref do doc → código:** [`pairwise.py:333`](../../../../src/domain/services/gold_builders/pairwise.py#L333) (chamada) e [`pairwise.py:184`](../../../../src/domain/services/gold_builders/pairwise.py#L184) (guard). ✅ **Confere:** L333 `return _apply_holm_adjustment_for_dm(pd.concat(rows, ignore_index=True))`; L184 `if dm_results.empty or "pvalue_two_sided" not in dm_results.columns: return dm_results`. Confirmei lendo a função inteira: o input é o **`pvalue_two_sided`** (cru, two-sided) do DM.
+- ⚠️ **Ponto de atenção — Holm herda o p-value que recebe; aqui é two-sided**
+  O Holm é **agnóstico à direção do teste**: corrige *qualquer* vetor de p-values. Ele recebe o `pvalue_two_sided` do DM gold (ver item #1, elemento 5). Isso significa que **todas as ressalvas do p-value de entrada são herdadas pelo ajustado**: se o claim do TCC é direcional ("TFT melhor que baseline em pinball"), o p two-sided é o "errado para o claim", e o `pvalue_adj_holm` apenas corrige a multiplicidade de um teste já desalinhado. A Phase B faz o caminho coerente: corrige `pvalue_one_sided` ([`holm_family_6.py:16`](../../../../src/domain/services/holm_family_6.py#L16)). **Quando importa:** sempre que o número ajustado for lido como evidência do claim — aí o desalinhamento two-sided/one-sided do insumo se propaga para a conclusão. **Quando é tolerável:** se o uso for puramente diagnóstico/exploratório. Não é defeito do Holm; é o insumo que precisa casar com o claim (decisão de C.0.2/C.0.3, ver item #1).
+
+**2. Composição da família: groupby `[asset, parent_sweep_id, split, horizon]` — `split_signature` ausente**
+- **O que o doc afirma:** o groupby da família é `[asset, parent_sweep_id, split, horizon]` (linha 191) e **`split_signature` NÃO entra**, apesar de o DM ter `split_signature` na grain de pré-processamento.
+- **Como deveria funcionar (exemplo):** Holm controla o FWER dentro de **uma família** = o conjunto de testes que sustentam **um claim**, declarada **antes** de olhar os p-values. Se o claim é "config A bate config B em BTC, sweep S1, horizonte 7", a família correta é o conjunto de pares testados sob *exatamente* esse desenho. Misturar testes de desenhos diferentes (ou repetir o mesmo teste em vários folds) numa só família contamina a contagem `m`.
+- **O que esperar no código:** ou reuso de `_pairwise_group_cols` (que **insere** `split_signature` na posição 2 quando a coluna existe — [`pairwise.py:25-29`](../../../../src/domain/services/gold_builders/pairwise.py#L25)), ou uma lista explícita coerente com a grain do DM.
+- **Ref do doc → código:** [`pairwise.py:191`](../../../../src/domain/services/gold_builders/pairwise.py#L191). ✅ **Confere:** `group_cols = [c for c in ["asset", "parent_sweep_id", "split", "horizon"] if c in out.columns]` — lista **hard-coded**, **sem** `split_signature`, e **sem** reusar `_pairwise_group_cols`.
+- ⚠️ **Ponto de atenção — família por grain administrativo, e a assimetria DM-inclui / Holm-exclui o `split_signature`**
+  Este é o ponto central do item. Há uma **inconsistência dentro do próprio builder**:
+
+  | Etapa | Como agrupa | `split_signature`? | Ref |
+  |---|---|---|---|
+  | DM (cálculo dos testes) | `_pairwise_group_cols(df)` | **incluído** (inserido na pos. 2 se existir) | [`pairwise.py:297`](../../../../src/domain/services/gold_builders/pairwise.py#L297) + [`:25-29`](../../../../src/domain/services/gold_builders/pairwise.py#L25) |
+  | Holm (família p/ correção) | lista hard-coded | **excluído** | [`pairwise.py:191`](../../../../src/domain/services/gold_builders/pairwise.py#L191) |
+
+  Ou seja: o DM **computa os testes por `split_signature`** (cada fold/desenho gera
+  seu próprio conjunto de pares, e a coluna `split_signature` é gravada de volta em
+  [`pairwise.py:316-317`](../../../../src/domain/services/gold_builders/pairwise.py#L316)),
+  mas o Holm **pool**a todos os `split_signature` que compartilham
+  `(asset, parent_sweep_id, split, horizon)` numa única família. E como
+  `_pairwise_preprocess` filtra `split == "test"` ([`pairwise.py:269`](../../../../src/domain/services/gold_builders/pairwise.py#L269)),
+  na prática `split` é constante e o que distingue os folds **é justamente o
+  `split_signature` descartado**.
+
+  **O erro tem duas direções, em eixos diferentes — e qual delas domina depende do claim:**
+
+  | Eixo | O que a omissão faz | Efeito no FWER | Quando é o risco |
+  |---|---|---|---|
+  | **`split_signature`** (folds do mesmo desenho) | *pool*a folds: o **mesmo par** (A,B) vira várias linhas na mesma família (uma por fold) | `m` infla com hipóteses **repetidas, não distintas** → mistura desenhos; correção incoerente | walk-forward com vários folds de test |
+  | **horizon / baseline / asset / sweep** | *particiona*: cada `(asset, sweep, split, horizon)` é uma família separada | se o **claim agrega** sobre esses eixos, a família real é maior → **subcorrige** (FWER global não controlado) | claim que afirma superioridade "no geral" |
+
+  **Exemplo numérico (eixo `split_signature`).** BTC, sweep S1, horizonte 7, 4
+  configs → 6 pares por fold. Com 2 folds (`split_signature` = `foldA`, `foldB`),
+  o DM gera 6 + 6 = 12 linhas. O Holm, omitindo `split_signature`, vê **m = 12** e
+  trata como 12 hipóteses distintas — mas a hipótese "A bate B" aparece **duas
+  vezes** (uma por fold). Holm pressupõe `m` hipóteses **distintas**; aqui ele as
+  conta repetidas. A correção fica **incoerente** (nem o FWER por-fold nem o
+  agregado é o que se quer).
+
+  **Quando cada escolha se aplica e por quê:**
+  - **Incluir `split_signature` (corrigir por fold):** correto se cada fold é um
+    desenho/claim independente. Mantém famílias coerentes, mas exige depois decidir
+    como **combinar** vereditos entre folds.
+  - **Omitir e agregar antes (um teste por par, combinando folds):** correto se o
+    claim é "A bate B *agregando* os folds" — mas então é preciso **agregar os
+    p-values por par antes** do Holm (ex.: meta-análise / um DM sobre a série
+    concatenada), não simplesmente empilhar as linhas dos folds.
+  - **O que o código faz hoje:** nem um nem outro — empilha as linhas dos folds e
+    corrige como se fossem testes distintos. É a opção que **não** corresponde a
+    nenhuma família bem-definida.
+
+  **Comparação com a Phase B.** A Phase B **declara a família ex-ante** (6 testes:
+  3 baselines × 2 horizontes) e aplica o Holm exatamente sobre esses 6 p-values,
+  passados como `Series` para [`holm_family_6.py`](../../../../src/domain/services/holm_family_6.py#L7) — a família não é
+  derivada de um groupby, é **escolhida** para casar com H2a/H2b. (A Phase B
+  também não usa `split_signature` no groupby — mas lá é **intencional e
+  documentado**, porque a família confirmatória é um único conjunto pré-registrado;
+  ver skeleton §"Familia Holm".) O gold legacy faz o oposto: a família **emerge** de
+  um grain administrativo que ninguém declarou como correspondendo a um claim.
+
+  **Implicação para o TCC:** a fórmula Holm está certa, mas a família **não é
+  derivada de um claim**, então o `pvalue_adj_holm` do gold legacy **não tem
+  interpretação de FWER bem-definida**. Não dá para dizer "controlamos o FWER da
+  comparação de modelos a 5%" porque "a comparação de modelos" (o claim) não
+  corresponde à partição usada. Promover esse número a confirmatório exige primeiro
+  **declarar a família** e fazer o groupby/agregação baterem com ela.
+
+**3. Fórmula Holm step-down: ordena, `(m − j + 1)·p`, `maximum.accumulate`, clip em 1**
+- **O que o doc afirma:** dentro de cada grupo, ordena os p-values; calcula `(m − j + 1) · p` para o *j*-ésimo menor; aplica `np.maximum.accumulate`; faz clip em 1 (linhas 197-208).
+- **Como deveria funcionar (exemplo):** família de 3 pares com p-values crus `{0.01, 0.04, 0.04}` → `m = 3`.
+  - Ordena: `0.01, 0.04, 0.04` (j = 1, 2, 3).
+  - `(m − j + 1)·p`: j=1 → `3·0.01 = 0.03`; j=2 → `2·0.04 = 0.08`; j=3 → `1·0.04 = 0.04`.
+  - Sequência crua: `[0.03, 0.08, 0.04]` — repare que o terceiro (`0.04`) é **menor** que o segundo (`0.08`): não-monotônico.
+  - `np.maximum.accumulate`: `[0.03, 0.08, 0.08]` — o terceiro é puxado para cima até `0.08`.
+  - clip em 1: inalterado → ajustados `{0.03, 0.08, 0.08}`.
+
+  Resultado: só `p = 0.01` (ajustado `0.03`) cruza 5%. **Por que o `accumulate` é
+  necessário:** sem ele, um p-value *maior* (menos significativo) poderia receber um
+  ajustado *menor* que um p-value menor — absurdo lógico (não se pode rejeitar o teste
+  mais fraco e não rejeitar o mais forte). A monotonicidade garante a coerência
+  step-down. **Por que é melhor que Bonferroni:** Bonferroni multiplicaria todos por
+  `m = 3` → `{0.03, 0.12, 0.12}`; o Holm é ≤ Bonferroni em todo ponto → mais poder,
+  mesma garantia de FWER.
+- **O que esperar no código:** `ordered = valid.sort_values()`; loop `(m - j + 1) * float(pval)`; `np.minimum(1.0, np.maximum.accumulate(adj_vals))`.
+- **Ref do doc → código:** [`pairwise.py:203-207`](../../../../src/domain/services/gold_builders/pairwise.py#L203). ✅ **Confere exatamente:** L203 `ordered = valid.sort_values()`; L205-206 `for j, (_, pval) in enumerate(ordered.items(), start=1): adj_vals.append((m - j + 1) * float(pval))`; L207 `adj_vals = np.minimum(1.0, np.maximum.accumulate(adj_vals))`. É a **mesma fórmula** de [`holm_family_6.py:25-27`](../../../../src/domain/services/holm_family_6.py#L25).
+- ⚠️ **Ponto de atenção — ordenação não-estável vs. empates (é benigno, mas vale registrar)**
+  O gold legacy usa `valid.sort_values()` (quicksort, **não estável**); a Phase B usa
+  `sort_values(kind="mergesort")` (estável). Com p-values **empatados**, a ordem
+  interna das linhas empatadas pode diferir entre execuções. **Por que não é bug:**
+  para dois empates em `p` nas posições `j` e `j+1`, as estatísticas cruas são
+  `(m−j+1)·p` e `(m−j)·p`; após o `maximum.accumulate`, **ambas** viram
+  `(m−j+1)·p` (o maior). Logo o **valor ajustado é o mesmo** independentemente da
+  ordem interna dos empates — o `accumulate` neutraliza a instabilidade. **Quando
+  poderia importar:** só se algum consumidor dependesse de *qual linha física*
+  recebeu qual valor entre empates idênticos — não é o caso aqui. Registro por
+  completude/determinismo, não como defeito.
+
+**4. Tamanho da família `m` = nº de p-values válidos (`dropna`)**
+- **O que o doc afirma:** (implícito na fórmula) `m` é o número de p-values válidos; `valid = pv.dropna()`, `m = int(len(valid))`, e o grupo é pulado se `m == 0`.
+- **Como deveria funcionar (exemplo):** num grupo onde o DM produziu 6 linhas, mas 1 par teve `pvalue_two_sided` não-numérico (coerce → NaN), `valid` cai para 5 → `m = 5`. Pares com p NaN **não contam** na família nem recebem `pvalue_adj_holm` (ficam NaN). Na prática, o DM só grava linhas com p finito (item #1: pula `n < 5` e `var ≤ 0` **sem criar linha**), então `m` ≈ nº de pares que sobreviveram ao DM.
+- **O que esperar no código:** `valid = pv.dropna()`; `m = int(len(valid))`; `if m == 0: continue`.
+- **Ref do doc → código:** [`pairwise.py:198-202`](../../../../src/domain/services/gold_builders/pairwise.py#L198). ✅ **Confere:** L198 `pv = pd.to_numeric(g["pvalue_two_sided"], errors="coerce")`; L199 `valid = pv.dropna()`; L200 `m = int(len(valid))`; L201-202 `if m == 0: continue`.
+- ⚠️ **Ponto de atenção — `m` é contado sobre o universo já filtrado pelo top-50**
+  O `m` da família **não** é o número de pares do universo completo de configs — é o
+  número de pares **que sobreviveram ao top-50** (item #4), pois o filtro roda
+  *antes* do DM ([`pairwise.py:299`](../../../../src/domain/services/gold_builders/pairwise.py#L299)). Com >50 configs, `m` é
+  no máximo `C(50,2) = 1225` pares, sobre as 50 configs de menor `squared_error`
+  médio **no próprio split de teste**. **Por que importa:** mesmo que a família
+  fosse perfeitamente definida (elemento 2), a correção de multiplicidade opera
+  sobre um subconjunto **selecionado pelos dados** — a garantia de FWER é
+  *condicional à seleção*, não sobre o espaço original de modelos. **Quando é
+  aceitável:** se o top-50 for declarado como parte do desenho e o claim for
+  explicitamente "entre as 50 melhores". **Quando não é:** se o número for lido como
+  "controlamos o FWER da comparação de todos os modelos". Liga-se diretamente ao
+  problema de inferência seletiva do item #4.
+
+**5. Flag `significant_adj_0_05 = pvalue_adj_holm < 0.05`**
+- **O que o doc afirma:** a flag booleana `significant_adj_0_05` é `pvalue_adj_holm < 0.05` (linhas 211-213).
+- **Como deveria funcionar (exemplo):** par com `pvalue_adj_holm = 0.03` → `True`; com `0.06` → `False`; com `NaN` (par sem ajuste) → `False`, porque `NaN < 0.05` é `False` em pandas/numpy. Ou seja, ausência de ajuste é tratada como **não-significativo**, que é o comportamento conservador correto.
+- **O que esperar no código:** `pd.to_numeric(out["pvalue_adj_holm"], errors="coerce") < 0.05`.
+- **Ref do doc → código:** [`pairwise.py:211-213`](../../../../src/domain/services/gold_builders/pairwise.py#L211). ✅ **Confere:** `out["significant_adj_0_05"] = (pd.to_numeric(out["pvalue_adj_holm"], errors="coerce") < 0.05)`.
+- ⚠️ **Ponto de atenção — α = 0,05 hard-coded (Phase B parametriza)**
+  O corte `0.05` está **fixo** no código do gold legacy, ao passo que a Phase B
+  expõe `alpha` como parâmetro ([`holm_family_6.py:8`](../../../../src/domain/services/holm_family_6.py#L8) e o `< float(alpha)` em
+  [`:32`](../../../../src/domain/services/holm_family_6.py#L32)). **Quando importa:** se C.0.3 decidir um α diferente (ou
+  análise de sensibilidade ao α), o gold legacy exige editar código em vez de passar
+  um parâmetro; e o **nome da coluna** (`significant_adj_0_05`) embute o `0.05`, então
+  mudar o α sem renomear geraria um artefato com nome enganoso. Não é erro de
+  cálculo; é rigidez de configuração que vale anotar para a fase de especificação.
+
+**6. Consumo downstream: persistido no parquet, ignorado pelo rollup, mas usado no plot**
+- **O que o doc afirma:** `pvalue_adj_holm` existe em `gold_dm_pairwise_results`, mas `_build_model_decision_final` calcula `dm_net_wins` a partir de `pvalue_two_sided < 0.05` (cru), **não** de `pvalue_adj_holm`; portanto o Holm fica disponível no artefato DM mas não é o critério efetivo do rollup final.
+- **Como deveria funcionar (exemplo):** existem **três** noções de "DM significativo" circulando — e elas podem **discordar** para o mesmo par: (a) `significant_adj_0_05` no parquet (ajustado por Holm); (b) `dm_net_wins` no `gold_model_decision_final` (p **cru** < 0,05); (c) a célula da figura *DM P-Value Matrix* (que **prefere** o Holm quando disponível).
+- **O que esperar no código:** no rollup, leitura de `pvalue_two_sided` e filtro `p >= 0.05`; no plot, preferência por `pvalue_adj_holm`.
+- **Ref do doc → código:** [`confidence.py:605`](../../../../src/domain/services/gold_builders/confidence.py#L605) + [`confidence.py:609`](../../../../src/domain/services/gold_builders/confidence.py#L609) (rollup usa p cru) e [`generate_prediction_analysis_plots_use_case.py:430`](../../../../src/use_cases/generate_prediction_analysis_plots_use_case.py#L430) (plot prefere Holm). ✅ **Confere:** rollup — L599-600 groupby `["asset", "parent_sweep_id", "split", "horizon"]`, L605 `p = pd.to_numeric(r.get("pvalue_two_sided"), ...)`, L609 `if pd.isna(p) or pd.isna(d) or p >= 0.05: continue`, sem qualquer leitura de `pvalue_adj_holm`; plot — L430 `pcol = "pvalue_adj_holm" if "pvalue_adj_holm" in df.columns else (...)`, sobre `dm_df = gold_dm_pairwise_results` (L428).
+- ⚠️ **Ponto de atenção — o Holm não é dormente: o plot oficial consome a Holm de família mal-definida**
+  O dossiê (e o item #1, elemento 7) deixa a impressão de que o Holm fica "disponível
+  mas inerte" porque o `decision_final` o ignora. O código mostra que **não é bem
+  assim**: a figura *DM P-Value Matrix* (`_build_fig_dm_pvalue_matrix`)
+  **prefere ativamente** o `pvalue_adj_holm` sobre o `pvalue_two_sided`
+  ([`generate_prediction_analysis_plots_use_case.py:430`](../../../../src/use_cases/generate_prediction_analysis_plots_use_case.py#L430)). Consequências:
+
+  - **Três vereditos divergentes** para "DM significativo" — parquet (Holm),
+    `decision_final` (cru), plot (Holm). O leitor que cruza a figura com o
+    `gold_model_decision_final` pode ver **conclusões diferentes** sobre o mesmo par.
+  - **O problema da família (elemento 2) propaga para a figura.** Como o plot usa o
+    `pvalue_adj_holm`, a matriz de p-values exibida carrega a **família
+    mal-definida** (sem `split_signature`, sobre o top-50). Se a figura for lida como
+    evidência de superioridade, o defeito de composição da família vira um artefato
+    visual.
+
+  **Quando importa:** quando a figura ou o `decision_final` forem usados para
+  embasar/ilustrar o claim — aí a divergência entre os três números e a família
+  mal-definida deixam de ser "diagnóstico" e passam a confundir a evidência.
+  **Quando é tolerável:** se tudo isso for explicitamente rotulado como descritivo
+  não-inferencial. A decisão de unificar (qual p-value cada artefato usa, e sobre
+  qual família) é de C.0.2/C.0.3.
+
+### Cross-check — o que NÃO está corretamente indicado/referenciado
+
+Todas as referências de "Implementação atual localizada" do dossiê de Holm
+**conferem** com o código (li a função `_apply_holm_adjustment_for_dm` inteira,
+183-214, mais a chamada em 333, o helper 25-29, o rollup em confidence.py 599-609 e
+o plot em 430). Pontos a registrar:
+
+1. **Nenhuma referência quebrada.** Linhas-âncora corretas: função 183-214 ✅;
+   groupby sem `split_signature` em L191 ✅; fórmula `(m − j + 1)·p` +
+   `maximum.accumulate` + clip em L203-207 ✅ (o dossiê cita "197-208"/"203-207" —
+   ambos batem com o corpo real); flag `significant_adj_0_05 = pvalue_adj_holm <
+   0.05` em L211-213 ✅.
+2. **O dossiê descreve o groupby como "lista de 4 colunas" mas não menciona a
+   assimetria com `_pairwise_group_cols`.** O ponto mais informativo não é só "falta
+   `split_signature`": é que o **DM inclui** `split_signature` (via
+   `_pairwise_group_cols`, L297 + L25-29) e o **Holm exclui** (lista hard-coded em
+   L191, sem reusar o helper). A omissão é uma **divergência interna do builder**,
+   não um esquecimento isolado. Isso reforça que `split_signature` **está populado**
+   em `gold_dm_pairwise_results` (gravado em L316-317) — o descarte é ativo no Holm,
+   não ausência upstream (mesmo padrão do achado do item #2 sobre o MCS).
+3. **O campo "Uso atual no projeto" subdescreve o consumo.** Afirma que o Holm "não
+   é hoje o critério efetivo do rollup final" — verdade para o `decision_final`, mas
+   **omite** que a figura *DM P-Value Matrix* (`generate_prediction_analysis_plots_use_case.py:430`)
+   **prefere** o `pvalue_adj_holm`. O Holm gold **é** consumido — por um plot, não
+   pelo rollup. Discrepância de completude, registrada no elemento 6.
+4. **"split" é praticamente constante na grain do Holm.** Como `_pairwise_preprocess`
+   filtra `split == "test"` (L269), `split` no groupby de L191 não discrimina nada; o
+   que de fato distinguiria desenhos seria o `split_signature` — exatamente o que está
+   de fora. O dossiê não explicita isso.
+5. **Ponto residual metodológico central:** a **definição da família** (elemento 2) é
+   o que decide se o `pvalue_adj_holm` tem interpretação de FWER. O dossiê captou o
+   risco ("família possivelmente mal definida"; "subcorrige"), mas o aprofundamento
+   acima detalha as **duas direções** (pool por `split_signature` vs. partição por
+   horizon/baseline/asset/sweep) e a condicionalidade ao top-50.
+
+### Veredito do item #3
+
+🟡 **Ressalvas.** Referências intactas e evidência fiel ao código; a **fórmula
+Holm step-down está correta** (idêntica à da Phase B). As ressalvas são
+metodológicas e de descrição, não de localização: (a) a **família é definida por um
+grain administrativo** (`[asset, parent_sweep_id, split, horizon]`, sem
+`split_signature`) que não corresponde a nenhum claim declarado — o DM **inclui**
+`split_signature` mas o Holm **exclui**, uma divergência interna do builder; (b) o
+dossiê subdescreve o consumo — o Holm gold **é** usado pela figura *DM P-Value
+Matrix* (não é dormente), propagando a família mal-definida para um artefato visual;
+(c) `m` é contado sobre o universo já filtrado pelo top-50. Decisões de declarar a
+família, unificar qual p-value cada artefato consome e parametrizar α são de
+C.0.2/C.0.3.
 
 ---
 
