@@ -1252,6 +1252,14 @@ mede **calibração** (o intervalo cumpre o que promete?); sozinho **não** mede
   > o PICP além de descritivo, adicionar o **teste de Christoffersen** (cobertura
   > condicional + independência) como complemento — o PICP marginal vira o "primeiro
   > olhar", não o veredicto de calibração.
+- ⚠️ **Ponto de atenção — PICP nunca é lido sozinho: calibração ≠ utilidade (elo com a §5.1)**
+  Mesmo um PICP=0,80 com IC estreito e cobertura condicional OK **não** elege vencedor:
+  calibração diz que o intervalo é **honesto**, não que é **útil**. Um intervalo pode ser
+  calibrado e **largo demais** (ex.: banda histórica fixa que cobre 80% trivialmente, com
+  zero skill preditivo). Quem mede a largura é o MPIW (item #6) / interval score. Por isso
+  a **§5.1 do skeleton** ([`C0_statistical_methods_hardening.md`](C0_statistical_methods_hardening.md))
+  determina que **PICP entra junto com MPIW/sharpness na decisão de vencedor — nunca
+  isolado**. Para C.0.2/C.0.3: o PICP é gate de calibração, não critério de superioridade.
 
 **4. `coverage_nominal = 0.80` hard-coded + `coverage_error`**
 - **O que o doc afirma:** `coverage_nominal = 0.80` fixo
@@ -1415,7 +1423,9 @@ confirmação com a pesquisa acadêmica do paper. **Correções recomendadas ao 
 (skeleton)** registradas nos elementos 2 e 5 — são doc-sync (mismatch doc↔código) e
 **não** dependem da pesquisa do paper: (1) "coluna `picp`" → `picp_raw`/`picp_post_guardrail`
 (e `mean_picp` no final); (2) a degeneração é **filtrada**, com a elegibilidade julgada
-nos quantis **crus** mesmo para o `picp_post_guardrail`.
+nos quantis **crus** mesmo para o `picp_post_guardrail`. Por fim, registrado no elemento 3:
+**PICP nunca é lido sozinho** — calibração ≠ utilidade; entra junto com MPIW/sharpness na
+decisão de vencedor (**§5.1** do skeleton), nunca como critério isolado de superioridade.
 
 ---
 
