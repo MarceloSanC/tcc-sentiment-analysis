@@ -1530,7 +1530,13 @@ combina num número só.
   três pontas forem iguais** — ou seja, exatamente o caso `q10_raw == q90_raw` que o filtro
   **já exclui**. Conclusão: **nenhuma linha de largura zero entra no `mpiw_post_guardrail`**;
   não existe "colapso induzido pelo guardrail". (Um intervalo bem-ordenado como `[95, 110]`
-  é devolvido **intacto** pelo *sort* — não vira `[100, 100]`.)
+  é devolvido **intacto** pelo *sort* — não vira `[100, 100]`.) Esse invariante **já tem
+  teste**: `test_guardrail_keeps_already_ordered_triplet`
+  ([`test_quantile_guardrail_service.py:6-11`](../../../../tests/unit/domain/services/test_quantile_guardrail_service.py#L6))
+  afirma que uma tripla já ordenada volta inalterada com `applied=False`. **Vale registrar
+  como teste de contrato adicional** o corolário no nível do MPIW (que o C.0.2/C.0.3 decide):
+  para toda linha elegível, `pred_interval_width_post_guardrail ≥ |pred_interval_width_raw|`
+  e nunca zero — fechando a garantia no agregado, não só na unidade do *sort*.
 
   O que **de fato** distingue os dois contratos:
   - para linhas **bem-ordenadas** (o caso normal `q10 ≤ q50 ≤ q90`), a largura
@@ -1576,6 +1582,20 @@ combina num número só.
   `confidence_calibrated`** (elemento 4); `mpiw` é o **nome semântico** da métrica. **Quando
   importa:** um leitor do parquet pode supor que são **duas medidas diferentes** (ex.: uma
   normalizada, outra crua) e ler significado onde não há — são byte-a-byte iguais.
+  **Verificado no código (não suposição):** as duas saídas agregam a **mesma** coluna-fonte
+  (`pred_interval_width` por linha) com a **mesma** função (`mean`) no **mesmo** `groupby`,
+  dentro do **mesmo** `.agg(...)` — não há parâmetro, máscara ou transformação que as
+  separe, logo **não existe caminho de divergência de valor**, nem mesmo em ponto flutuante
+  (é a mesma redução executada duas vezes sobre dados idênticos). Confirmei também que
+  nenhum consumidor reescreve uma sem a outra: o `confidence_calibrated` apenas **lê**
+  `pred_interval_width` via `.clip(lower=0)` (L266) sem mutar a coluna armazenada. A única
+  diferença é de **papel/propagação**, não de valor: o `pred_interval_width` é o que
+  alimenta o `confidence_calibrated`; o `mpiw` é o que se propaga ao
+  `gold_model_decision_final` como `mean_mpiw` (o `pred_interval_width` **não** é levado ao
+  artefato final). Não confundir, ainda, com o `mpiw` **independente** da Phase B, computado
+  à parte em
+  [`marginal_coverage_calculator.py:105`](../../../../src/domain/services/marginal_coverage_calculator.py#L105)
+  (`_finite_mean(q90 − q10)`, outro cohort, outra tabela — `phase_b_marginal_coverage`).
 - ⚠️ **Ponto de atenção — MPIW sozinho não mede calibração (sharpness sem cobertura)**
   Este é o ponto metodológico central do item. MPIW responde "quão estreito?", **nunca**
   "quão honesto?". Dois modelos com larguras muito diferentes podem ser igualmente
@@ -1598,7 +1618,18 @@ combina num número só.
   > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: nunca reportar
   > MPIW isolado; acoplá-lo **sempre** ao PICP do mesmo grupo e, para qualquer uso
   > comparativo/seletivo, preferir um **interval score (Winkler)** que combine largura e
-  > cobertura num único número próprio (*proper*).
+  > cobertura num único número próprio (*proper*). **Hoje o interval score não existe no
+  > código** (busca por `winkler`/`interval_score` em `src/` e `tests/` retorna zero — só
+  > aparece em docs), mas seria **quase de graça**: para o intervalo central de 80%
+  > (α = 0,20) vale a identidade `IS₈₀ = (2/α)·(pinball_q10 + pinball_q90) = 10·(pinball_q10
+  > + pinball_q90)`, e ambos os termos **já são agregados** por linha e por grupo
+  > ([`quantile.py:240`](../../../../src/domain/services/gold_builders/quantile.py#L240)/[`:242`](../../../../src/domain/services/gold_builders/quantile.py#L242),
+  > já mascarados pelo mesmo Cat C filter). Bastaria **uma linha** —
+  > `interval_score_80 = 10·(pinball_q10 + pinball_q90)` — emitida com variantes
+  > `_raw`/`_post_guardrail` como as demais métricas. Seria o substituto *proper* do
+  > `confidence_calibrated` ad hoc (item #10) e a perda probabilística natural para
+  > alimentar DM/MCS quando o claim for distribucional. **(Decisão de criar/persistir é de
+  > C.0.2/C.0.3.)**
 
 **4. Saídas e consumo cross-file: `mpiw_raw`/`mpiw_post_guardrail` → calibration → decision_final (`mean_mpiw`)**
 - **O que o doc afirma:** coluna `mpiw` em `gold_prediction_metrics_*` e
