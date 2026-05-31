@@ -75,29 +75,29 @@ O teste de **Diebold-Mariano** compara a **acurácia preditiva de dois modelos**
 1. Para cada instante *t*, mede o "erro" de cada modelo (uma *loss*).
 2. Forma a **série da diferença** `d_t = loss_A(t) − loss_B(t)`.
 3. Pergunta: a **média** de `d_t` é estatisticamente diferente de zero?
-   - `media ≈ 0` → os dois modelos sao igualmente bons (nao da para distinguir).
+   - `média ≈ 0` → os dois modelos são igualmente bons (não da para distinguir).
    - `média < 0` → modelo A erra menos (A vence).
 
 O truque fino: `d_t` é **autocorrelacionado** no tempo (erro de ontem se parece
-com o de hoje), entao nao da para usar a variancia "ingenua". Usa-se uma
-**variancia HAC** (robusta a heterocedasticidade e autocorrelacao) para nao
+com o de hoje), então não dá para usar a variância "ingênua". Usa-se uma
+**variância HAC** (robusta a heterocedasticidade e autocorrelacao) para nao
 subestimar o desvio e gerar p-value otimista demais.
 
 ### Elementos
 
 **1. Loss = `squared_error`**
-- **O que o doc afirma:** a perda e o erro quadratico `(y_pred − y_true)²`, calculada em `_pairwise_preprocess`.
-- **Como deveria funcionar (exemplo):** se o modelo preve 102 e o real e 100, a loss e `(102−100)² = 4`. Quanto maior, pior. O DM compara essas losses entre dois modelos timestamp a timestamp.
-- **O que esperar no codigo:** uma coluna `squared_error` derivada de `y_pred` e `y_true`, **antes** do pivot da matriz de losses.
-- **Ref do doc → codigo:** [`pairwise.py:280`](../../../../src/domain/services/gold_builders/pairwise.py#L280). ✅ **Confere:** `df["squared_error"] = (df["y_pred"] - df["y_true"]) ** 2`.
-- ⚠️ **Ponto de atencao — a loss casa com o claim?**
+- **O que o doc afirma:** a perda é o erro quadrático `(y_pred − y_true)²`, calculada em `_pairwise_preprocess`.
+- **Como deveria funcionar (exemplo):** se o modelo prevê 102 e o real é 100, a loss é `(102−100)² = 4`. Quanto maior, pior. O DM compara essas losses entre dois modelos timestamp a timestamp.
+- **O que esperar no código:** uma coluna `squared_error` derivada de `y_pred` e `y_true`, **antes** do pivot da matriz de losses.
+- **Ref do doc → código:** [`pairwise.py:280`](../../../../src/domain/services/gold_builders/pairwise.py#L280). ✅ **Confere:** `df["squared_error"] = (df["y_pred"] - df["y_true"]) ** 2`.
+- ⚠️ **Ponto de atenção — a loss casa com o claim?**
   O DM **não quebra** com modelo probabilístico: ele é **agnóstico a loss** — testa a media da diferenca de *qualquer* loss por periodo. O que precisa casar é **a loss com o claim**:
 
   | Loss alimentada no DM | O que o teste passa a medir | Claim que sustenta |
   |---|---|---|
-  | `squared_error` (atual) | acuracia **pontual** (do ponto previsto) | "modelo preve melhor o valor central" |
-  | `squared_error` so do **q50** | acuracia pontual **da mediana** | claim pontual mais honesto p/ modelo de quantis |
-  | **pinball loss** (q10/q50/q90) | qualidade **da distribuicao preditiva** | "modelo e melhor probabilisticamente" ← claim do TCC |
+  | `squared_error` (atual) | acurácia **pontual** (do ponto previsto) | "modelo prevê melhor o valor central" |
+  | `squared_error` só do **q50** | acurácia pontual **da mediana** | claim pontual mais honesto p/ modelo de quantis |
+  | **pinball loss** (q10/q50/q90) | qualidade **da distribuição preditiva** | "modelo é melhor probabilisticamente" ← claim do TCC |
   | CRPS / WIS | idem, agregando quantis de forma mais principled | idem, ainda mais defensavel |
 
   Para o claim probabilístico do projeto, a loss certa é **pinball** (foi o que a
@@ -109,7 +109,7 @@ subestimar o desvio e gerar p-value otimista demais.
 
 **2. Matriz de losses por timestamp (unidade estatística)**
 - **O que o doc afirma:** monta uma "loss matrix wide por `target_timestamp_utc`" e usa `dropna(how="any")`.
-- **Como deveria funcionar (exemplo):** uma tabela com linhas = timestamps, colunas = configs de modelo, celulas = loss media naquele timestamp. Para comparar dois modelos de forma justa, so valem timestamps em que **ambos** previram → dai o `dropna(how="any")` (descarta qualquer linha com buraco).
+- **Como deveria funcionar (exemplo):** uma tabela com linhas = timestamps, colunas = configs de modelo, células = loss média naquele timestamp. Para comparar dois modelos de forma justa, só valem timestamps em que **ambos** previram → daí o `dropna(how="any")` (descarta qualquer linha com buraco).
 - **O que esperar no codigo:** um `pivot(index=target_timestamp_utc, columns=config_label, values=squared_error)` seguido de `dropna(axis=0, how="any")`.
 - **Ref do doc → codigo:** [`pairwise.py:305-308`](../../../../src/domain/services/gold_builders/pairwise.py#L305). ✅ **Confere:** pivot + `dropna(axis=0, how="any")`.
 
@@ -248,6 +248,11 @@ Pertencer ao MCS significa "não foi possível rejeitar este modelo como inferio
   o gold MCS usa squared_error. Reportar "TFT está no confidence set superior" usando
   squared_error não sustenta claim probabilístico — sustenta claim pontual.
 
+  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: substituir
+  > `squared_error` por **pinball loss** (q10/q50/q90) como loss primária do MCS gold,
+  > tornando o confidence set coerente com o claim probabilístico do TCC. Enquanto a
+  > mudança não for implementada, reportar o gold MCS apenas como descritivo pontual.
+
 **2. Matriz de losses por timestamp (estrutura de entrada)**
 - **O que o doc afirma:** mesmo padrão do DM — pivot wide por `target_timestamp_utc`,
   seguido de `dropna(how="any")` (herdado de `_pairwise_preprocess` + builder).
@@ -319,6 +324,16 @@ Pertencer ao MCS significa "não foi possível rejeitar este modelo como inferio
   nas séries de losses, sem estimativa data-driven), o parâmetro é um hardcode de
   conveniência. Para promoção a confirmatório, a regra de block_len precisa ser declarada
   e justificada antes de ver os resultados.
+
+  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*:
+  > - **B:** aumentar de 300 para **5000**. Custo é apenas tempo de execução; sem impacto
+  >   arquitetural. Elimina a instabilidade de Monte Carlo na fronteira de decisão.
+  > - **block_len:** adotar **`n^(1/3)` adaptativo** como regra base (análoga ao lag HAC
+  >   do DM, sem dependência de biblioteca externa); complementar com **análise de
+  >   sensibilidade** (rodar com block_len = n^(1/3), 10, 20 e verificar se o confidence
+  >   set muda — estabilidade é evidência positiva). Avaliar complexidade de adotar
+  >   **Politis-White (2004) data-driven** como alternativa mais defensável se o MCS
+  >   for promovido a confirmatório.
 
 **5. Moving block bootstrap com wrap-around**
 - **O que o doc afirma:** moving block bootstrap com wrap-around (linhas 124-130).
@@ -502,6 +517,14 @@ Pertencer ao MCS significa "não foi possível rejeitar este modelo como inferio
   **soma de vitórias/derrotas** (via groupby + iterrows), o que é uma agregação implícita.
   No MCS, o colapso é via `drop_duplicates`, que não agrega, apenas escolhe uma linha.
 
+  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: incluir
+  > `split_signature` na seleção de colunas de `mcs_summary` (`confidence.py:642-644`) e
+  > no `merge_cols` do merge final (`confidence.py:720-722`), propagando a chave até
+  > `gold_model_decision_final`. Não há razão técnica para descartá-la — o builder já a
+  > fornece. Agregar com regra explícita (`all()` ou `any()`) quando múltiplos
+  > split_signatures existirem, em vez de deixar o `drop_duplicates` escolher
+  > arbitrariamente.
+
 ### Cross-check — o que NÃO está corretamente indicado/referenciado
 
 Para o MCS, as referências de "Implementação atual localizada" são precisas e conferem
@@ -516,12 +539,12 @@ com o código. Pontos a registrar:
    - Top-50: linha 351 ✅ exato.
    - split_signature: linhas 25-29 (group_cols) ✅ e linhas 368-374 (propagação) ✅.
 
-2. **Risco de split_signature descrito como upstream, mas o drop é downstream.**
+2. **Risco de split_signature incorretamente descrito como problema upstream; o drop é downstream.**
    O dossiê diz: "Se `split_signature` não vier populada do upstream, a família MCS perde
-   essa chave." O código mostra que o drop acontece **no consumer** (`confidence.py:642-644`),
-   não no upstream. O builder propaga corretamente; é o `_build_model_decision_final` que
-   descarta. A descrição do risco no dossiê está incompleta (não é bug de localização —
-   as linhas citadas estão certas — mas o mecanismo do risco é diferente do descrito).
+   essa chave." Essa descrição está imprecisa: o builder **propaga corretamente**
+   `split_signature` (pairwise.py:368-374) e ela existe em `gold_mcs_results`. O descarte
+   acontece **no consumer** (`confidence.py:642-644`), de forma ativa e incondicional —
+   independente do upstream. A correção pertence ao consumer, não ao upstream.
 
 3. **`drop_duplicates(merge_cols)` sem split_signature (confidence.py:727) não está
    mencionado no dossiê.** Quando há múltiplos split_signatures, o colapso é
