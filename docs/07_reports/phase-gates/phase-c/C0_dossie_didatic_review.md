@@ -2078,6 +2078,14 @@ central.
   segunda é a média da média dos 3 quantis). Mesma natureza do achado do MPIW (item #6,
   elemento 4) — completude, não referência quebrada.
 
+  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: achado de
+  > **completude/doc-sync**, não de código. (a) Atualizar o campo "Uso atual no projeto"
+  > (pinball) do skeleton para incluir `gold_prediction_calibration` e
+  > `gold_model_decision_final` (hoje só lista `gold_prediction_metrics_*` e Phase B). (b)
+  > Quanto ao `mean_mean_pinball`: **documentar** em `METRICS_DEFINITIONS.md` (é correto:
+  > `= (mean_pinball_q10+q50+q90)/3`), **não renomear** — coluna gold persistida, blast radius
+  > alto e valor baixo.
+
 **7. Alinhamento com o claim: a pinball é a loss "certa", mas no gold legacy ela é descritiva**
 - **O que o doc afirma:** "Phase B confirmatória; gold legacy descritivo enquanto DM gold
   roda squared_error"; a §5.1 nomeia `pinball_loss_post_guardrail` como **métrica primária
