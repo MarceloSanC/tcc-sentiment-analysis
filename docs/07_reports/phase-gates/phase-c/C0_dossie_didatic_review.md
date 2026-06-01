@@ -2558,6 +2558,27 @@ como *heuristic, renomear*).
   `prob_up` para H1/H2a/H2b — então nenhum claim confirmatório depende dela hoje; o risco é
   leitura indevida do número como se fosse calibrado.
 
+  **Alternativas à interpolação linear (simples; só relevantes se a coluna for retida).** Há
+  reconstruções mais fiéis que a reta, todas baratas. Em ordem de esforço:
+  - **Piecewise-linear pelos 3 nós** — escolhe o segmento que contém o 0 (`(q10,0,10)→(q50,0,50)`
+    ou `(q50,0,50)→(q90,0,90)`). Ganho **quase de graça**: o código atual interpola direto de q10
+    a q90 e **ignora o q50**; passar a usá-lo já corrige isso. Continua assumindo densidade
+    uniforme por trecho.
+  - **Ajuste normal (location-scale):** `μ = q50`, `σ = (q90 − q10)/2,563`, e `prob_up = Φ(μ/σ)`
+    (uma chamada a `Φ`). Vira um sigmoide suave (capta curvatura), mas assume **simetria** e cauda
+    gaussiana.
+  - **Split-normal (assimétrica):** `σ_esq = (q50 − q10)/1,2816`, `σ_dir = (q90 − q50)/1,2816` —
+    usa os 3 quantis e capta **skew**, mais fiel a retorno financeiro, ainda trivial. (Spline
+    monótono tipo PCHIP só compensa com **grade densa** de quantis, não com 3 pontos.)
+
+  O quanto isso muda: para `q10=−1, q50=+3, q90=+4`, os três dão `prob_up ≈ 0,74 / 0,80 / 0,94`
+  — mesmos quantis, números bem diferentes. **Mas o teto permanece:** (a) entre q10 e q90 a forma
+  é **subdeterminada** (3 quantis ⇒ infinitas distribuições), então a escolha é sempre um *prior*;
+  (b) quando o 0 cai **fora** de [q10, q90] (caso dos hard bounds) é **extrapolação** de cauda, que
+  3 quantis não fixam; (c) a **única** forma de saber se alguma reconstrução é "boa aproximação do
+  real" é **calibração empírica** (diagrama de confiabilidade / Brier de `prob_up` vs frequência
+  real de `y_true > 0`). Sem esse artefato, troca-se um prior por outro — não se mede a realidade.
+
   > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper; decisão de
   > C.0.2/C.0.3)*: **deprecar `prob_up` para o claim do TCC**. Pela política de C.0 (corrigir o
   > gap para tornar o gold defensável **ou**, se o conserto for refator multi-camada, analisar e
