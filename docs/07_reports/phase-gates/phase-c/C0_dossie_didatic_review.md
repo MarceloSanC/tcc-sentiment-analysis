@@ -2021,6 +2021,12 @@ central.
   pelos quantis **crus** e citar `n_probabilistic_samples` ao lado (duas runs com o mesmo
   `mean_pinball` podem ter denominadores diferentes).
 
+  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: o filtro está
+  > correto (remove ruído de intervalos colapsados); a única ação prática é **reportar sempre
+  > `n_probabilistic_samples` ao lado do `mean_pinball`** (é o denominador real — sem ele, duas
+  > runs com a mesma média não são comparáveis) e registrar que a genuinidade é julgada pelo
+  > **modelo (quantis crus)**, não pelo guardrail.
+
 **6. Consumo cross-file: `gold_prediction_calibration` + `gold_model_decision_final` (`mean_mean_pinball`)**
 - **O que o doc afirma:** colunas `pinball_q10/q50/q90`, `mean_pinball` em
   `gold_prediction_metrics_*`; Phase B usa `pinball_loss_post_guardrail` em
