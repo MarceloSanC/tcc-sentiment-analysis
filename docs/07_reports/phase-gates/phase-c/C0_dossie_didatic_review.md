@@ -2247,6 +2247,18 @@ confiança. É um **placar**, não uma inferência.
   for lido como "quem é melhor". **Quando é tolerável:** como descrição de **consistência**
   (com que frequência um modelo lidera), **reportado ao lado da loss média**, nunca isolado.
 
+  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: o objetivo da
+  > Phase C.0 é tornar métricas/testes **claims válidos**, então: (a) **trocar `squared_error`
+  > por pinball** como loss do win-rate — sem isso ele só embasa claim **pontual**, não o
+  > probabilístico do TCC (mesma troca dos itens #1/#2/#4 e do elemento 7). (b) Mesmo com
+  > pinball, o win-rate **achata a magnitude** (intrínseco — só o sinal `l<r` sobrevive): seu
+  > claim válido é de **consistência** ("A lidera B com mais frequência"), **distinto** do
+  > claim de média (que é do DM / loss média). Logo: reportá-lo **sempre ao lado de
+  > `left_mean_loss`/`right_mean_loss`/`left_minus_right_mean_loss`**
+  > ([`pairwise.py:438-442`](../../../../src/domain/services/gold_builders/pairwise.py#L438)) e,
+  > para uso **inferencial**, pareá-lo com teste de significância (sinal/binomial) — ou deixar a
+  > inferência ao DM. Win-rate isolado nunca elege vencedor.
+
 **2. Alinhamento pareado: a interseção é GLOBAL (`dropna(how="any")`), não por par**
 - **O que o doc afirma:** "interseção temporal exata herdada de `_pairwise_preprocess`";
   unidade = timestamp pareado.
