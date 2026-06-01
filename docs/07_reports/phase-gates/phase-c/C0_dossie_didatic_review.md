@@ -2286,6 +2286,17 @@ confiança. É um **placar**, não uma inferência.
   sobre o mesmo suporte temporal; a inconsistência seria pior. Apenas não se deve ler `n`
   como cobertura pairwise.
 
+  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: para teste
+  > **pairwise** (win-rate e DM), a interseção deve ser **par-a-par**, não global.
+  > Concretamente: **remover o `dropna(how="any")` global** (L405 no win-rate; L308 no DM) —
+  > pivotar mantendo NaN — e deixar a interseção par-a-par operar (no win-rate a **L411 já
+  > faz isso** e hoje é redundante; no DM, garantir o `.dropna()` equivalente no laço de
+  > pares). Cada par A-B passa a usar exatamente A∩B → maximiza `n` e não perde timestamps
+  > por causa de configs não relacionados. **Manter o `how="any"` global só no MCS** (teste
+  > **conjunto** sobre todos os modelos, exige matriz retangular sem NaN). Após a correção,
+  > `aligned_timestamps` é cobertura **do par** (varia entre pares; ao agregar win-rates,
+  > ponderar por `n`). Decisão **gêmea** no DM (item #1, elemento 2) — resolver juntas.
+
 **3. Vitórias, empates e as DUAS taxas (com e sem empates)**
 - **O que o doc afirma:** calcula `left_wins`, `right_wins`, `ties`; `left_win_rate =
   left_wins / n`; `left_win_rate_ex_ties = left_wins / non_ties`, com `non_ties = max(1,
