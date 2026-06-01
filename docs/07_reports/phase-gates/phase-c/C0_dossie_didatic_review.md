@@ -2383,6 +2383,21 @@ confiança. É um **placar**, não uma inferência.
   > com (a) sign test/binomial **ou** block bootstrap para IC, (b) controle de multiplicidade
   > sobre os pares, e (c) reporte obrigatório de `tie_rate` e `n` alinhado.
 
+  > **Prioridade e custo de implementação — P2 (depois dos itens mais robustos).** Implementar
+  > esta promoção **só após** as correções mais importantes (loss pinball nos testes,
+  > interseção par-a-par do elemento 2, hardening de DM/MCS/Holm). **Custo de código: baixo** —
+  > reusa a variância **HAC do DM** (aplicada à série indicadora `d_t = 1{loss_L < loss_R}`,
+  > pois um sign test/binomial ingênuo é **anticonservador** sob autocorrelação), o **block
+  > bootstrap do MCS** e o **Holm** já existentes; `ties`/`n` já são emitidos e `tie_rate` é
+  > uma coluna derivada. O único custo real é a **plumbing da pinball** na matriz pairwise,
+  > **compartilhada** com os itens #1/#2 e o elemento 7 (não é custo isolado do win-rate).
+  > **Racional para corrigir em vez de remover:** se, chegada a hora, o custo de corrigir for
+  > de fato baixo, **corrigir é preferível a remover** — desfazer o win-rate das tabelas e do
+  > wiring downstream (`gold_win_rate_pairwise_results` → `confidence.py`) pode custar **mais**
+  > do que torná-lo evidência válida. Ressalva: o teste inferencial **duplica largamente o DM**
+  > (média vs sinal), então o ganho é marginal — vale sobretudo pela robustez do sign test a
+  > margens-outlier.
+
 **6. Consumo em `confidence.py`: `win_rate_ex_ties_mean` (média NÃO ponderada; coluna passiva)**
 - **O que o doc afirma:** `gold_win_rate_pairwise_results` é consumido por
   `_build_model_decision_final` ([`confidence.py:649-694`](../../../../src/domain/services/gold_builders/confidence.py#L649)) só para gerar `win_rate_ex_ties_mean`; a ordenação final é por `rank_rmse, rank_mae`; `academic_decision_ready` **não** depende de win-rate.
