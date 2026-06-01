@@ -1916,12 +1916,16 @@ central.
   pesos iguais ([`quantile.py:191-193`](../../../../src/domain/services/gold_builders/quantile.py#L191)).
 - **Como deveria funcionar (exemplo):** numa linha com `pinball_q10=2`, `pinball_q50=1`,
   `pinball_q90=3` → `pinball_mean_row = (2+1+3)/3 = 2`. Os três quantis pesam **igual**;
-  nenhum (nem a mediana, nem as caudas) recebe mais importância.
+  nenhum (nem a mediana, nem as caudas) recebe mais importância. (Esses valores são
+  **factíveis**, mas correspondem a um intervalo **largo** com o real perto da mediana — ex.
+  `y=100, q10=80, q50=98, q90=130` → ρ10=0,1·20=2, ρ50=0,5·2=1, ρ90=0,1·30=3. Não é o formato
+  *típico*: em intervalo apertado as caudas, com peso 0,1, costumam dar pinball **menor** que a
+  mediana. O exemplo serve à aritmética da média; vale igual em raw ou post-guardrail.)
 - **O que esperar no código:** soma dos três `_row` dividida por `3.0`, sem pesos.
 - **Ref do doc → código:** [`quantile.py:191-193`](../../../../src/domain/services/gold_builders/quantile.py#L191).
   ✅ **Confere** exatamente: `valid["pinball_mean_row"] = (valid["pinball_q10_row"] +
   valid["pinball_q50_row"] + valid["pinball_q90_row"]) / 3.0`.
-- ⚠️ **Ponto de atenção — média uniforme ≠ WIS/CRPS; é uma aproximação, não o score *principled***
+- ⚠️ **Ponto de atenção — média uniforme vs WIS/CRPS: para 3 quantis, WIS = 2 × média (mesmo ranking)**
   A média simples dos 3 quantis é um resumo razoável, mas **não é** a forma canônica de
   agregar uma previsão por quantis num número só. As alternativas da literatura **pesam**
   diferente:
@@ -1932,19 +1936,29 @@ central.
   | **WIS** (Weighted Interval Score, Bracher 2021) | mediana com peso `1/2`; cada intervalo `(1−α)` com peso `α/2`, normalizado | claim probabilístico comparável a forecasting hubs |
   | **CRPS** (aproximação por quantis) | integra sobre **muitos** níveis; 3 quantis é grosseiro | distribuição preditiva completa |
 
-  Com apenas 3 níveis fixos, a média uniforme é uma **aproximação grosseira** do CRPS, e
-  difere do WIS (que dá metade do peso à mediana). **Quando importa:** se `mean_pinball` for
-  usado para **comparar/eleger** modelos como métrica primária do claim — aí o esquema de
-  pesos vira uma decisão metodológica que precisa ser declarada e justificada (a §4 do
-  skeleton já anota "pesos uniformes implícitos em `mean_pinball`"). **Quando é tolerável:**
-  como resumo descritivo reportado ao lado dos três `pinball_q10/q50/q90` individuais (que o
-  código também persiste), a média uniforme é transparente e auditável.
+  **Mas há uma identidade que desarma a maior parte da preocupação no escopo atual.** Com
+  exatamente 3 níveis `{0,1; 0,5; 0,9}` (= **um** intervalo central de 80% + mediana), o WIS
+  reduz-se a `(2/3)·(ρ10 + ρ50 + ρ90)`, enquanto a média uniforme é `(1/3)·(ρ10 + ρ50 + ρ90)`
+  — ou seja, **WIS = 2 × `mean_pinball`** (derivação: termo da mediana `½·|y−q50| = ρ50`; termo
+  do intervalo `0,1·IS(0,2) = 0,1·(2/0,2)·(ρ10+ρ90) = ρ10+ρ90`; normalização `1/(K+½) = 2/3`).
+  Como diferem só por um **fator constante positivo**, produzem o **ranking idêntico** de
+  modelos. **Quando importa:** o esquema de pesos só passa a reordenar modelos com **≥ 2
+  intervalos** (mais níveis, ex. `{0,05; 0,25; 0,5; 0,75; 0,95}`) — caso de cauda/grade-fina já
+  **fora de escopo**. Para os 3 quantis atuais, a média uniforme é **proporcional ao WIS** e
+  adequada para comparar/eleger. **Quando é tolerável:** sempre, no escopo do TCC, desde que
+  reportada ao lado dos três `pinball_q10/q50/q90` individuais (que o código também persiste).
+  Ela continua sendo uma aproximação **grosseira do CRPS** (que integraria muitos níveis), mas
+  isso afeta só a granularidade da distribuição, não o veredito comparativo (a §4 do skeleton
+  anota "pesos uniformes implícitos em `mean_pinball`").
 
-  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: para qualquer uso
-  > comparativo/seletivo, preferir um score com pesos *principled* (**WIS** ou CRPS por
-  > quantis) ou **documentar explicitamente** a escolha de pesos uniformes como convenção do
-  > projeto; em ambos os casos, sempre reportar os três quantis individuais ao lado do
-  > agregado.
+  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: no escopo atual
+  > (3 quantis = 1 intervalo de 80% + mediana), **WIS = 2 × `mean_pinball`** → mesmo ranking;
+  > a média uniforme é **proporcional ao WIS** e adequada para comparar/eleger. Adotar WIS é
+  > **baixo custo** (uma linha; os pinballs por quantil já existem) e vale como **ganho de
+  > nomenclatura/credibilidade** ("score padrão da literatura"), mas **não muda conclusão**. O
+  > esquema de pesos só passa a importar com **≥ 2 intervalos** (mais níveis), caso de
+  > cauda/grade-fina já fora de escopo. Em qualquer caso, reportar sempre os três quantis
+  > individuais ao lado do agregado.
 
 **4. Agregação por grupo: `mean_pinball` e os 3 quantis individuais**
 - **O que o doc afirma:** agg `mean_pinball=("pinball_mean_row", "mean")`
@@ -2138,9 +2152,10 @@ descriptive.py 363-419, o agg por config em quantile.py 615-667 e o rollup em co
    elegibilidade é julgada nos quantis **crus** mesmo para a `pinball_*_post_guardrail`.
 
 5. **"Pesos uniformes" em `mean_pinball` não consta dos "Riscos conhecidos" do dossiê §6**
-   (embora a §4 do skeleton anote "pesos uniformes implícitos em `mean_pinball`"). A média
-   simples dos 3 quantis difere de WIS (mediana com peso ½) e é aproximação grosseira do CRPS
-   — relevante se `mean_pinball` virar métrica primária do claim (elemento 3).
+   (embora a §4 do skeleton anote "pesos uniformes implícitos em `mean_pinball`"). Ressalva
+   **fraca no escopo atual:** para 3 quantis (1 intervalo + mediana), **WIS = 2 × `mean_pinball`**
+   → ranking idêntico; a média uniforme é proporcional ao WIS. O peso só reordena modelos com
+   **≥ 2 intervalos** (fora de escopo). Detalhe no elemento 3.
 
 6. **Pontos residuais metodológicos centrais.** "Quantis hard-coded" consta dos "Riscos
    conhecidos"; o aprofundamento acima detalha o mecanismo (hard-code **duplo**: nível +
@@ -2155,7 +2170,7 @@ Referências **intactas** e evidência fiel ao código — a pinball é calculad
 como o dossiê afirma e a fórmula é **idêntica à canônica** (Koenker-Bassett); as correções
 de linha do C.0.1 (L188-190, L191-193, L243) conferem. As ressalvas são (a) **metodológicas**
 — quantis **duplamente hard-coded** (nível + coluna; drift silencioso se a config mudar),
-**pesos uniformes** em `mean_pinball` (≠ WIS/CRPS) e, sobretudo, o **descasamento de uso**: a
+**pesos uniformes** em `mean_pinball` (ressalva fraca: p/ 3 quantis **WIS = 2× a média** → mesmo ranking) e, sobretudo, o **descasamento de uso**: a
 pinball é a loss **certa** para o claim probabilístico mas no gold legacy é **descritiva** (o
 DM/MCS gold e a ordenação usam métricas pontuais — ponto-espelho dos itens #1/#2); e (b) **de
 completude do dossiê** — "Uso atual" subdimensiona o alcance (a pinball chega ao
