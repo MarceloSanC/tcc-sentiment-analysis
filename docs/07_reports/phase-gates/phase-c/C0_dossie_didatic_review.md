@@ -2436,10 +2436,19 @@ confiança. É um **placar**, não uma inferência.
   real é narrativa/plot tratá-la como evidência (mesmo risco do elemento 5).
 
   > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: se a coluna for
-  > mantida, **ponderar a média por `aligned_timestamps`** (ou `non_ties`) e **preservar
-  > `split_signature`** na chave de agregação (ou agregar com regra explícita), em vez do
-  > `np.mean` não ponderado que funde desenhos. Mantê-la marcada como **diagnóstica
-  > não-inferencial** no artefato final.
+  > mantida, agregar de forma **explícita e ponderada por evidência**, não com `np.mean` de
+  > taxas. Três precisões: (a) **folds/`split_signature` são réplicas do mesmo config, não
+  > modelos diferentes** — agregá-los é correto (é o objetivo da validação cruzada), mas
+  > **preservar `split_signature`** para a **dispersão entre folds** ficar visível, em vez de
+  > fundi-la silenciosamente (a chave agrupa por `config_label`, então configs distintos já
+  > não se misturam — [`confidence.py:662-675`](../../../../src/domain/services/gold_builders/confidence.py#L662)); (b) a forma exata da ponderação é **agregar os *counts***
+  > (`Σ left_wins / Σ non_ties`), **idêntica** à média ponderada por `non_ties` e é o que um
+  > sign test usaria — preferível à média de taxas; (c) **acoplamento com o elemento 2:** hoje
+  > `aligned_timestamps` é **global** no grupo, então ponderar entre **oponentes** é quase
+  > no-op até a interseção virar par-a-par; entre **folds** o `n` já difere, então a ponderação
+  > já importa lá. Para **inferência**, não promediar taxas de folds — pool dos counts (um
+  > binomial/sign test sobre os timestamps de todos os folds) ou fold como fator. Manter a
+  > coluna marcada como **diagnóstica não-inferencial** no artefato final.
 
 ### Cross-check — o que NÃO está corretamente indicado/referenciado
 
