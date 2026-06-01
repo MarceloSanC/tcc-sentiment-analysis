@@ -2480,6 +2480,13 @@ referências **substantivas** conferem; há duas imprecisões de linha e uma omi
    cego à magnitude, `n` global, guard `max(1, ·)` mascarando o caso tudo-empate, média não
    ponderada e fusão de `split_signature` no consumidor).
 
+6. **Reparo recomendado (doc-sync ao skeleton).** As imprecisões 1-3 acima pedem correção no
+   dossiê/skeleton, não no código: (a) corrigir os números de linha `ties` L432→**L433** e
+   `split_signature` L422→**L423**; (b) **incluir `gold_quality_statistics_report` no "Uso
+   atual"** do dossiê de win-rate (2º consumidor, [`confidence.py:918-926`](../../../../src/domain/services/gold_builders/confidence.py#L918)),
+   registrando que ali o win-rate é só **contagem** e **não** entra em `statistics_ready`. São
+   correções de referência/completude, não decisões metodológicas.
+
 ### Veredito do item #8
 
 🟡 **Ressalvas.** O win-rate é calculado **exatamente** como o dossiê afirma (proporção de
@@ -2495,7 +2502,7 @@ mútua (`0` em vez de `NaN`), e o consumidor faz uma média **não ponderada** q
 (não ordena, não entra em `academic_decision_ready`), então o risco real é leitura indevida
 downstream. As decisões (expor `tie_rate`, `NaN` no tudo-empate, média ponderada + preservar
 `split_signature`, manter `DESCRIPTIVE_ONLY` com bloqueio de uso confirmatório) são de
-C.0.2/C.0.3. Decisões recomendadas registradas nos elementos 3, 5 e 6 — pendentes de
+C.0.2/C.0.3. Decisões recomendadas registradas nos elementos 1, 2, 3, 5 e 6 (+ doc-sync das imprecisões no cross-check) — pendentes de
 confirmação com a pesquisa acadêmica do paper.
 
 ---
