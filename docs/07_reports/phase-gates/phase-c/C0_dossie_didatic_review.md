@@ -2558,11 +2558,24 @@ como *heuristic, renomear*).
   `prob_up` para H1/H2a/H2b — então nenhum claim confirmatório depende dela hoje; o risco é
   leitura indevida do número como se fosse calibrado.
 
-  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: **não promover**;
-  > para uso operacional honesto, **renomear** a coluna para algo como
-  > `prob_up_heuristic_from_q10_q90` e **ler os níveis de quantil do contrato real** em vez de
-  > fixar 0,1/0,9. Alternativas mais defensáveis citadas no skeleton: distribuição paramétrica
-  > ajustada, grade densa de quantis, ou amostras preditivas.
+  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper; decisão de
+  > C.0.2/C.0.3)*: **deprecar `prob_up` para o claim do TCC**. Pela política de C.0 (corrigir o
+  > gap para tornar o gold defensável **ou**, se o conserto for refator multi-camada, analisar e
+  > depreciar): o gap **fundamental** — obter um `P(Y>0)` **calibrado** a partir de apenas 3
+  > quantis com interpolação linear — **não se fecha no gold builder**; exige mudança
+  > **upstream** (grade densa de quantis, distribuição paramétrica ajustada ou amostras
+  > preditivas no inference/silver) **mais** validação de calibração empírica (reliability /
+  > Brier) como artefato novo. Como **nenhum claim do TCC depende de `prob_up`** (a Phase B
+  > sustenta H1 por calibração e H2a/H2b por pinball — `prob_up` não entra em nenhuma hipótese),
+  > esse refator de várias camadas **não se justifica**. Como o projeto **não mantém tabela
+  > legada por preciosismo nem "para exploratório"**, a saída preferida é **remover** a coluna
+  > `prob_up`/`prob_down` (e variantes), **salvo** se C.0.2/C.0.3 identificar um **consumidor
+  > operacional concreto** fora do TCC — nesse caso, **renomear** para
+  > `prob_up_heuristic_from_q10_q90` e **bloquear de qualquer claim**. O hard-code 0,1/0,9 é a
+  > **decisão-gêmea** do quantil do pinball (item #7, elem. 2) e do `coverage_nominal` do PICP
+  > (item #5, elem. 4) — preferência **congelar {0,1; 0,5; 0,9} + teste de contrato**, com
+  > derivação dinâmica só como contingência; mas isso **só importa se a coluna for retida** (se
+  > removida, é moot).
 
 **2. Hard bounds — `q10 > 0` ⇒ prob_up = 1; `q90 < 0` ⇒ prob_up = 0**
 - **O que o doc afirma:** se `q10 > 0`, `cdf0 = 0` (linha 93); se `q90 < 0`, `cdf0 = 1`
@@ -2585,6 +2598,14 @@ como *heuristic, renomear*).
   inteiro está de um lado de zero"), o extremo é informativo. **Quando não:** se for tratado
   como probabilidade calibrada para qualquer claim — aí o `{0,1}` forçado e o degrau de 0,1 são
   artefatos da fórmula, não evidência.
+
+  > **Decisão recomendada** *(decisão de C.0.2/C.0.3)*: **sem ação própria — subsumida pela
+  > deprecação do elemento 1.** A descontinuidade {0,1}/[0,1;0,9] só prejudica se `prob_up` for
+  > lido como probabilidade calibrada; sob a deprecação para o claim, é **moot**. Um conserto
+  > "correto" (reconstrução de CDF sem o degrau) seria o **mesmo refator multi-camada** que o
+  > elemento 1 já considera injustificado. Se a coluna for **retida** para uso operacional,
+  > registrar a descontinuidade como limitação conhecida (não tratar `prob_up` como
+  > probabilidade).
 
 **3. Fallback degenerado (largura ≈ 0) — âncora em q50: 1 / 0 / 0,5**
 - **O que o doc afirma:** quando `width ≈ 0`, `safe_width = NaN` (linha 88); o fallback usa q50
@@ -2629,10 +2650,14 @@ como *heuristic, renomear*).
   usável) seria **`NaN`**, não um número que parece certeza. **Quando é tolerável:** nunca como
   estatística probabilística — um ponto degenerado não carrega informação de incerteza.
 
-  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: **retornar `NaN`
-  > quando `q90 ≤ q10`** (skeleton), em vez de cair no fallback — elimina de uma vez a inversão
-  > latente e o mascaramento de degeneração, deixando o filtro Cat C (elemento 4) ser a única
-  > fonte de verdade sobre elegibilidade.
+  > **Decisão recomendada** *(decisão de C.0.2/C.0.3)*: **condicional ao destino do elemento 1.**
+  > Se `prob_up` for **removido/deprecado** (preferência do elemento 1), esta correção é **moot**.
+  > Se a coluna for **retida** para uso operacional, aplicar o conserto **barato** (não é refator
+  > multi-camada, é uma função no gold builder): **retornar `NaN` quando `q90 ≤ q10`** em vez de
+  > cair no fallback — fecha de uma vez a inversão latente (3a) e o mascaramento de degeneração
+  > (3b). Nota: 3b já está **parcialmente resolvido** — no `prob_up_raw` o filtro Cat C (elemento
+  > 4) já mascara as linhas cruamente degeneradas; resta apenas o caminho do **colapso
+  > pós-guardrail**, que o `NaN` fecharia.
 
 **4. Row-level + máscara Cat C — elegibilidade julgada nos quantis CRUS**
 - **O que o doc afirma:** `prob_up_row` é computado por linha (linhas 194–196) e sujeito ao
@@ -2668,6 +2693,14 @@ como *heuristic, renomear*).
   para o `mpiw_post_guardrail`; aqui ele se manifesta como **mascaramento de degeneração**
   (elemento 3b), não como largura zero.
 
+  > **Decisão recomendada** *(decisão de C.0.2/C.0.3)*: **não é gap próprio — herda a decisão de
+  > #5 (PICP, elem. 2) e #6 (MPIW, elem. 2).** Lá a assimetria foi avaliada como **defensável**
+  > ("medir genuinidade pelo que o modelo emitiu é a leitura mais honesta") e a recomendação foi
+  > **doc-sync** (documentar que a base elegível é fixada pelos quantis crus) + reportar
+  > `n_probabilistic_samples`, **não** mexer no código. Para `prob_up` a assimetria é, além
+  > disso, **moot para o claim** (deprecado no elemento 1); se a coluna for retida, segue a mesma
+  > decisão de documentação de #5/#6 — não é refator.
+
 **5. Agregação — `mean(prob_up_row)` e `prob_down = 1 − prob_up`**
 - **O que o doc afirma:** o agregador usa `prob_up=("prob_up_row", "mean")` (linha 247) e
   `prob_down` é derivado.
@@ -2687,6 +2720,11 @@ como *heuristic, renomear*).
   agregado". **Quando importa:** quem ler `prob_down` como confirmação independente de
   `prob_up` está contando a mesma informação duas vezes. **Quando é tolerável:** desde que se
   saiba que `prob_down` é só o complemento.
+
+  > **Decisão recomendada** *(decisão de C.0.2/C.0.3)*: **não é gap — apenas documentação.**
+  > `prob_down = 1 − prob_up` está **correto** (probabilidades somam 1); basta **rotular**
+  > `prob_down` como complemento determinístico (não evidência independente) onde a coluna
+  > aparecer. Segue o destino do `prob_up` (elemento 1): se removido, sai junto. Sem refator.
 
 **6. Variantes raw/post-guardrail + alias nu `prob_up` = post-guardrail**
 - **O que o doc afirma:** as variantes raw/post-guardrail são computadas no
@@ -2712,6 +2750,12 @@ como *heuristic, renomear*).
   é tolerável:** desde que o contrato (post-guardrail) seja sempre declarado junto. É imprecisão
   de **nomenclatura/expectativa**, não referência quebrada — o código é coerente (o alias
   privilegia o post-guardrail, igual ao `mean_picp` do item #5).
+
+  > **Decisão recomendada** *(decisão de C.0.2/C.0.3)*: **acoplada à nomenclatura do item #5.**
+  > Se a coluna for **retida**, expor o contrato no nome (não deixar `prob_up` nu ambíguo — ou
+  > documentar explicitamente que `prob_up`/`prob_down` nus = **post-guardrail**), consistente
+  > com o tratamento do `mean_picp`. Se `prob_up` for **removido** (elemento 1), **moot**.
+  > Imprecisão de nome, não gap de cálculo — custo baixo, sem refator.
 
 **7. Pass-through em `gold_prediction_calibration`; NÃO consumido por `decision_final`/plots**
 - **O que o doc afirma:** as variantes são **passadas-through** pelo
@@ -2739,6 +2783,14 @@ como *heuristic, renomear*).
   `gold_prediction_calibration`. **Quando importa:** o contrato é **forward-looking** — protege
   contra um vazamento futuro, não conserta um vazamento ativo. É bom registrar que a heurística
   está **contida** ao subsistema de métricas/calibração e não contamina o rollup de decisão.
+
+  > **Decisão recomendada** *(decisão de C.0.2/C.0.3)*: **já satisfeito na prática — falta só a
+  > trava.** O contrato anti-leak do skeleton já está atendido (`prob_up` não chega ao
+  > `gold_model_decision_final` nem aos plots). Recomendação **barata e valiosa independentemente
+  > do destino do elemento 1**: adicionar um **teste de regressão** que falhe se
+  > `prob_up`/`prob_down` (ou `mean_prob_up_*`) forem ligados ao `gold_model_decision_final` ou a
+  > plots/living-paper oficiais — congela o estado seguro atual. Se a coluna for removida
+  > (elemento 1), a trava torna-se trivialmente garantida.
 
 ### Cross-check — o que NÃO está corretamente indicado/referenciado
 
@@ -2786,8 +2838,15 @@ dossiê** — a coluna **nua `prob_up` é o post-guardrail**, `prob_down` é só
 `prob_up`, e `prob_up` **não é consumido** por `gold_model_decision_final` nem pelos plots (o
 contrato anti-leak é preventivo). Não há defeito de localização; as decisões (renomear para
 `prob_up_heuristic_from_q10_q90`, retornar `NaN` quando `q90 ≤ q10`, calibração empírica em
-coluna separada) são de C.0.2/C.0.3. Decisões recomendadas registradas nos elementos 1 e 3 —
-pendentes de confirmação com a pesquisa acadêmica do paper.
+coluna separada) são de C.0.2/C.0.3. **Decisão recomendada central: deprecar `prob_up` para o
+claim do TCC** — o gap fundamental (P(Y>0) calibrado a partir de 3 quantis) só se fecha com
+refator multi-camada upstream, e **nenhum claim depende de `prob_up`**; pela política de C.0
+(corrigir se barato, depreciar se for refator de várias camadas), a saída é depreciar e
+**preferir remover** a coluna (sem retenção "exploratória"), salvo consumidor operacional
+concreto. **Todos os 7 pontos de atenção agora têm decisão registrada**: elementos 1 e 3
+(conserto barato condicional à retenção), 7 (já satisfeito + trava de regressão) e — subsumidos
+pela deprecação ou herdados de #5/#6 — elementos 2, 4, 5 e 6. Pendentes de confirmação com a
+pesquisa acadêmica do paper.
 
 ---
 
@@ -3292,6 +3351,12 @@ plot escolhe) está vendo o **melhor em RMSE**, não o melhor probabilisticament
   para um claim probabilístico; o problema (próximo elemento) **não é** quais colunas existem,
   e sim que **nenhuma delas governa a ordenação** da tabela.
 
+  > **Decisão recomendada** *(sem ação — gap inexistente)*: **manter** a exclusão de
+  > `confidence_calibrated` do rollup. Não há gap a corrigir aqui — o código já faz o
+  > defensável (a heurística não entra). Única dependência: se o item #10 renomear
+  > `confidence_calibrated`, apenas confirmar que a `decision_final` continua **não** a
+  > referenciando (já é o caso). Custo: zero.
+
 **3. Ordenação e ranks por RMSE/MAE/DA — métricas probabilísticas só "pegam carona"**
 - **O que o doc afirma:** `rank_rmse` (linhas 785-789, `mean_rmse.rank(ascending=True)`), `rank_mae` (linhas 790-794), e `sort_values` final (linhas 815-818) por `["asset","parent_sweep_id","horizon","rank_rmse","rank_mae"]`. Mistura objetivos: ordenação **pontual** enquanto pinball/PICP/MPIW entram como **colunas auxiliares**.
 - **Como deveria funcionar (exemplo):** para `(BTC, sweepX, h+7)` com duas configs:
@@ -3332,6 +3397,19 @@ plot escolhe) está vendo o **melhor em RMSE**, não o melhor probabilisticament
   o sidecar `model_comparison_confirmatory_scorecard_phase_c.parquet`, que **separa** o
   vencedor primário (por loss probabilística) do perfil comparativo.
 
+  > **Decisão recomendada** *(confirmar com pesquisa acadêmica do paper)*: **corrigir** —
+  > eleger o vencedor por **loss probabilística primária (pinball)**, pré-registrada antes de
+  > ver os dados, com RMSE/MAE/DA **rebaixados a colunas descritivas**. Concretamente: criar
+  > `rank_primary` por `mean_mean_pinball` (asc) e usá-lo no `sort_values`, mantendo
+  > `rank_rmse/rank_mae/rank_da` só como colunas. Custo **baixo/localizado** (em
+  > `confidence.py`: ranks L785-801 e `sort_values` L815-818; + o plot do elemento 8) — **não**
+  > exige refatorar múltiplas camadas → **corrigir, não depreciar**. **Atenção (não está
+  > resolvido):** o "sidecar confirmatório Phase C" que o skeleton cita como alternativa
+  > **ainda não existe em código** (só em doc; não há pipeline Phase C em `src/` nem
+  > pré-registro Phase C), logo **não** é saída pronta — ou se corrige a `decision_final`, ou
+  > se constrói o sidecar. Acoplado ao item #7 (pinball como loss primária) e ao pré-registro
+  > do critério (elemento 7).
+
 **4. `dm_net_wins` calculado com `pvalue_two_sided` cru (sem Holm)**
 - **O que o doc afirma:** DM processing nas linhas 588-631 conta winners/losers por `pvalue_two_sided < 0.05` — **não** por `pvalue_adj_holm`.
 - **Como deveria funcionar (exemplo):** para cada grupo `(asset, sweep, split, horizon)`, percorre os pares DM; se `p_cru < 0.05` e a diferença de loss aponta a favor de uma config, ela ganha +1 vitória, a outra +1 derrota. `dm_net_wins = vitórias − derrotas`. Com 6 pares e p-values crus `{0.004, 0.02, 0.03, 0.06, 0.20, 0.50}`, **3** passam o corte cru (0.004/0.02/0.03) e viram vitórias/derrotas; os outros são ignorados.
@@ -3352,6 +3430,16 @@ plot escolhe) está vendo o **melhor em RMSE**, não o melhor probabilisticament
   contagem (L599-601) **não inclui `split_signature`**, mesma assimetria de "família por grain
   administrativo". Não é decisão nova deste item — segue o que o item #1/#3 definir.
 
+  > **Decisão recomendada** *(herda itens #1 elem 5/7 e #3)*: **corrigir** — quando o DM gold
+  > expuser o p-value ajustado correto (one-sided + HLN + Holm sobre família com
+  > `split_signature`), trocar a leitura em `_build_model_decision_final` de `pvalue_two_sided`
+  > (cru) para a coluna **ajustada** (`significant_adj_0_05` / `pvalue_adj_holm`) em L605/L609.
+  > **Não é auto-resolvido a montante:** corrigir o DM gold é necessário mas **não** suficiente
+  > — a `decision_final` ainda precisa desta **troca local de coluna**, senão segue recontando
+  > vitórias com p cru mesmo com o parquet já ajustado. Custo **baixo**. Depreciar `dm_net_wins`
+  > (marcá-lo diagnóstico não-inferencial) só se o custo subir muito; dado o objetivo de claim
+  > defensável, ler o ajustado é preferível.
+
 **5. MCS → coluna `mcs_selected_alpha_0_05` (renomeada; `split_signature` descartada)**
 - **O que o doc afirma:** MCS summary nas linhas 633-647; renomeia `selected_in_mcs_alpha_0_05` → `mcs_selected_alpha_0_05` e mergeia como coluna diagnóstica.
 - **Como deveria funcionar (exemplo):** se a config `feat_A|sig_3` está no confidence set, ela chega na decision_final com `mcs_selected_alpha_0_05 = True`. Lembre da assimetria do item #2: `True` = "não foi possível **rejeitá-la** como inferior", **não** "ela venceu".
@@ -3365,6 +3453,13 @@ plot escolhe) está vendo o **melhor em RMSE**, não o melhor probabilisticament
   `mcs_selected_alpha_0_05` fica. **Quando importa:** walk-forward com vários folds, em que
   uma config é selecionada em um split e não em outro. Aqui apenas **herdamos** o ponto — a
   decisão pertence ao item #2.
+
+  > **Decisão recomendada** *(já coberta pelo item #2, elemento 11)*: **sem ação separada para
+  > o #12** — a decisão do item #2 (incluir `split_signature` na seleção de colunas L642-644 e
+  > no `merge_cols` do merge final, agregando com `all()`/`any()` explícito) **incide
+  > exatamente sobre este código** (`confidence.py`, dentro de `_build_model_decision_final`).
+  > Aplicar a correção do item #2 já resolve este ponto aqui. Custo **baixo**. Registrado para
+  > evitar correção em duplicidade.
 
 **6. Win-rate → coluna `win_rate_ex_ties_mean` (sem variância, sem p-value, sem disclaimer)**
 - **O que o doc afirma:** win-rate processing nas linhas 649-694; agrega `win_rate_ex_ties_mean` por config; a coluna aparece na tabela final **sem disclaimer**, expondo risco de ser lida como inferencial.
@@ -3383,6 +3478,13 @@ plot escolhe) está vendo o **melhor em RMSE**, não o melhor probabilisticament
   **Quando não é:** se for usada para **eleger** ou para sugerir significância — ela não
   controla nada (nem variância, nem empates na coluna final, nem múltiplas comparações). O
   skeleton já marca: "não usar como critério confirmatório em decision_final".
+
+  > **Decisão recomendada** *(herda item #8; risco só de rótulo)*: **corrigir por
+  > rotulagem/contrato**, não por cálculo — `win_rate_ex_ties_mean` **já não** governa
+  > ordenação nem `academic_decision_ready`, então o gap de cálculo **não existe** aqui; resta
+  > o risco de leitura inferencial por vizinhança. Ação: marcar a coluna como **descritiva**
+  > (dicionário de dados + nota no artefato) e garantir por contrato que win-rate **nunca**
+  > entre em critério de vencedor. Custo **baixo** (documental). Coordena com o item #8.
 
 **7. `academic_decision_ready` — o nome promete mais do que a coluna entrega**
 - **O que o doc afirma:** `academic_decision_ready` (linhas 803-813) depende de `pairwise_ready_dm & pairwise_ready_mcs & target_exact_alignment`; **não** depende de win-rate.
@@ -3406,6 +3508,15 @@ plot escolhe) está vendo o **melhor em RMSE**, não o melhor probabilisticament
   (`confidence_calibrated` que não calibra) e do item #2 (`selected` que não é "vencedor"),
   agora no nível da decisão final.
 
+  > **Decisão recomendada** *(corrigir nomenclatura + separar do veredito)*: **corrigir** —
+  > (a) **renomear** a flag para algo fiel ao que ela computa, ex.: `pairwise_inputs_aligned` /
+  > `dm_mcs_alignment_ready` (é prontidão de **dados**, não veredito); custo **baixo** (coluna +
+  > consumidores). (b) Se quiser uma flag de "pronto para claim", criá-la **separada**, com as
+  > verificações reais: inputs P0 em `PROMOTED_CONFIRMATORY` + critério **pré-registrado**
+  > (elemento 3) + `decision_criterion_hash`/`version` persistidos. (a) é barato e mata o risco
+  > de nomenclatura já; (b) é parte do pré-registro do critério (acoplado ao elemento 3).
+  > **Não depreciar** — a flag de prontidão de dados é útil, só está mal nomeada.
+
 **8. Consumo nos plots oficiais — `pick_config` elege o config exibido por `rank_rmse`**
 - **O que o doc afirma:** `gold_model_decision_final` é consumido por plots oficiais ([`generate_prediction_analysis_plots_use_case.py:819`](../../../../src/use_cases/generate_prediction_analysis_plots_use_case.py#L819)); risco de mostrar "modelo vencedor" sem disclaimer de que a ordenação é por RMSE/MAE, não por loss probabilística.
 - **Como deveria funcionar (exemplo):** a tabela é carregada (L819) e passada como `decision_df` ao plot `fig_oos_timeseries_examples` (L851). Lá dentro, `pick_config(h)` ordena `decision_df` por `rank_rmse` **ascendente** e pega `.iloc[0]` → o config exibido como **exemplo** para aquele horizonte é o **rank_rmse=1**. No exemplo do elemento 3 (LSTM rank 1, TFT rank 2), o plot de h+7 mostra a **série da LSTM** como "o exemplo" — e o leitor entende "este é o modelo". Se `decision_df` estiver vazia, cai num fallback que ordena `gold_prediction_metrics_by_config` por `mean_rmse` (mesmo critério pontual).
@@ -3425,6 +3536,14 @@ plot escolhe) está vendo o **melhor em RMSE**, não o melhor probabilisticament
   melhor pinball pode **nunca** aparecer no plot. Não é um defeito do plot em si; é a
   **propagação** do critério de ordenação pontual da decision_final até a figura que o leitor
   enxerga como conclusão.
+
+  > **Decisão recomendada** *(herda elemento 3; correção barata no consumidor)*: **corrigir** —
+  > alinhar `pick_config` ao critério primário probabilístico: criado o `rank_primary`
+  > (elemento 3), o plot apenas troca `rank_rmse` → `rank_primary` em `pick_config` (L588-592)
+  > e no fallback (L596-604), passando a exibir o melhor **probabilístico**. Custo **baixo**
+  > (uma coluna de ordenação). Mitigação mínima enquanto o elemento 3 não chega: rotular o
+  > título/legenda como "exemplo do config com menor RMSE em h+N". **Parte auto-resolvida**
+  > pela decisão do elemento 3.
 
 ### Cross-check — o que NÃO está corretamente indicado/referenciado
 
@@ -3489,6 +3608,10 @@ usado no sort, e o `sweep_map` colapsa `config_label → parent_sweep_id` por `d
 (não-determinístico se um label cruzar sweeps). Não há defeito de localização; as decisões
 (ordenar por loss probabilística, renomear/redefinir `academic_decision_ready`, rotular as
 colunas descritivas, pré-registrar o critério, qualificar os plots) são de C.0.2/C.0.3.
+Decisões recomendadas registradas nos elementos 2 (sem ação — gap inexistente), 3, 4, 5
+(coberta pelo item #2), 6, 7 e 8 — todas orientadas a **corrigir para tornar a tabela
+defensável** (custo localizado em `confidence.py` + plot, sem refatoração multi-camada →
+**corrigir, não depreciar**); pendentes de confirmação com a pesquisa acadêmica do paper.
 
 ---
 
